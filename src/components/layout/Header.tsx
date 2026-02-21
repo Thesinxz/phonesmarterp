@@ -12,28 +12,61 @@ interface HeaderProps {
 
 export function Header({ title }: HeaderProps) {
     const [unidade, setUnidade] = useState("Matriz");
+    const [solicitationsCount, setSolicitationsCount] = useState(0);
     const { user, profile } = useAuth();
     const supabase = createClient();
 
     useEffect(() => {
-        async function loadUnit() {
+        async function loadData() {
             try {
-                const { data } = await supabase
+                // Load unit
+                const { data: configData } = await supabase
                     .from("configuracoes")
                     .select("valor")
                     .eq("chave", "nfe_emitente")
                     .single();
 
-                if (data && (data as any).valor?.municipio) {
-                    const val = (data as any).valor;
+                if (configData && (configData as any).valor?.municipio) {
+                    const val = (configData as any).valor;
                     setUnidade(val.municipio + (val.uf ? ` - ${val.uf}` : ""));
                 }
+
+                // Load pending solicitations count
+                if (profile?.empresa_id) {
+                    const { count } = await (supabase.from("solicitacoes") as any)
+                        .select("*", { count: 'exact', head: true })
+                        .eq("empresa_id", profile.empresa_id)
+                        .eq("status", "pendente");
+
+                    setSolicitationsCount(count || 0);
+                }
             } catch (error) {
-                console.error("Error loading unit:", error);
+                console.error("Error loading header data:", error);
             }
         }
-        loadUnit();
-    }, []);
+        loadData();
+
+        // Subscribe to changes in solicitacoes to update count in real-time
+        if (profile?.empresa_id) {
+            const channel = supabase
+                .channel('header-solicitacoes')
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'solicitacoes', filter: `empresa_id=eq.${profile.empresa_id}` },
+                    () => {
+                        // Re-fetch count on any change
+                        (supabase.from("solicitacoes") as any)
+                            .select("*", { count: 'exact', head: true })
+                            .eq("empresa_id", profile.empresa_id)
+                            .eq("status", "pendente")
+                            .then(({ count }: any) => setSolicitationsCount(count || 0));
+                    }
+                )
+                .subscribe();
+
+            return () => { supabase.removeChannel(channel); };
+        }
+    }, [profile?.empresa_id]);
 
     return (
         <header className="fixed top-0 right-0 left-[260px] h-16 z-30 glass border-b border-white/40 px-6 flex items-center justify-between gap-4">
@@ -52,12 +85,12 @@ export function Header({ title }: HeaderProps) {
                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight leading-none">Unidade</span>
                         <div className="flex items-center gap-1">
                             <span className="text-xs font-bold text-slate-700">{unidade}</span>
-                            <ChevronDown size={10} className="text-slate-400 group-hover:text-brand-600 transition-colors" />
+                            <span className="text-[10px] text-slate-400 group-hover:text-brand-600 transition-colors">▼</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="relative flex-1 max-w-sm">
+                <div className="relative flex-1 max-sm:hidden max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                         type="text"
@@ -85,10 +118,18 @@ export function Header({ title }: HeaderProps) {
                 </Link>
 
                 {/* Notifications */}
-                <button className="relative w-9 h-9 rounded-xl glass flex items-center justify-center hover:bg-white/60 transition-colors">
+                <Link
+                    href="/solicitacoes"
+                    className="relative w-9 h-9 rounded-xl glass flex items-center justify-center hover:bg-white/60 transition-colors"
+                >
                     <Bell className="w-4 h-4 text-slate-600" />
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-                </button>
+                    {solicitationsCount > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-white shadow-sm ring-2 ring-red-500/20 animate-pulse">
+                            {solicitationsCount > 9 ? '9+' : solicitationsCount}
+                        </span>
+                    )}
+                </Link>
+
 
                 {/* Avatar */}
                 <div

@@ -19,10 +19,12 @@ import {
     Receipt,
     Calculator,
     ClipboardCheck,
-    History as HistoryIcon
+    History as HistoryIcon,
+    Bell
 } from "lucide-react";
 import { cn } from "@/utils/cn";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
@@ -35,6 +37,11 @@ const navItems = [
         label: "Ordens de Serviço",
         href: "/os",
         icon: ClipboardList,
+    },
+    {
+        label: "Solicitações",
+        href: "/solicitacoes",
+        icon: Bell,
     },
     {
         label: "PDV",
@@ -112,7 +119,8 @@ const navItems = [
 
 export function Sidebar() {
     const pathname = usePathname();
-    const { empresa } = useAuth();
+    const { empresa, profile } = useAuth();
+    const [solicitationsCount, setSolicitationsCount] = useState(0);
     const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(() => {
         // Inicializa menus que têm filhos ativos como abertos
         const initialState: Record<string, boolean> = {};
@@ -123,6 +131,34 @@ export function Sidebar() {
         });
         return initialState;
     });
+
+    // Supabase Realtime for solicitations count
+    useEffect(() => {
+        if (!empresa?.id) return;
+
+        const supabase = createClient();
+
+        const fetchCount = async () => {
+            const { count } = await (supabase.from("solicitacoes") as any)
+                .select("*", { count: 'exact', head: true })
+                .eq("empresa_id", empresa.id)
+                .eq("status", "pendente");
+            setSolicitationsCount(count || 0);
+        };
+
+        fetchCount();
+
+        const channel = supabase
+            .channel('sidebar-solicitacoes')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'solicitacoes', filter: `empresa_id=eq.${empresa.id}` },
+                () => fetchCount()
+            )
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [empresa?.id]);
 
     const toggleMenu = (label: string) => {
         setOpenMenus(prev => ({ ...prev, [label]: !prev[label] }));
@@ -176,6 +212,11 @@ export function Sidebar() {
                                 >
                                     <Icon className="w-4.5 h-4.5 shrink-0" size={18} />
                                     <span className="flex-1">{item.label}</span>
+                                    {item.label === "Solicitações" && solicitationsCount > 0 && (
+                                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse-subtle">
+                                            {solicitationsCount}
+                                        </span>
+                                    )}
                                     {isActive && (
                                         <ChevronRight className="w-3.5 h-3.5 text-white/40" size={14} />
                                     )}
@@ -204,6 +245,7 @@ export function Sidebar() {
                     );
                 })}
             </nav>
+
 
             {/* Plan badge */}
             <div className="px-4 py-4 border-t border-white/10">

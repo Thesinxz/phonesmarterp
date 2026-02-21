@@ -356,6 +356,26 @@ export interface Database {
                 Insert: Omit<Database["public"]["Tables"]["audit_logs"]["Row"], "id" | "criado_em">;
                 Update: never;
             };
+            solicitacoes: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    usuario_id: string;
+                    titulo: string;
+                    descricao: string | null;
+                    categoria: "pedido" | "aviso_cliente" | "lembrete" | "outro";
+                    prioridade: "baixa" | "media" | "alta" | "urgente";
+                    status: "pendente" | "em_andamento" | "concluido" | "arquivado";
+                    data_vencimento: string | null;
+                    telefone_contato: string | null;
+                    nome_cliente: string | null;
+                    atribuido_a: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["solicitacoes"]["Row"], "id" | "created_at" | "updated_at">;
+                Update: Partial<Database["public"]["Tables"]["solicitacoes"]["Insert"]>;
+            };
         };
         Views: Record<string, never>;
         Functions: Record<string, never>;
@@ -379,6 +399,7 @@ export type Caixa = Database["public"]["Tables"]["caixas"]["Row"];
 export type CaixaMovimentacao = Database["public"]["Tables"]["caixa_movimentacoes"]["Row"];
 export type FinanceiroTitulo = Database["public"]["Tables"]["financeiro_titulos"]["Row"];
 export type XmlImportacao = Database["public"]["Tables"]["xml_importacoes"]["Row"];
+export type Solicitacao = Database["public"]["Tables"]["solicitacoes"]["Row"];
 
 export type OsStatus = OrdemServico["status"];
 export type UserPapel = Usuario["papel"];

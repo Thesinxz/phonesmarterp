@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { Bell, X, User, Clock, AlertTriangle } from "lucide-react";
 import { cn } from "@/utils/cn";
-import { type Solicitacao, marcarComoVisualizada } from "@/services/solicitacoes";
+import { type Solicitacao } from "@/types/database";
+import { marcarComoVisualizada } from "@/services/solicitacoes";
 
 const supabase = createClient();
 
@@ -31,9 +32,9 @@ export function NotificationCenter() {
                 (payload) => {
                     const newNotif = payload.new as Solicitacao;
 
-                    // Filter: if it's for everyone (destinatario_id null) or for this specific user
-                    if (!newNotif.destinatario_id || newNotif.destinatario_id === profile.id ||
-                        (newNotif.destinatario_id === "admin" && profile.papel === "admin")) {
+                    // Filter: if it's for everyone (atribuido_a null) or for this specific user
+                    if (!newNotif.atribuido_a || newNotif.atribuido_a === profile.id ||
+                        (newNotif.atribuido_a === "admin" && profile.papel === "admin")) {
 
                         setLatest(newNotif);
                         setShowPopup(true);
@@ -87,7 +88,7 @@ export function NotificationCenter() {
                     </div>
 
                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 italic text-slate-600 text-sm leading-relaxed">
-                        "{latest.mensagem}"
+                        "{latest.descricao}"
                     </div>
 
                     <div className="flex gap-3 pt-2">

@@ -1,23 +1,10 @@
 import { createClient } from "@/lib/supabase/client";
-import { type Database } from "@/types/database";
+import { type Solicitacao } from "@/types/database";
 
-const supabase = createClient();
+const supabase = createClient() as any;
 
-export interface Solicitacao {
-    id: string;
-    empresa_id: string;
-    solicitante_id: string;
-    destinatario_id: string | null; // null = para todos
-    cliente_id: string | null;
-    titulo: string;
-    mensagem: string;
-    prioridade: "baixa" | "media" | "alta" | "urgente";
-    status: "pendente" | "visualizado" | "resolvido";
-    created_at: string;
-}
 
-export async function criarSolicitacao(data: Omit<Solicitacao, "id" | "created_at" | "status">) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function criarSolicitacao(data: Omit<Solicitacao, "id" | "created_at" | "updated_at" | "status">) {
     const { data: res, error } = await (supabase.from("solicitacoes") as any)
         .insert({
             ...data,
@@ -31,12 +18,11 @@ export async function criarSolicitacao(data: Omit<Solicitacao, "id" | "created_a
 }
 
 export async function getSolicitacoes() {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase.from("solicitacoes") as any)
         .select(`
             *,
-            solicitante:usuarios!solicitante_id(nome),
-            cliente:clientes(nome)
+            usuario:usuarios!usuario_id(nome),
+            atribuido:usuarios!atribuido_a(nome)
         `)
         .order("created_at", { ascending: false });
 
@@ -44,10 +30,36 @@ export async function getSolicitacoes() {
     return data;
 }
 
+export async function atualizarStatusSolicitacao(id: string, status: Solicitacao["status"]) {
+    const { error } = await supabase
+        .from("solicitacoes")
+        .update({ status } as any)
+        .eq("id", id);
+
+    if (error) {
+        console.error("Erro ao atualizar status:", error);
+        throw error;
+    }
+}
+
 export async function marcarComoVisualizada(id: string) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase.from("solicitacoes") as any)
-        .update({ status: "visualizado" })
+    const { error } = await supabase
+        .from("solicitacoes")
+        .update({ status: 'arquivado' } as any)
+        .eq("id", id);
+
+    if (error) {
+        console.error("Erro ao marcar visualizada:", error);
+        throw error;
+    }
+}
+
+
+export async function deletarSolicitacao(id: string) {
+
+    const { error } = await supabase
+        .from("solicitacoes")
+        .delete()
         .eq("id", id);
 
     if (error) throw error;
