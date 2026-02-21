@@ -12,10 +12,10 @@ import type { PaymentGateway, CategoriaMargin } from "@/types/configuracoes";
  */
 export async function GET(
     request: NextRequest,
-    { params }: { params: Promise<{ subdominio: string }> }
+    { params }: { params: { subdominio: string } }
 ) {
     try {
-        const { subdominio } = await params;
+        const { subdominio } = params;
 
         if (!subdominio || subdominio.length < 2) {
             return NextResponse.json(

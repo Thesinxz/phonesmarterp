@@ -21,7 +21,7 @@ export async function extractProductsWithGemini(imageDataUrl: string, apiKey: st
 
         const prompt = `Extraia dados desta nota fiscal em JSON puro (array de objetos): item, cost, qtd, categoria. Use o formato: [{"item": "...", "cost": 10.0, "qtd": 1, "categoria": "..."}]`;
 
-        console.log("[Gemini Service] Calling API with model gemini-2.5-flash...");
+        console.log("[Gemini Service] Calling API with model gemini-1.5-flash...");
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {
             console.warn("[Gemini Service] Timeout reached (30s)");
@@ -30,7 +30,7 @@ export async function extractProductsWithGemini(imageDataUrl: string, apiKey: st
 
         const startTime = Date.now();
         try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 signal: controller.signal,
