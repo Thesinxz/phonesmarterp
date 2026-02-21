@@ -34,9 +34,13 @@ const CHECKLIST_PADRAO: ChecklistItem[] = [
     // Mídia
     { id: "camera_traseira", label: "Câmera Traseira", icon: <Camera size={14} />, categoria: "Mídia" },
     { id: "camera_frontal", label: "Câmera Frontal", icon: <Camera size={14} />, categoria: "Mídia" },
-    { id: "auto_falante", label: "Auto-falante", icon: <Volume2 size={14} />, categoria: "Mídia" },
+    { id: "auto_falante", label: "Auto-falante Inferior", icon: <Volume2 size={14} />, categoria: "Mídia" },
+    { id: "som_auricular", label: "Auto-falante Auricular", icon: <Volume2 size={14} />, categoria: "Mídia" },
     { id: "microfone", label: "Microfone", icon: <Mic size={14} />, categoria: "Mídia" },
     { id: "flash", label: "Flash / Lanterna", categoria: "Mídia" },
+
+    // Sensores & Motores
+    { id: "vibracao", label: "Vibração", categoria: "Avançado" },
 
     // Visual
     { id: "carcaca", label: "Carcaça / Tampa", categoria: "Aparência" },

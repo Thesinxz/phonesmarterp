@@ -55,7 +55,7 @@ export default function VendaPrintPage() {
                 .from('configuracoes')
                 .select('valor')
                 .eq('chave', 'nfe_emitente')
-                .single();
+                .single() as { data: any };
 
             if (configData?.valor) {
                 setEmpresa(configData.valor);

@@ -7,71 +7,97 @@ interface TesteTouchProps {
 }
 
 export function TesteTouch({ onResult }: TesteTouchProps) {
-    const [touched, setTouched] = useState<Set<number>>(new Set());
-    const zones = 9; // 3x3 grid
-    const allTouched = touched.size >= zones;
+    const [touched, setTouched] = useState<boolean[]>(new Array(100).fill(false));
+    const [touchPercent, setTouchPercent] = useState(0);
 
-    const handleTouch = (zone: number) => {
-        setTouched(prev => {
-            const next = new Set(prev);
-            next.add(zone);
+    const handleTouch = (index: number) => {
+        if (touched[index]) return;
+        setTouched((prev) => {
+            const next = [...prev];
+            next[index] = true;
             return next;
         });
     };
 
     useEffect(() => {
-        if (allTouched) {
-            // Vibrar ao completar
+        const filled = touched.filter((v) => v).length;
+        setTouchPercent(Math.round((filled / 100) * 100));
+
+        if (filled >= 100) {
             if (navigator.vibrate) navigator.vibrate(100);
         }
-    }, [allTouched]);
+    }, [touched]);
+
+    const allTouched = touchPercent === 100;
 
     return (
-        <div className="flex flex-col items-center gap-6 p-6">
-            <div className="text-center">
-                <h3 className="text-xl font-bold text-white mb-2">Teste de Touch</h3>
-                <p className="text-white/60 text-sm">
-                    Toque em <strong className="text-white">todos os quadrados</strong> abaixo.
-                    Eles ficarão verdes ao serem tocados.
-                </p>
-                <p className="text-indigo-400 text-xs mt-1 font-bold">{touched.size}/{zones} zonas tocadas</p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 w-full aspect-square max-w-xs">
-                {Array.from({ length: zones }).map((_, i) => (
-                    <button
+        <div className="fixed inset-0 z-[100] bg-slate-950 touch-none select-none">
+            {/* Grid de Touch - Tela Inteira */}
+            <div className="grid grid-cols-10 grid-rows-10 w-full h-full">
+                {touched.map((filled, i) => (
+                    <div
                         key={i}
-                        onTouchStart={() => handleTouch(i)}
+                        onMouseEnter={(e) => {
+                            if (e.buttons === 1) handleTouch(i);
+                        }}
                         onMouseDown={() => handleTouch(i)}
-                        className={`rounded-xl border-2 transition-all duration-200 active:scale-95 flex items-center justify-center text-2xl font-bold ${touched.has(i)
-                                ? 'bg-emerald-500 border-emerald-400 text-white scale-95'
-                                : 'bg-white/10 border-white/20 text-white/40'
+                        onTouchStart={() => handleTouch(i)}
+                        onTouchMove={(e) => {
+                            const touch = e.touches[0];
+                            const el = document.elementFromPoint(
+                                touch.clientX,
+                                touch.clientY
+                            ) as HTMLElement;
+                            if (el && el.dataset.index) {
+                                handleTouch(parseInt(el.dataset.index));
+                            }
+                        }}
+                        data-index={i}
+                        className={`w-full h-full border-[0.5px] border-white/5 transition-colors duration-150 ${filled ? "bg-emerald-500/90" : "bg-white"
                             }`}
-                    >
-                        {touched.has(i) ? '✓' : i + 1}
-                    </button>
+                    />
                 ))}
             </div>
 
-            {allTouched && (
-                <div className="w-full animate-in slide-in-from-bottom-4 fade-in duration-500">
-                    <p className="text-emerald-400 text-center font-bold mb-3">✅ Todas as zonas responderam!</p>
-                    <div className="flex gap-3 w-full">
-                        <button onClick={() => onResult(true)} className="flex-1 py-4 rounded-2xl bg-emerald-600 text-white font-bold text-lg active:scale-95 transition-transform">
-                            ✅ Touch OK
-                        </button>
-                        <button onClick={() => onResult(false)} className="flex-1 py-4 rounded-2xl bg-red-600 text-white font-bold text-lg active:scale-95 transition-transform">
-                            ❌ Com Problema
+            {/* Overlay de Informações */}
+            <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
+                {!allTouched ? (
+                    <div className="bg-slate-900/80 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl flex flex-col items-center gap-4 animate-in fade-in zoom-in duration-500">
+                        <h3 className="text-2xl font-black text-white italic tracking-tighter uppercase">
+                            Teste de Touch
+                        </h3>
+                        <div className="flex flex-col items-center">
+                            <span className="text-6xl font-black text-indigo-400 tabular-nums">
+                                {touchPercent}%
+                            </span>
+                            <span className="text-[10px] font-bold text-white/50 uppercase tracking-[0.2em]">
+                                Área Coberta
+                            </span>
+                        </div>
+                        <p className="text-white/70 text-sm font-medium max-w-[200px] text-center leading-tight">
+                            Pinte toda a tela de <strong className="text-emerald-400">verde</strong> para validar o touch.
+                        </p>
+                        <button
+                            onClick={() => onResult(false)}
+                            className="pointer-events-auto mt-4 px-6 py-2 rounded-full bg-white/5 border border-white/10 text-white/40 text-[10px] font-bold uppercase tracking-widest hover:bg-white/10 transition-all"
+                        >
+                            Pular (Defeito)
                         </button>
                     </div>
-                </div>
-            )}
-
-            {!allTouched && (
-                <button onClick={() => onResult(false)} className="text-white/40 text-xs underline mt-4">
-                    Pular (marcar como defeito)
-                </button>
-            )}
+                ) : (
+                    <div className="bg-emerald-500 p-10 rounded-full shadow-[0_0_50px_rgba(16,185,129,0.5)] animate-in zoom-in duration-300 pointer-events-auto flex flex-col items-center gap-4">
+                        <div className="text-white font-black text-xl uppercase tracking-widest">
+                            Sucesso!
+                        </div>
+                        <button
+                            onClick={() => onResult(true)}
+                            className="bg-white text-emerald-600 px-8 py-4 rounded-2xl font-black text-2xl shadow-xl active:scale-95 transition-all"
+                        >
+                            CONTINUAR
+                        </button>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

@@ -28,6 +28,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useFinanceConfig } from "@/hooks/useFinanceConfig";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
+import { FileCode2 } from "lucide-react";
 
 interface CartItem extends Produto {
     quantity: number;
@@ -102,7 +103,7 @@ export default function PDVPage() {
                     table: "produtos",
                     filter: filter
                 },
-                (payload) => {
+                (payload: any) => {
                     console.log("Realtime PDV:", payload.eventType, payload);
                     if (payload.eventType === 'UPDATE') {
                         // Atualiza instantaneamente o estoque disponível na tela do PDV
@@ -115,7 +116,7 @@ export default function PDVPage() {
                     }
                 }
             )
-            .subscribe((status) => {
+            .subscribe((status: any) => {
                 console.log(`Realtime PDV Status [${channelId}]:`, status);
             });
 
@@ -218,7 +219,7 @@ export default function PDVPage() {
                     cliente_id: selectedClient?.id || null,
                     total_centavos: total,
                     desconto_centavos: Math.round(descontoReais * 100),
-                    forma_pagamento: paymentMethod === 'credito' ? `credito_${parcelas}x` : paymentMethod,
+                    forma_pagamento: ['credito', 'boleto', 'crediario'].includes(paymentMethod) ? `${paymentMethod}_${parcelas}x` : paymentMethod,
                     nfce_chave: null,
                     observacoes: taxaGatewayCentavos > 0 ? `Taxa Gateway: R$ ${(taxaGatewayCentavos / 100).toFixed(2)}` : "",
                 },
@@ -482,18 +483,20 @@ export default function PDVPage() {
                         </div>
 
                         {/* Payment Methods */}
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                             {[
                                 { id: "dinheiro", icon: Banknote, label: "Dinheiro" },
                                 { id: "pix", icon: QrCode, label: "Pix" },
                                 { id: "debito", icon: CreditCard, label: "Débito" },
                                 { id: "credito", icon: CreditCard, label: "Crédito" },
+                                { id: "crediario", icon: Banknote, label: "Fiado" },
                             ].map(method => (
                                 <button
                                     key={method.id}
                                     onClick={() => {
                                         setPaymentMethod(method.id);
-                                        if (method.id !== 'credito') setParcelas(1);
+                                        // Apenas para métodos que não suportam parcelamento, volta pra 1
+                                        if (!['credito', 'boleto', 'crediario'].includes(method.id)) setParcelas(1);
                                     }}
                                     className={cn(
                                         "flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all gap-1",
@@ -508,11 +511,11 @@ export default function PDVPage() {
                             ))}
                         </div>
 
-                        {/* Seletor de Parcelas (Apenas Crédito) */}
-                        {paymentMethod === 'credito' && (
+                        {/* Seletor de Parcelas */}
+                        {['credito', 'boleto', 'crediario'].includes(paymentMethod) && (
                             <div className="animate-in slide-in-from-top-2 duration-200">
                                 <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">
-                                    Número de Parcelas
+                                    Número de Parcelas ({paymentMethod})
                                 </label>
                                 <select
                                     value={parcelas}

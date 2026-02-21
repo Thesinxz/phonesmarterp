@@ -65,6 +65,13 @@ const navItems = [
         label: "Financeiro",
         href: "/financeiro",
         icon: DollarSign,
+        children: [
+            { label: "Visão Geral", href: "/financeiro" },
+            { label: "A Receber", href: "/financeiro/receber" },
+            { label: "A Pagar", href: "/financeiro/pagar" },
+            { label: "Caixa (PDV)", href: "/financeiro/caixa" },
+            { label: "DRE Gerencial", href: "/financeiro/dre" },
+        ]
     },
     {
         label: "Técnicos",

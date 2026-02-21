@@ -25,7 +25,6 @@ import { createDetailedOS } from "@/services/os";
 // Steps Components
 import { OSStep1Cliente } from "./OSStep1Cliente";
 import { OSStep2Equipamento } from "./OSStep2Equipamento";
-import { OSStepDiagnostic } from "./OSStepDiagnostic";
 import { OSStep3Problema } from "./OSStep3Problema";
 import { OSStep4PecasServicos } from "./OSStep4PecasServicos";
 import { OSStep5AgendaPagamento } from "./OSStep5AgendaPagamento";
@@ -34,7 +33,6 @@ import { OSStep6Resumo } from "./OSStep6Resumo";
 const STEPS = [
     { id: "cliente", label: "Cliente", icon: User },
     { id: "equipamento", label: "Equipamento", icon: Smartphone },
-    { id: "diagnostico", label: "Diagnóstico", icon: Bug },
     { id: "problema", label: "Problema", icon: Wrench },
     { id: "servicos", label: "Peças & Serviços", icon: Package },
     { id: "agenda", label: "Agenda & Pagto", icon: Calendar },
@@ -109,7 +107,7 @@ export function OSWizard() {
             toast.error("Marca e modelo são obrigatórios");
             return;
         }
-        if (currentStep === 3 && !formData.problema && formData.tags.length === 0) {
+        if (currentStep === 2 && !formData.problema && formData.tags.length === 0) {
             toast.error("Descreva o problema ou selecione tags");
             return;
         }
@@ -269,9 +267,9 @@ export function OSWizard() {
                     <div className="space-y-6">
                         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm">3</div>
-                            Diagnóstico de Hardware
+                            O que está acontecendo?
                         </h2>
-                        <OSStepDiagnostic
+                        <OSStep3Problema
                             data={formData}
                             onChange={(d) => setFormData(d)}
                         />
@@ -282,9 +280,9 @@ export function OSWizard() {
                     <div className="space-y-6">
                         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm">4</div>
-                            O que está acontecendo?
+                            Materiais e Mão de Obra
                         </h2>
-                        <OSStep3Problema
+                        <OSStep4PecasServicos
                             data={formData}
                             onChange={(d) => setFormData(d)}
                         />
@@ -295,9 +293,9 @@ export function OSWizard() {
                     <div className="space-y-6">
                         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm">5</div>
-                            Materiais e Mão de Obra
+                            Agenda, Responsável e Pagamento
                         </h2>
-                        <OSStep4PecasServicos
+                        <OSStep5AgendaPagamento
                             data={formData}
                             onChange={(d) => setFormData(d)}
                         />
@@ -308,19 +306,6 @@ export function OSWizard() {
                     <div className="space-y-6">
                         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm">6</div>
-                            Agenda, Responsável e Pagamento
-                        </h2>
-                        <OSStep5AgendaPagamento
-                            data={formData}
-                            onChange={(d) => setFormData(d)}
-                        />
-                    </div>
-                )}
-
-                {currentStep === 6 && (
-                    <div className="space-y-6">
-                        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm">7</div>
                             Confira os dados da Ordem de Serviço
                         </h2>
                         <OSStep6Resumo data={formData} />

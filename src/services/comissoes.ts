@@ -29,7 +29,7 @@ export async function getRelatorioComissoes(filtros: ComissaoFiltros) {
         tecnicosQuery = tecnicosQuery.eq("id", tecnico_id);
     }
 
-    const { data: tecnicos, error: errTecnicos } = await tecnicosQuery;
+    const { data: tecnicos, error: errTecnicos } = await tecnicosQuery as { data: any[]; error: any };
     if (errTecnicos) throw errTecnicos;
 
     // 2. Buscar OS Finalizadas/Entregues no período
@@ -46,7 +46,7 @@ export async function getRelatorioComissoes(filtros: ComissaoFiltros) {
         `)
         .in("status", ["finalizada", "entregue"])
         .gte("updated_at", startDate)
-        .lte("updated_at", endDate);
+        .lte("updated_at", endDate) as { data: any[]; error: any };
 
     if (errOS) throw errOS;
 

@@ -5,261 +5,248 @@ import {
     TrendingUp,
     TrendingDown,
     DollarSign,
-    Filter,
-    Plus,
+    Calendar,
     ArrowUpCircle,
     ArrowDownCircle,
-    Calendar,
     CheckCircle2,
     Clock,
-    MoreHorizontal
+    AlertCircle
 } from "lucide-react";
 import Link from "next/link";
-import { getFinanceiro, togglePagamento } from "@/services/financeiro";
-import { type Financeiro } from "@/types/database";
+import { getResumoTitulos } from "@/services/titulos";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { formatCurrency } from "@/utils/formatCurrency";
-import { formatDate } from "@/utils/formatDate";
 import { cn } from "@/utils/cn";
-import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 
 export default function FinanceiroPage() {
     const { profile } = useAuth();
-    const [movimentacoes, setMovimentacoes] = useState<Financeiro[]>([]);
+    const [resumoReceber, setResumoReceber] = useState<any>(null);
+    const [resumoPagar, setResumoPagar] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Carga inicial
-        loadData();
-
-        const supabase = createClient();
-        const channelId = profile?.empresa_id ? `financeiro-realtime-${profile.empresa_id}` : 'financeiro-realtime-global';
-        const filter = profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined;
-
-        const channel = supabase
-            .channel(channelId)
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "financeiro",
-                    filter: filter
-                },
-                (payload) => {
-                    console.log("Realtime Financeiro:", payload.eventType, payload);
-
-                    if (payload.eventType === 'UPDATE') {
-                        setMovimentacoes(current => current.map(m =>
-                            m.id === payload.new.id ? { ...m, ...payload.new } : m
-                        ));
-                    } else if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
-                        loadData();
-                    }
-                }
-            )
-            .subscribe((status) => {
-                console.log(`Realtime Financeiro Status [${channelId}]:`, status);
-            });
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
+        if (profile?.empresa_id) {
+            loadData();
+        }
     }, [profile?.empresa_id]);
 
     async function loadData() {
         setLoading(true);
         try {
-            const data = await getFinanceiro();
-            setMovimentacoes(data);
+            const [receber, pagar] = await Promise.all([
+                getResumoTitulos(profile!.empresa_id, 'receber'),
+                getResumoTitulos(profile!.empresa_id, 'pagar')
+            ]);
+
+            setResumoReceber(receber);
+            setResumoPagar(pagar);
         } catch (error) {
-            console.error("Erro ao carregar dados financeiros:", error);
+            console.error("Erro ao carregar resumos financeiros:", error);
         } finally {
             setLoading(false);
         }
     }
 
-    async function handleToggleStatus(item: Financeiro) {
-        try {
-            await togglePagamento(item.id, !item.pago);
-            loadData();
-        } catch (error) {
-            console.error("Erro ao alterar status:", error);
-        }
+    if (loading || !resumoReceber || !resumoPagar) {
+        return (
+            <div className="p-12 pl-0 flex justify-center">
+                <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+        );
     }
 
-    const entradas = movimentacoes
-        .filter(m => m.tipo === "entrada" && m.pago)
-        .reduce((sum, current) => sum + current.valor_centavos, 0);
-
-    const saidas = movimentacoes
-        .filter(m => m.tipo === "saida" && m.pago)
-        .reduce((sum, current) => sum + current.valor_centavos, 0);
-
-    const saldo = entradas - saidas;
+    const receberTotal = resumoReceber.totalAberto;
+    const pagarTotal = resumoPagar.totalAberto;
+    const saldoProjetado = receberTotal - pagarTotal;
 
     return (
-        <div className="space-y-6 page-enter pb-10">
+        <div className="space-y-6 page-enter pb-10 max-w-7xl mx-auto">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Financeiro</h1>
-                    <p className="text-slate-500 text-sm mt-0.5">Controle seu fluxo de caixa e faturamento</p>
+                    <h1 className="text-2xl font-bold text-slate-800">Visão Geral Financeira</h1>
+                    <p className="text-slate-500 text-sm mt-0.5">Acompanhamento do seu fluxo a pagar e a receber.</p>
                 </div>
                 <div className="flex gap-3">
                     <button className="bg-white/60 h-10 px-4 rounded-xl border border-white/60 text-slate-600 flex items-center gap-2 text-sm font-medium hover:bg-white/80 transition-all">
                         <Calendar size={16} />
                         Este Mês
                     </button>
-                    <Link href="/financeiro/novo" className="btn-primary">
-                        <Plus size={18} />
-                        Nova Movimentação
+                    <Link href="/financeiro/caixa" className="h-10 px-4 rounded-xl bg-indigo-600 text-white font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20">
+                        <DollarSign size={16} />
+                        Ir para Caixa (PDV)
                     </Link>
                 </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-6">
-                <GlassCard className="p-6 relative overflow-hidden border-emerald-100/50 bg-emerald-50/10">
+            {/* Projetado Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <GlassCard className="p-6 relative overflow-hidden border-emerald-100/50 bg-emerald-50/10 hover:border-emerald-200 transition-colors">
                     <div className="flex items-center justify-between relative z-10">
                         <div>
-                            <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">Entradas</p>
+                            <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">A Receber Total</p>
                             <p className="text-2xl font-black text-slate-800">
-                                R$ {(entradas / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                {formatCurrency(receberTotal)}
                             </p>
                         </div>
                         <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600">
                             <ArrowUpCircle size={28} />
                         </div>
                     </div>
-                    <div className="absolute -right-4 -bottom-4 opacity-[0.03] text-emerald-600">
+                    <div className="absolute -right-4 -bottom-4 opacity-[0.03] text-emerald-600 pointer-events-none">
                         <TrendingUp size={120} />
                     </div>
                 </GlassCard>
 
-                <GlassCard className="p-6 relative overflow-hidden border-red-100/50 bg-red-50/10">
+                <GlassCard className="p-6 relative overflow-hidden border-red-100/50 bg-red-50/10 hover:border-red-200 transition-colors">
                     <div className="flex items-center justify-between relative z-10">
                         <div>
-                            <p className="text-xs font-bold text-red-600 uppercase tracking-widest mb-1">Saídas</p>
+                            <p className="text-xs font-bold text-red-600 uppercase tracking-widest mb-1">A Pagar Total</p>
                             <p className="text-2xl font-black text-slate-800">
-                                R$ {(saidas / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                {formatCurrency(pagarTotal)}
                             </p>
                         </div>
                         <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center text-red-600">
                             <ArrowDownCircle size={28} />
                         </div>
                     </div>
-                    <div className="absolute -right-4 -bottom-4 opacity-[0.03] text-red-600">
+                    <div className="absolute -right-4 -bottom-4 opacity-[0.03] text-red-600 pointer-events-none">
                         <TrendingDown size={120} />
                     </div>
                 </GlassCard>
 
-                <GlassCard className="p-6 relative overflow-hidden border-brand-100/50 bg-brand-50/10">
+                <GlassCard className="p-6 relative overflow-hidden border-indigo-100/50 bg-indigo-50/10 hover:border-indigo-200 transition-colors">
                     <div className="flex items-center justify-between relative z-10">
                         <div>
-                            <p className="text-xs font-bold text-brand-600 uppercase tracking-widest mb-1">Saldo Atual</p>
+                            <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-1">Saldo Projetado</p>
                             <p className={cn(
                                 "text-2xl font-black text-slate-900",
-                                saldo < 0 && "text-red-600"
+                                saldoProjetado < 0 && "text-red-600"
                             )}>
-                                R$ {(saldo / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                {formatCurrency(saldoProjetado)}
                             </p>
                         </div>
-                        <div className="w-12 h-12 rounded-2xl bg-brand-100 flex items-center justify-center text-brand-600">
+                        <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600">
                             <DollarSign size={28} />
                         </div>
                     </div>
-                    <div className="absolute -right-4 -bottom-4 opacity-[0.03] text-brand-600">
+                    <div className="absolute -right-4 -bottom-4 opacity-[0.03] text-indigo-600 pointer-events-none">
                         <DollarSign size={120} />
                     </div>
                 </GlassCard>
             </div>
 
-            {/* List */}
-            <GlassCard className="p-0 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
-                    <h2 className="font-bold text-slate-700">Fluxo de Caixa</h2>
-                    <div className="relative">
-                        <button className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors">
-                            <Filter size={14} />
-                            FILTRAR POR CATEGORIA
-                        </button>
+            {/* Detailed Panels */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* A Pagar Breakdown */}
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6 flex flex-col">
+                    <div className="flex items-center justify-between mb-2">
+                        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+                                <TrendingDown size={16} />
+                            </div>
+                            Despesas (A Pagar)
+                        </h2>
+                        <Link href="/financeiro/pagar" className="text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors">
+                            Ver todas
+                        </Link>
                     </div>
+
+                    <div className="flex-1 space-y-4">
+                        <div className="flex items-center justify-between p-4 rounded-2xl border border-red-100 bg-red-50/50">
+                            <div className="flex items-center gap-3">
+                                <AlertCircle className="text-red-500" size={20} />
+                                <div>
+                                    <p className="font-bold text-slate-700">Atrasados</p>
+                                    <p className="text-xs text-slate-500">Títulos vencidos não pagos</p>
+                                </div>
+                            </div>
+                            <span className="text-lg font-black text-red-600">{formatCurrency(resumoPagar.atrasado)}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 rounded-2xl border border-amber-100 bg-amber-50/50">
+                            <div className="flex items-center gap-3">
+                                <Clock className="text-amber-500" size={20} />
+                                <div>
+                                    <p className="font-bold text-slate-700">Vencendo Hoje</p>
+                                    <p className="text-xs text-slate-500">Atenção com estes pagamentos</p>
+                                </div>
+                            </div>
+                            <span className="text-lg font-black text-amber-600">{formatCurrency(resumoPagar.vencendoHoje)}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                            <div className="flex items-center gap-3">
+                                <Calendar className="text-slate-500" size={20} />
+                                <div>
+                                    <p className="font-bold text-slate-700">A Vencer Futuro</p>
+                                    <p className="text-xs text-slate-500">Próximos dias</p>
+                                </div>
+                            </div>
+                            <span className="text-lg font-black text-slate-600">{formatCurrency(resumoPagar.aVencer)}</span>
+                        </div>
+                    </div>
+
+                    <Link href="/financeiro/pagar" className="w-full text-center block py-3 rounded-xl border-2 border-dashed border-red-200 text-red-600 font-bold hover:bg-red-50 transition-colors">
+                        Gerenciar Contas a Pagar
+                    </Link>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-slate-50/10 border-b border-slate-100 text-[10px] uppercase font-bold text-slate-400 tracking-widest">
-                            <tr>
-                                <th className="px-6 py-4">Status</th>
-                                <th className="px-6 py-4">Data/Vencimento</th>
-                                <th className="px-6 py-4">Descrição / Categoria</th>
-                                <th className="px-6 py-4">Valor</th>
-                                <th className="px-6 py-4 text-right">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {loading ? (
-                                Array.from({ length: 5 }).map((_, i) => (
-                                    <tr key={i} className="animate-pulse">
-                                        <td colSpan={5} className="px-6 py-4 h-16 bg-slate-50/30" />
-                                    </tr>
-                                ))
-                            ) : movimentacoes.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic">
-                                        Nenhuma movimentação registrada.
-                                    </td>
-                                </tr>
-                            ) : (
-                                movimentacoes.map((item) => (
-                                    <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
-                                        <td className="px-6 py-4">
-                                            <button
-                                                onClick={() => handleToggleStatus(item)}
-                                                className={cn(
-                                                    "flex items-center gap-2 text-[10px] font-black uppercase tracking-tighter px-2 py-1 rounded-full border",
-                                                    item.pago
-                                                        ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                                                        : "bg-amber-50 text-amber-600 border-amber-100"
-                                                )}
-                                            >
-                                                {item.pago ? (
-                                                    <><CheckCircle2 size={12} /> Pago</>
-                                                ) : (
-                                                    <><Clock size={12} /> Pendente</>
-                                                )}
-                                            </button>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <p className="font-semibold text-slate-700">{item.vencimento ? formatDate(item.vencimento) : '--/--/----'}</p>
-                                            <p className="text-[10px] text-slate-400">Registrado em {formatDate(item.created_at)}</p>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <p className="font-bold text-slate-800">{item.descricao || "Sem descrição"}</p>
-                                            <span className="badge badge-slate px-1.5 py-0 text-[10px]">{item.categoria}</span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={cn(
-                                                "font-black text-base",
-                                                item.tipo === "entrada" ? "text-emerald-600" : "text-red-500"
-                                            )}>
-                                                {item.tipo === "entrada" ? "+" : "-"} R$ {(item.valor_centavos / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all opacity-0 group-hover:opacity-100">
-                                                <MoreHorizontal size={18} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                {/* A Receber Breakdown */}
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6 flex flex-col">
+                    <div className="flex items-center justify-between mb-2">
+                        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                                <TrendingUp size={16} />
+                            </div>
+                            Receitas (A Receber)
+                        </h2>
+                        <Link href="/financeiro/receber" className="text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors">
+                            Ver todos
+                        </Link>
+                    </div>
+
+                    <div className="flex-1 space-y-4">
+                        <div className="flex items-center justify-between p-4 rounded-2xl border border-red-100 bg-red-50/50">
+                            <div className="flex items-center gap-3">
+                                <AlertCircle className="text-red-500" size={20} />
+                                <div>
+                                    <p className="font-bold text-slate-700">Inadimplentes</p>
+                                    <p className="text-xs text-slate-500">Boletos/crediário vencidos</p>
+                                </div>
+                            </div>
+                            <span className="text-lg font-black text-red-600">{formatCurrency(resumoReceber.atrasado)}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 rounded-2xl border border-emerald-100 bg-emerald-50/50">
+                            <div className="flex items-center gap-3">
+                                <CheckCircle2 className="text-emerald-500" size={20} />
+                                <div>
+                                    <p className="font-bold text-slate-700">Para Receber Hoje</p>
+                                    <p className="text-xs text-slate-500">Vencendo nesta data</p>
+                                </div>
+                            </div>
+                            <span className="text-lg font-black text-emerald-600">{formatCurrency(resumoReceber.vencendoHoje)}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                            <div className="flex items-center gap-3">
+                                <Calendar className="text-slate-500" size={20} />
+                                <div>
+                                    <p className="font-bold text-slate-700">A Vencer Futuro</p>
+                                    <p className="text-xs text-slate-500">Parcelas a longo prazo</p>
+                                </div>
+                            </div>
+                            <span className="text-lg font-black text-slate-600">{formatCurrency(resumoReceber.aVencer)}</span>
+                        </div>
+                    </div>
+
+                    <Link href="/financeiro/receber" className="w-full text-center block py-3 rounded-xl border-2 border-dashed border-emerald-200 text-emerald-600 font-bold hover:bg-emerald-50 transition-colors">
+                        Gerenciar Contas a Receber
+                    </Link>
                 </div>
-            </GlassCard>
+            </div>
         </div>
     );
 }

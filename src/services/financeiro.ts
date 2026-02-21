@@ -25,8 +25,8 @@ export async function createMovimentacao(mov: Database["public"]["Tables"]["fina
 }
 
 export async function togglePagamento(id: string, pago: boolean) {
-    const { error } = await supabase
-        .from("financeiro")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from("financeiro") as any)
         .update({ pago })
         .eq("id", id);
 

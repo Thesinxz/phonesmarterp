@@ -25,7 +25,7 @@ interface TesteStep {
 }
 
 const TESTES: TesteStep[] = [
-    { id: "som_inferior", label: "Alto-falante Inferior", emoji: "🔊" },
+    { id: "auto_falante", label: "Alto-falante Inferior", emoji: "🔊" },
     { id: "som_auricular", label: "Auricular (Topo)", emoji: "🔈" },
     { id: "vibracao", label: "Vibração", emoji: "📳" },
     { id: "touch", label: "Touch Screen", emoji: "👆" },
@@ -191,8 +191,8 @@ export default function TestePage({ params }: { params: { token: string } }) {
                             <div
                                 key={t.id}
                                 className={`h-1 flex-1 rounded-full transition-all ${resultados[t.id] === "ok" ? "bg-emerald-500" :
-                                        resultados[t.id] === "defeito" ? "bg-red-500" :
-                                            i === stepAtual ? "bg-indigo-500" : "bg-white/10"
+                                    resultados[t.id] === "defeito" ? "bg-red-500" :
+                                        i === stepAtual ? "bg-indigo-500" : "bg-white/10"
                                     }`}
                             />
                         ))}
@@ -201,7 +201,7 @@ export default function TestePage({ params }: { params: { token: string } }) {
 
                 {/* Conteúdo do teste atual */}
                 <div className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full">
-                    {testeAtual.id === "som_inferior" && <TesteSom tipo="inferior" onResult={(ok) => handleResult(testeAtual.id, ok)} />}
+                    {testeAtual.id === "auto_falante" && <TesteSom tipo="inferior" onResult={(ok) => handleResult(testeAtual.id, ok)} />}
                     {testeAtual.id === "som_auricular" && <TesteSom tipo="auricular" onResult={(ok) => handleResult(testeAtual.id, ok)} />}
                     {testeAtual.id === "vibracao" && <TesteVibracao onResult={(ok) => handleResult(testeAtual.id, ok)} />}
                     {testeAtual.id === "touch" && <TesteTouch onResult={(ok) => handleResult(testeAtual.id, ok)} />}

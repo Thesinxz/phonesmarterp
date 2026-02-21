@@ -26,6 +26,7 @@ import { useAuth } from "@/context/AuthContext";
 import { type Produto } from "@/types/database";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 
 export default function EstoquePage() {
     const { profile } = useAuth();
@@ -41,58 +42,7 @@ export default function EstoquePage() {
     const [totalItems, setTotalItems] = useState(0);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-    useEffect(() => {
-        if (profile?.empresa_id) {
-            loadProdutos();
-        }
-    }, [filters, currentPage, profile?.empresa_id]);
-
-    useEffect(() => {
-        if (!profile?.empresa_id) return;
-
-        const supabase = createClient();
-        const channelId = `stock-realtime-${profile.empresa_id}`;
-
-        const channel = supabase
-            .channel(channelId)
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "produtos",
-                    filter: `empresa_id=eq.${profile.empresa_id}`
-                },
-                (payload) => {
-                    console.log("Realtime Estoque:", payload.eventType, payload);
-
-                    if (payload.eventType === 'UPDATE') {
-                        setProdutos(current => current.map(p =>
-                            p.id === payload.new.id ? { ...p, ...payload.new } : p
-                        ));
-                    } else if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
-                        loadProdutos();
-                    }
-                }
-            )
-            .subscribe((status) => {
-                console.log(`Realtime Stock Status [${channelId}]:`, status);
-            });
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [profile?.empresa_id]);
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setFilters(prev => ({ ...prev, search: searchTerm }));
-            setCurrentPage(1); // Reset to page 1 on search
-        }, 500);
-        return () => clearTimeout(timer);
-    }, [searchTerm]);
-
-    async function loadProdutos() {
+    const loadProdutos = async () => {
         setLoading(true);
         try {
             const response = await getProdutos(currentPage, 50, filters);
@@ -104,7 +54,36 @@ export default function EstoquePage() {
         } finally {
             setLoading(false);
         }
-    }
+    };
+
+    useEffect(() => {
+        if (profile?.empresa_id) {
+            loadProdutos();
+        }
+    }, [filters, currentPage, profile?.empresa_id]);
+
+    useRealtimeSubscription({
+        table: "produtos",
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: (payload: any) => {
+            console.log("Realtime Estoque:", payload.eventType, payload);
+            if (payload.eventType === 'UPDATE') {
+                setProdutos(current => current.map(p =>
+                    p.id === payload.new.id ? { ...p, ...payload.new } : p
+                ));
+            } else {
+                loadProdutos();
+            }
+        }
+    });
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setFilters(prev => ({ ...prev, search: searchTerm }));
+            setCurrentPage(1); // Reset to page 1 on search
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
     const toggleSelect = (id: string) => {
         setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -32,15 +34,15 @@ export async function GET(request: Request) {
             .select('id, nome, sku, imei, codigo_barras, categoria')
             .eq('empresa_id', empresaId)
             .or(`nome.ilike.${searchTerm},sku.ilike.${searchTerm},imei.ilike.${searchTerm},codigo_barras.ilike.${searchTerm}`)
-            .limit(5);
+            .limit(5) as { data: any[] | null };
 
-        // 2. Buscar Clientes (por nome, cpf, telefone ou email)
+        // 2. Buscar Clientes (por nome, cpf_cnpj, telefone ou email)
         const { data: clientes } = await supabase
             .from('clientes')
-            .select('id, nome, telefone, cpf, email')
+            .select('id, nome, telefone, cpf_cnpj, email')
             .eq('empresa_id', empresaId)
-            .or(`nome.ilike.${searchTerm},cpf.ilike.${searchTerm},telefone.ilike.${searchTerm},email.ilike.${searchTerm}`)
-            .limit(5);
+            .or(`nome.ilike.${searchTerm},cpf_cnpj.ilike.${searchTerm},telefone.ilike.${searchTerm},email.ilike.${searchTerm}`)
+            .limit(5) as { data: any[] | null };
 
         // 3. Buscar OS (por ID numérico ou equipamento)
         // Se a busca for um número, tenta buscar pelo ID exato da OS
@@ -56,7 +58,7 @@ export async function GET(request: Request) {
             osQuery = osQuery.or(`equipamento.ilike.${searchTerm},marca.ilike.${searchTerm},problema_relatado.ilike.${searchTerm}`);
         }
 
-        const { data: os } = await osQuery.limit(5);
+        const { data: os } = await osQuery.limit(5) as { data: any[] | null };
 
         // Formatar resultados padronizados
         const results: any[] = [];
@@ -79,7 +81,7 @@ export async function GET(request: Request) {
                     type: 'cliente',
                     id: c.id,
                     title: c.nome,
-                    subtitle: `Cliente • ${c.telefone || c.email || c.cpf || ''}`,
+                    subtitle: `Cliente • ${c.telefone || c.email || c.cpf_cnpj || ''}`,
                     url: `/clientes/${c.id}`
                 });
             });

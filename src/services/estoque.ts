@@ -20,7 +20,7 @@ export async function getProdutos(page = 1, limit = 50, filters?: ProdutoFilters
         .range(from, to);
 
     if (filters?.search) {
-        query = query.or(`nome.ilike.%${filters.search}%,imei.ilike.%${filters.search}%,codigo_barras.ilike.%${filters.search}%`);
+        query = query.or(`nome.ilike.%${filters.search}%,imei.ilike.%${filters.search}%,codigo_barras.ilike.%${filters.search}%,categoria.ilike.%${filters.search}%,marca.ilike.%${filters.search}%`);
     }
 
     if (filters?.grade) {
@@ -112,8 +112,8 @@ export async function updateProduto(id: string, produto: Partial<Database["publi
 }
 
 export async function deleteProduto(id: string) {
-    const { error } = await supabase
-        .from("produtos")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from("produtos") as any)
         .delete()
         .eq("id", id);
 

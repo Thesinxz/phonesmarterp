@@ -145,24 +145,67 @@ export async function updateOSStatus(
     }
 
     // 5. Registrar no financeiro se estiver sendo entregue
-    // Se mudou para entregue e o valor > 0, registra entrada no financeiro como pago
+    // Lançaremos um Título "A Receber" para que o caixa/frente possa dar a baixa oficial
     if (status === "entregue" && currentOS.valor_total_centavos > 0) {
-        // Verificar se já não existe uma entrada para esta OS
+        // Verificar se já não existe um título para esta OS
         const { count } = await supabase
-            .from("financeiro")
+            .from("financeiro_titulos")
             .select("*", { count: 'exact', head: true })
-            .eq("descricao", `Recebimento OS #${String(currentOS.numero).padStart(4, "0")}`);
+            .eq("origem_tipo", "os")
+            .eq("origem_id", id);
 
         if (count === 0) {
-            await (supabase as any).from("financeiro").insert({
-                empresa_id: empresaId,
-                tipo: "entrada",
-                valor_centavos: currentOS.valor_total_centavos,
-                categoria: "Serviços de Manutenção",
-                descricao: `Recebimento OS #${String(currentOS.numero).padStart(4, "0")}`,
-                pago: true,
-                vencimento: new Date().toISOString()
-            });
+            const formaPagamento = extraFields?.forma_pagamento || 'dinheiro';
+            const isPrazo =
+                formaPagamento.startsWith('credito_') ||
+                formaPagamento.startsWith('boleto_') ||
+                formaPagamento.startsWith('crediario_');
+
+            if (isPrazo) {
+                // Instalar Parcelas
+                let qtdParcelas = 1;
+                const parts = formaPagamento.split('_');
+                if (parts.length > 1) {
+                    qtdParcelas = parseInt(parts[1].replace('x', '')) || 1;
+                }
+                const baseType = parts[0];
+
+                const valorParcela = Math.round(currentOS.valor_total_centavos / qtdParcelas);
+                const titulos = [];
+
+                for (let i = 1; i <= qtdParcelas; i++) {
+                    const vto = new Date();
+                    vto.setDate(vto.getDate() + (30 * i)); // Vencimentos a cada 30 dias
+
+                    titulos.push({
+                        empresa_id: empresaId,
+                        tipo: "receber",
+                        status: "pendente",
+                        valor_total_centavos: (i === qtdParcelas) ? currentOS.valor_total_centavos - (valorParcela * (qtdParcelas - 1)) : valorParcela,
+                        valor_pago_centavos: 0,
+                        categoria: "Serviços de Manutenção",
+                        descricao: `Parcela ${i}/${qtdParcelas} (${baseType}) - OS #${String(currentOS.numero).padStart(4, "0")}`,
+                        data_vencimento: vto.toISOString().split('T')[0],
+                        origem_tipo: "os",
+                        origem_id: id,
+                    });
+                }
+                await (supabase as any).from("financeiro_titulos").insert(titulos);
+            } else {
+                // Pagamento a vista (Pix, Dinheiro, Débito, Boleto a vista etc)
+                await (supabase as any).from("financeiro_titulos").insert({
+                    empresa_id: empresaId,
+                    tipo: "receber",
+                    status: "pendente",
+                    valor_total_centavos: currentOS.valor_total_centavos,
+                    valor_pago_centavos: 0,
+                    categoria: "Serviços de Manutenção",
+                    descricao: `Recebimento OS #${String(currentOS.numero).padStart(4, "0")}`,
+                    data_vencimento: new Date().toISOString().split('T')[0],
+                    origem_tipo: "os",
+                    origem_id: id,
+                });
+            }
         }
     }
 

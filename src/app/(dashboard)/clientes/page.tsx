@@ -8,6 +8,7 @@ import { type Cliente } from "@/types/database";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 
 export default function ClientesPage() {
     const { profile } = useAuth();
@@ -28,43 +29,24 @@ export default function ClientesPage() {
     }, [searchTerm]);
 
     useEffect(() => {
-        // Carga inicial
         loadClientes();
-
-        const supabase = createClient();
-        const channelId = profile?.empresa_id ? `clientes-realtime-${profile.empresa_id}` : 'clientes-realtime-global';
-        const filter = profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined;
-
-        const channel = supabase
-            .channel(channelId)
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "clientes",
-                    filter: filter
-                },
-                (payload) => {
-                    console.log("Realtime Clientes:", payload.eventType, payload);
-
-                    if (payload.eventType === 'UPDATE') {
-                        setClientes(current => current.map(c =>
-                            c.id === payload.new.id ? { ...c, ...payload.new } : c
-                        ));
-                    } else if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
-                        loadClientes();
-                    }
-                }
-            )
-            .subscribe((status) => {
-                console.log(`Realtime Clientes Status [${channelId}]:`, status);
-            });
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
     }, [filters, profile?.empresa_id]);
+
+    useRealtimeSubscription({
+        table: "clientes",
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: (payload: any) => {
+            console.log("Realtime Clientes:", payload.eventType, payload);
+
+            if (payload.eventType === 'UPDATE') {
+                setClientes(current => current.map(c =>
+                    c.id === payload.new.id ? { ...c, ...payload.new } : c
+                ));
+            } else {
+                loadClientes();
+            }
+        }
+    });
 
     async function loadClientes() {
         setLoading(true);

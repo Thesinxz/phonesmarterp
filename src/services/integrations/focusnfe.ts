@@ -15,7 +15,7 @@ export async function getFocusConfig(): Promise<FocusConfig | null> {
         .from("configuracoes")
         .select("valor")
         .eq("chave", "focus_nfe")
-        .single();
+        .single() as { data: any };
 
     if (!data) return null;
     return data.valor as FocusConfig;
@@ -38,7 +38,7 @@ export async function emitirNFCe(vendaId: string) {
             )
         `)
         .eq("id", vendaId)
-        .single();
+        .single() as { data: any; error: any };
 
     if (vendaError || !venda) throw new Error("Venda não encontrada.");
 

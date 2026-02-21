@@ -31,6 +31,7 @@ import { AssinaturaPad } from "@/components/os/AssinaturaPad";
 import { cn } from "@/utils/cn";
 import { formatDate } from "@/utils/formatDate";
 import { notifyOSStatusChange } from "@/actions/notifications";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
     aberta: { label: "Aberta", color: "text-slate-700", bg: "bg-slate-100" },
@@ -56,48 +57,33 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
     const [tokenTeste, setTokenTeste] = useState<string | null>(null);
     const [gerandoQR, setGerandoQR] = useState(false);
 
+    // Billing States
+    const [paymentMethod, setPaymentMethod] = useState("dinheiro");
+    const [parcelas, setParcelas] = useState(1);
+
     useEffect(() => {
-        if (!params.id) return;
-
-        loadOS();
-
-        const supabase = createClient();
-        const channel = supabase
-            .channel(`os-detail-${params.id}`)
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "ordens_servico",
-                    filter: `id=eq.${params.id}`
-                },
-                (payload) => {
-                    console.log("Realtime: OS detail changed", payload);
-                    loadOS();
-                }
-            )
-            .on(
-                "postgres_changes",
-                {
-                    event: "INSERT",
-                    schema: "public",
-                    table: "os_timeline",
-                    filter: `os_id=eq.${params.id}`
-                },
-                (payload) => {
-                    console.log("Realtime: OS timeline event", payload);
-                    loadOS();
-                }
-            )
-            .subscribe((status) => {
-                console.log("Realtime OS Detail Status:", status);
-            });
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
+        if (params.id) {
+            loadOS();
+        }
     }, [params.id]);
+
+    useRealtimeSubscription({
+        table: "ordens_servico",
+        filter: `id=eq.${params.id}`,
+        callback: (payload: any) => {
+            console.log("Realtime OS Detail:", payload.eventType);
+            loadOS();
+        }
+    });
+
+    useRealtimeSubscription({
+        table: "os_timeline",
+        filter: `os_id=eq.${params.id}`,
+        callback: (payload: any) => {
+            console.log("Realtime Timeline Detail:", payload.eventType);
+            loadOS();
+        }
+    });
 
     async function loadOS() {
         try {
@@ -141,10 +127,14 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                 ? new Date(Date.now() + os.garantia_dias * 86400000).toISOString()
                 : null;
 
+            const qtParcelas = ['credito', 'boleto', 'crediario'].includes(paymentMethod) ? parcelas : 1;
+            const formaFinal = qtParcelas > 1 ? `${paymentMethod}_${qtParcelas}x` : paymentMethod;
+
             const extraFields = {
                 checklist_saida_json: checklistSaida,
                 assinatura_base64: assinatura,
                 garantia_ate: garantiaAte,
+                forma_pagamento: formaFinal, // A repassar para updateOSStatus
             };
 
             await updateOSStatus(os.id, "entregue", profile.id, profile.empresa_id, extraFields);
@@ -450,6 +440,51 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                                     onChange={setChecklistSaida}
                                     compararCom={checklistEntrada}
                                 />
+                            </div>
+
+                            <div className="pt-4 border-t border-slate-100">
+                                <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
+                                    <ClipboardCheck size={16} className="text-blue-500" /> Faturamento Base
+                                </h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">
+                                            Forma de Recebimento
+                                        </label>
+                                        <select
+                                            value={paymentMethod}
+                                            onChange={(e) => {
+                                                setPaymentMethod(e.target.value);
+                                                if (!['credito', 'boleto', 'crediario'].includes(e.target.value)) setParcelas(1);
+                                            }}
+                                            className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-700"
+                                        >
+                                            <option value="dinheiro">Dinheiro</option>
+                                            <option value="pix">Pix</option>
+                                            <option value="debito">Cartão de Débito</option>
+                                            <option value="credito">Cartão de Crédito</option>
+                                            <option value="boleto">Boleto</option>
+                                            <option value="crediario">Fiado / Promissória</option>
+                                        </select>
+                                    </div>
+
+                                    {['credito', 'boleto', 'crediario'].includes(paymentMethod) && (
+                                        <div className="animate-in slide-in-from-top-2 duration-200">
+                                            <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">
+                                                Nº de Parcelas
+                                            </label>
+                                            <select
+                                                value={parcelas}
+                                                onChange={e => setParcelas(Number(e.target.value))}
+                                                className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 shadow-sm transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                            >
+                                                {[...Array(12)].map((_, i) => (
+                                                    <option key={i + 1} value={i + 1}>{i + 1}x</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="pt-4 border-t border-slate-100">

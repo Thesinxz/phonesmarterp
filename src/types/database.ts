@@ -266,6 +266,82 @@ export interface Database {
                 Insert: Omit<Database["public"]["Tables"]["tecnicos"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["tecnicos"]["Insert"]>;
             };
+            caixas: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    usuario_abertura_id: string;
+                    usuario_fechamento_id: string | null;
+                    data_abertura: string;
+                    data_fechamento: string | null;
+                    saldo_inicial: number;
+                    saldo_final_esperado: number | null;
+                    saldo_final_informado: number | null;
+                    diferenca_fechamento: number | null;
+                    status: "aberto" | "fechado";
+                    observacao: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["caixas"]["Row"], "id" | "created_at" | "updated_at">;
+                Update: Partial<Database["public"]["Tables"]["caixas"]["Insert"]>;
+            };
+            caixa_movimentacoes: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    caixa_id: string;
+                    usuario_id: string;
+                    vendedor_id: string | null;
+                    tipo: "venda" | "recebimento_os" | "sangria" | "reforco" | "pagamento_despesa";
+                    forma_pagamento: string;
+                    valor_centavos: number;
+                    observacao: string | null;
+                    origem_id: string | null;
+                    created_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["caixa_movimentacoes"]["Row"], "id" | "created_at">;
+                Update: never;
+            };
+            financeiro_titulos: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    tipo: "pagar" | "receber";
+                    status: "pendente" | "pago" | "atrasado" | "cancelado" | "parcial";
+                    descricao: string;
+                    valor_total_centavos: number;
+                    valor_pago_centavos: number;
+                    data_vencimento: string;
+                    data_pagamento: string | null;
+                    cliente_id: string | null;
+                    fornecedor_id: string | null;
+                    categoria: string;
+                    origem_tipo: string | null;
+                    origem_id: string | null;
+                    forma_pagamento_prevista: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["financeiro_titulos"]["Row"], "id" | "created_at" | "updated_at">;
+                Update: Partial<Database["public"]["Tables"]["financeiro_titulos"]["Insert"]>;
+            };
+            xml_importacoes: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    chave_acesso: string;
+                    fornecedor_cnpj: string | null;
+                    fornecedor_nome: string | null;
+                    valor_total_centavos: number | null;
+                    data_emissao: string | null;
+                    status_processamento: "pendente" | "processado" | "erro";
+                    arquivo_url: string | null;
+                    created_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["xml_importacoes"]["Row"], "id" | "created_at">;
+                Update: Partial<Database["public"]["Tables"]["xml_importacoes"]["Insert"]>;
+            };
             audit_logs: {
                 Row: {
                     id: string;
@@ -299,6 +375,10 @@ export type VendaItem = Database["public"]["Tables"]["venda_itens"]["Row"];
 export type Financeiro = Database["public"]["Tables"]["financeiro"]["Row"];
 export type Tecnico = Database["public"]["Tables"]["tecnicos"]["Row"];
 export type AuditLog = Database["public"]["Tables"]["audit_logs"]["Row"];
+export type Caixa = Database["public"]["Tables"]["caixas"]["Row"];
+export type CaixaMovimentacao = Database["public"]["Tables"]["caixa_movimentacoes"]["Row"];
+export type FinanceiroTitulo = Database["public"]["Tables"]["financeiro_titulos"]["Row"];
+export type XmlImportacao = Database["public"]["Tables"]["xml_importacoes"]["Row"];
 
 export type OsStatus = OrdemServico["status"];
 export type UserPapel = Usuario["papel"];

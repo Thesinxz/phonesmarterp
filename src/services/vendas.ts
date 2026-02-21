@@ -33,20 +33,68 @@ export async function finalizarVenda({ venda, itens, usuarioId }: FinalizarVenda
     const { error: itensError } = await (supabase.from("venda_itens") as any).insert(itensComVendaId);
     if (itensError) throw itensError;
 
-    // 3. Registrar no financeiro (entrada) como PAGO
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: finError } = await (supabase.from("financeiro") as any).insert({
-        empresa_id: venda.empresa_id,
-        tipo: "entrada",
-        valor_centavos: venda.total_centavos,
-        categoria: "Venda de Produtos",
-        descricao: `Venda PDV #${vendaData.numero ? String(vendaData.numero).padStart(5, '0') : vendaData.id.substring(0, 8)}`,
-        pago: true,
-        vencimento: new Date().toISOString()
-    });
+    // 3. Registrar no financeiro (Novo Módulo Títulos ou Caixa)
+    // Se for crédito parcelado ou "fiado", deve ir para Títulos a Receber.
+    // Se for à vista (dinheiro, pix, debito), idealmente cairia no Caixa Atual, 
+    // mas para manter compatibilidade temporária com o Dashboard antigo, registramos como pago.
 
-    if (finError) {
-        console.error("Erro ao registrar financeiro:", finError);
+    // Suporta: credito_1x, boleto_3x, crediario_5x
+    const isPrazo =
+        venda.forma_pagamento?.startsWith('credito_') ||
+        venda.forma_pagamento?.startsWith('boleto_') ||
+        venda.forma_pagamento?.startsWith('crediario_');
+
+    if (isPrazo) {
+        // Gerar parcelas no Contas a Receber
+        let qtdParcelas = 1;
+
+        // Pega o número final depois do underline (ex: credito_3x -> 3)
+        const parts = venda.forma_pagamento?.split('_') || [];
+        if (parts.length > 1) {
+            qtdParcelas = parseInt(parts[1].replace('x', '')) || 1;
+        }
+
+        const baseType = parts[0] || venda.forma_pagamento; // credito, boleto, crediario
+
+        const valorParcela = Math.round(venda.total_centavos / qtdParcelas);
+        const titulos = [];
+
+        for (let i = 1; i <= qtdParcelas; i++) {
+            // Vencimento projeta 30 dias para frente por parcela
+            const vto = new Date();
+            vto.setDate(vto.getDate() + (30 * i));
+
+            titulos.push({
+                empresa_id: venda.empresa_id,
+                tipo: 'receber',
+                status: 'pendente',
+                valor_total_centavos: (i === qtdParcelas) ? venda.total_centavos - (valorParcela * (qtdParcelas - 1)) : valorParcela,
+                valor_pago_centavos: 0,
+                data_vencimento: vto.toISOString().split('T')[0],
+                cliente_id: venda.cliente_id,
+                categoria: 'Venda Produtos',
+                descricao: `Parcela ${i}/${qtdParcelas} (${baseType}) - Venda PDV #${vendaData.numero || vendaData.id.substring(0, 8)}`,
+                origem_tipo: 'venda',
+                origem_id: vendaData.id
+            });
+        }
+
+        const { error: titulosError } = await (supabase.from('financeiro_titulos') as any).insert(titulos);
+        if (titulosError) console.error("Erro ao gerar parcelas no financeiro:", titulosError);
+
+    } else {
+        // Registro em Tabela Antiga / Baixado Automático
+        const { error: finError } = await (supabase.from("financeiro") as any).insert({
+            empresa_id: venda.empresa_id,
+            tipo: "entrada",
+            valor_centavos: venda.total_centavos,
+            categoria: "Venda de Produtos",
+            descricao: `Venda PDV à vista #${vendaData.numero ? String(vendaData.numero).padStart(5, '0') : vendaData.id.substring(0, 8)}`,
+            pago: true,
+            vencimento: new Date().toISOString()
+        });
+
+        if (finError) console.error("Erro ao registrar financeiro antigo:", finError);
     }
 
     // 4. Baixar estoque dos produtos e Pontos de Fidelidade
@@ -139,21 +187,22 @@ export async function criarPedido({ venda, itens, usuarioId }: FinalizarVendaDat
     const { error: itensError } = await (supabase.from("venda_itens") as any).insert(itensComVendaId);
     if (itensError) throw itensError;
 
-    // 3. Registrar no financeiro como A RECEBER (pago: false)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: finError } = await (supabase.from("financeiro") as any).insert({
+    // 3. Registrar no financeiro como A RECEBER (pago: false) no novo módulo
+    const { error: titulosError } = await (supabase.from('financeiro_titulos') as any).insert({
         empresa_id: venda.empresa_id,
-        tipo: "entrada",
-        valor_centavos: venda.total_centavos,
-        categoria: "Pedido de Venda",
-        descricao: `Pedido #${vendaData.numero ? String(vendaData.numero).padStart(5, '0') : vendaData.id.substring(0, 8)}`,
-        pago: false,
-        vencimento: new Date().toISOString()
+        tipo: 'receber',
+        status: 'pendente',
+        valor_total_centavos: venda.total_centavos,
+        valor_pago_centavos: 0,
+        data_vencimento: new Date().toISOString().split('T')[0], // Ou usar uma data vinda do form
+        cliente_id: venda.cliente_id,
+        categoria: 'Pedido de Venda',
+        descricao: `Pedido #${vendaData.numero || vendaData.id.substring(0, 8)}`,
+        origem_tipo: 'venda', // Mantemos 'venda' para relacionar facilmente (pedidos e vendas estão na mesma tabela)
+        origem_id: vendaData.id
     });
 
-    if (finError) {
-        console.error("Erro ao registrar financeiro:", finError);
-    }
+    if (titulosError) console.error("Erro ao gerar título pendente do pedido:", titulosError);
 
     // 4. Log de Auditoria
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -100,6 +100,7 @@ export function BuscaPecaEstoque({ onSelect }: BuscaPecaEstoqueProps) {
             // Passa para o wizard o objeto formatado
             onSelect({
                 id: data.id,
+                produto_id: data.id,
                 nome: data.nome,
                 preco: data.preco_venda_centavos || precoVendaCentavos,
                 custo: data.preco_custo_centavos || precoCustoCentavos,
@@ -128,8 +129,13 @@ export function BuscaPecaEstoque({ onSelect }: BuscaPecaEstoqueProps) {
     const addManualPart = () => {
         if (!search) return;
 
+        // Tenta inferir se o usuário já digitou um preço no final (ex: "Tela iPhone 300")
+        // Mas o ideal é perguntar. Vamos abrir o form de "Nova Peça" com o nome já preenchido
+        // OU simplesmente adicionar com preço 0 e focar o input de preço no componente pai.
+
         onSelect({
             id: `manual-${Date.now()}`,
+            produto_id: null,
             nome: search,
             preco: 0,
             custo: 0,
@@ -138,22 +144,54 @@ export function BuscaPecaEstoque({ onSelect }: BuscaPecaEstoqueProps) {
         });
         setSearch("");
         setResults([]);
-        toast.info("Peça manual adicionada (ajuste o preço no resumo)");
+        toast.info("Peça manual adicionada! Ajuste o preço abaixo.");
+    };
+
+    const handleSearchClick = (prod: any) => {
+        console.log("DEBUG: Selecionando produto da busca:", prod);
+        onSelect({
+            id: prod.id,
+            nome: prod.nome,
+            preco: prod.preco_venda_centavos,
+            custo: prod.preco_custo_centavos,
+            qtd: 1
+        });
+        setResults([]);
+        setSearch("");
+        toast.success(`${prod.nome} adicionado!`);
     };
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 relative">
             <div className="flex gap-2">
                 <div className="relative flex-1">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                     <input
                         type="text"
-                        placeholder="Buscar peça no estoque..."
-                        className="w-full h-14 pl-12 pr-4 rounded-2xl border border-slate-100 bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none text-lg transition-all"
+                        placeholder="Buscar peça ou digitar nome de nova..."
+                        className="w-full h-14 pl-12 pr-12 rounded-2xl border border-slate-100 bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none text-lg transition-all"
                         value={search}
                         onChange={(e) => handleSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && search && results.length === 0) {
+                                addManualPart();
+                            }
+                        }}
                     />
-                    {loading && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-500 animate-spin" size={20} />}
+                    {search && (
+                        <button
+                            type="button"
+                            onClick={() => { setSearch(""); setResults([]); }}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                        >
+                            <X size={20} />
+                        </button>
+                    )}
+                    {loading && (
+                        <div className="absolute right-12 top-1/2 -translate-y-1/2">
+                            <Loader2 className="text-indigo-500 animate-spin" size={20} />
+                        </div>
+                    )}
                 </div>
 
                 <button
@@ -162,8 +200,7 @@ export function BuscaPecaEstoque({ onSelect }: BuscaPecaEstoqueProps) {
                         setNewProduct(p => ({ ...p, nome: search }));
                         setShowNewForm(true);
                     }}
-                    className="h-14 px-6 rounded-2xl bg-slate-800 text-white font-bold flex items-center gap-2 hover:bg-slate-900 transition-all shadow-lg shadow-slate-200 shrink-0"
-                    title="Novo Produto"
+                    className="h-14 px-6 rounded-2xl bg-indigo-600 text-white font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 shrink-0"
                 >
                     <Plus size={24} />
                     <span className="hidden sm:inline">Nova Peça</span>
@@ -172,34 +209,26 @@ export function BuscaPecaEstoque({ onSelect }: BuscaPecaEstoqueProps) {
 
             {/* Resultados da busca */}
             {!showNewForm && results.length > 0 && (
-                <div className="bg-white rounded-2xl shadow-2xl border border-slate-50 overflow-hidden animate-in fade-in slide-in-from-top-4 z-10">
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-top-4 z-20 absolute left-0 right-0 max-h-[400px] overflow-y-auto">
                     {results.map(prod => (
                         <button
                             key={prod.id}
                             type="button"
-                            onClick={() => {
-                                console.log("DEBUG: Selecionando produto da busca:", prod);
-                                onSelect({
-                                    id: prod.id,
-                                    nome: prod.nome,
-                                    preco: prod.preco_venda_centavos,
-                                    custo: prod.preco_custo_centavos,
-                                    qtd: 1
-                                });
-                                setResults([]);
-                                setSearch("");
-                            }}
-                            className="w-full p-4 flex items-center justify-between hover:bg-indigo-50 transition-colors text-left border-b border-slate-50 last:border-0"
+                            onClick={() => handleSearchClick(prod)}
+                            className="w-full p-4 flex items-center justify-between hover:bg-indigo-50 transition-colors text-left border-b border-slate-100 last:border-0"
                         >
                             <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
-                                    <Package size={20} />
+                                <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
+                                    <Package size={24} />
                                 </div>
                                 <div>
-                                    <p className="font-bold text-slate-800">{prod.nome}</p>
+                                    <p className="font-bold text-slate-800 text-base">{prod.nome}</p>
                                     <div className="flex gap-3 mt-1">
-                                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest bg-slate-50 px-2 py-0.5 rounded">
-                                            Estoque: {prod.estoque_qtd}
+                                        <span className={cn(
+                                            "text-[10px] font-black uppercase px-2 py-0.5 rounded tracking-widest",
+                                            prod.estoque_qtd > 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+                                        )}>
+                                            {prod.estoque_qtd > 0 ? `Em estoque: ${prod.estoque_qtd}` : "Sem estoque"}
                                         </span>
                                         <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest bg-slate-50 px-2 py-0.5 rounded">
                                             {prod.categoria}
@@ -208,7 +237,7 @@ export function BuscaPecaEstoque({ onSelect }: BuscaPecaEstoqueProps) {
                                 </div>
                             </div>
                             <div className="text-right">
-                                <p className="text-lg font-black text-indigo-600">R$ {(prod.preco_venda_centavos / 100).toFixed(2)}</p>
+                                <p className="text-xl font-black text-brand-600">R$ {(prod.preco_venda_centavos / 100).toFixed(2)}</p>
                             </div>
                         </button>
                     ))}
@@ -217,25 +246,66 @@ export function BuscaPecaEstoque({ onSelect }: BuscaPecaEstoqueProps) {
 
             {/* Empty State / Opção Manual */}
             {!showNewForm && search.length >= 2 && results.length === 0 && !loading && (
-                <div className="p-8 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 space-y-4">
-                    <p className="text-slate-500 font-medium">Nenhuma peça encontrada com "{search}"</p>
-                    <div className="flex flex-wrap justify-center gap-3">
+                <div className="p-10 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200 space-y-6 shadow-sm">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
+                        <Package className="text-slate-300" size={32} />
+                    </div>
+                    <div>
+                        <p className="text-slate-700 font-bold text-lg">"{search}" não encontrado</p>
+                        <p className="text-slate-400 text-sm">O que você deseja fazer?</p>
+                    </div>
+
+                    <div className="max-w-xs mx-auto space-y-3">
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">R$</span>
+                            <input
+                                type="text"
+                                placeholder="0,00"
+                                id="manual-price-input"
+                                className="w-full h-12 pl-10 pr-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-center"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        const priceBtn = document.getElementById('add-manual-btn');
+                                        priceBtn?.click();
+                                    }
+                                }}
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            id="add-manual-btn"
+                            onClick={() => {
+                                const priceInput = document.getElementById('manual-price-input') as HTMLInputElement;
+                                const val = Math.round(parseFloat(priceInput?.value.replace(",", ".") || "0") * 100);
+                                onSelect({
+                                    id: `manual-${Date.now()}`,
+                                    produto_id: null,
+                                    nome: search,
+                                    preco: val,
+                                    custo: 0,
+                                    qtd: 1,
+                                    isManual: true
+                                });
+                                setSearch("");
+                                setResults([]);
+                                toast.success("Peça manual adicionada!");
+                            }}
+                            className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all active:scale-95"
+                        >
+                            <ShoppingCart size={20} /> Adicionar Manualmente
+                        </button>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-50">
                         <button
                             type="button"
                             onClick={() => {
                                 setNewProduct(p => ({ ...p, nome: search }));
                                 setShowNewForm(true);
                             }}
-                            className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 transition-all"
+                            className="text-indigo-600 font-bold text-sm hover:underline flex items-center gap-2 mx-auto"
                         >
-                            <Plus size={18} /> Cadastrar "{search}"
-                        </button>
-                        <button
-                            type="button"
-                            onClick={addManualPart}
-                            className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all"
-                        >
-                            <ShoppingCart size={18} /> Apenas usar este nome
+                            <Plus size={16} /> Cadastrar permanentemente no Estoque
                         </button>
                     </div>
                 </div>

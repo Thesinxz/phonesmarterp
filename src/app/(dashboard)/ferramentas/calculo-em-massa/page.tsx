@@ -660,7 +660,12 @@ export default function CalculoEmMassa() {
                         descricao: `Importado via Cálculo em Massa em ${new Date().toLocaleDateString()}`,
                         fornecedor_id: null,
                         condicao: "novo_lacrado" as const,
-                        exibir_vitrine: true
+                        exibir_vitrine: true,
+                        sku: null,
+                        cest: null,
+                        saude_bateria: null,
+                        memoria_ram: null,
+                        imagem_url: null,
                     };
                 });
 

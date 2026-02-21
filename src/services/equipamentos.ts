@@ -38,8 +38,8 @@ export async function updateEquipamento(id: string, equipamento: Database["publi
 }
 
 export async function deleteEquipamento(id: string) {
-    const { error } = await supabase
-        .from("equipamentos")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from("equipamentos") as any)
         .delete()
         .eq("id", id);
 

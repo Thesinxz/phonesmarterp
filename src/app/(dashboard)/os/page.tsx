@@ -18,6 +18,7 @@ import { type OrdemServico, type OsStatus } from "@/types/database";
 import { OSKanbanCard } from "@/components/os/OSKanbanCard";
 import { notifyOSStatusChange } from "@/actions/notifications";
 import { useAuth } from "@/context/AuthContext";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 
 const STAGES: { label: string; status: OsStatus; color: string }[] = [
     { label: "Abertas", status: "aberta", color: "bg-slate-500" },
@@ -42,78 +43,52 @@ export default function OSPage() {
     const [totalItems, setTotalItems] = useState(0);
 
     useEffect(() => {
-        // Carregamento inicial rápido
         loadOS();
-
-        const supabase = createClient();
-
-        // Inscrição para atualizações de toda a empresa
-        // Se o perfil demorar a carregar, tentamos sem filtro e depois reiniciamos com filtro de segurança
-        const channelId = profile?.empresa_id ? `os-realtime-${profile.empresa_id}` : 'os-realtime-global';
-        const filter = profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined;
-
-        console.log("Realtime: Conectando canal", channelId);
-
-        const channel = supabase
-            .channel(channelId)
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "ordens_servico",
-                    filter: filter
-                },
-                (payload) => {
-                    console.log("Realtime: Evento recebido", payload.eventType, payload);
-
-                    if (payload.eventType === 'INSERT') {
-                        // Fazemos fetch silencioso da nova OS para garantir joins atualizados (cliente, equipamento)
-                        supabase
-                            .from('ordens_servico')
-                            .select('*, cliente:clientes(nome), equipamento:equipamentos(marca, modelo), tecnico:usuarios(nome)')
-                            .eq('id', payload.new.id)
-                            .single()
-                            .then(({ data }) => {
-                                if (data) {
-                                    setOrders(current => {
-                                        // Evita duplicatas se o evento disparar duas vezes
-                                        if (current.some(o => o.id === (data as any).id)) return current;
-                                        return [data, ...current];
-                                    });
-                                }
-                            });
-                    } else if (payload.eventType === 'UPDATE') {
-                        // Atualização: Atualizamos o estado local IMEDIATAMENTE para ser ultra rápido
-                        setOrders(current => current.map(os =>
-                            os.id === payload.new.id ? { ...os, ...payload.new } : os
-                        ));
-                        // Fazemos fetch silencioso em background para garantir joins atualizados
-                        supabase
-                            .from('ordens_servico')
-                            .select('*, cliente:clientes(nome), equipamento:equipamentos(marca, modelo), tecnico:usuarios(nome)')
-                            .eq('id', payload.new.id)
-                            .single()
-                            .then(({ data }) => {
-                                if (data) {
-                                    setOrders(current => current.map(os =>
-                                        os.id === (data as any).id ? data : os
-                                    ));
-                                }
-                            });
-                    } else if (payload.eventType === 'DELETE') {
-                        setOrders(current => current.filter(os => os.id !== payload.old.id));
-                    }
-                }
-            )
-            .subscribe((status) => {
-                console.log(`Realtime OS Status [${channelId}]:`, status);
-            });
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
     }, [profile?.empresa_id, currentPage, viewMode]);
+
+    useRealtimeSubscription({
+        table: "ordens_servico",
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: (payload: any) => {
+            console.log("Realtime OS:", payload.eventType, payload);
+            const supabase = createClient();
+
+            if (payload.eventType === 'INSERT') {
+                supabase
+                    .from('ordens_servico')
+                    .select('*, cliente:clientes(nome), equipamento:equipamentos(marca, modelo), tecnico:usuarios(nome)')
+                    .eq('id', payload.new.id)
+                    .single()
+                    .then(({ data }) => {
+                        if (data) {
+                            setOrders(current => {
+                                if (current.some(o => o.id === (data as any).id)) return current;
+                                return [data, ...current];
+                            });
+                        }
+                    });
+            } else if (payload.eventType === 'UPDATE') {
+                setOrders(current => current.map(os =>
+                    os.id === payload.new.id ? { ...os, ...payload.new } : os
+                ));
+
+                supabase
+                    .from('ordens_servico')
+                    .select('*, cliente:clientes(nome), equipamento:equipamentos(marca, modelo), tecnico:usuarios(nome)')
+                    .eq('id', payload.new.id)
+                    .single()
+                    .then(({ data }) => {
+                        if (data) {
+                            setOrders(current => current.map(os =>
+                                os.id === (data as any).id ? data : os
+                            ));
+                        }
+                    });
+            } else if (payload.eventType === 'DELETE') {
+                setOrders(current => current.filter(os => os.id !== payload.old.id));
+            }
+        }
+    });
 
     async function loadOS() {
         setLoading(true);
