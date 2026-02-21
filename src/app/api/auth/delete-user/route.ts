@@ -13,6 +13,10 @@ export const dynamic = 'force-dynamic';
  * Body: { userId: string } (ID do registro na tabela `usuarios`)
  */
 export async function DELETE(request: NextRequest) {
+    // Guard: env not configured (static build), bail out early
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+        return NextResponse.json({ error: 'Service not configured' }, { status: 503 });
+    }
     const supabaseAdmin = getSupabaseAdmin();
     try {
         const body = await request.json();
