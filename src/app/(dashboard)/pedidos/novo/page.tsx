@@ -63,8 +63,8 @@ export default function NovoPedidoPage() {
     async function loadProducts(search?: string) {
         setLoading(true);
         try {
-            const data = await getProdutos({ search });
-            setProducts(data);
+            const response = await getProdutos(1, 50, { search });
+            setProducts(response.data);
         } catch (error) {
             console.error("Erro ao carregar produtos:", error);
         } finally {

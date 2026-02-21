@@ -37,12 +37,12 @@ export default function BalancoEstoquePage() {
 
     async function loadData() {
         try {
-            const produtos = await getProdutos();
+            const response = await getProdutos(1, 1000); // Carrega até 1000 produtos para o balanço
 
             const newInventory: Record<string, ScannedItem> = {};
             const newLookup: Record<string, string> = {};
 
-            produtos.forEach(p => {
+            response.data.forEach(p => {
                 newInventory[p.id] = {
                     produto: p,
                     qtdEsperada: p.estoque_qtd,

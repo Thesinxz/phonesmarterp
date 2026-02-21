@@ -44,11 +44,11 @@ export default function PedidosPage() {
     async function loadData() {
         setLoading(true);
         try {
-            const data = await getVendas({
+            const response = await getVendas(1, 50, {
                 tipo: "pedido",
                 status: activeTab === "todos" ? undefined : activeTab
             });
-            setPedidos(data || []);
+            setPedidos(response.data || []);
         } catch (error) {
             console.error("Erro ao carregar pedidos:", error);
         } finally {
