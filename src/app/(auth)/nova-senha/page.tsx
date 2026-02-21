@@ -18,14 +18,38 @@ export default function NovaSenhaPage() {
     // Verificar se o usuário tem uma sessão válida (veio do link de reset)
     useEffect(() => {
         const supabase = createClient();
+
+        // Verificar sessão atual (pode já estar ativa se veio do /auth/callback)
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session) {
                 setSessionReady(true);
-            } else {
-                setError("Link de redefinição inválido ou expirado. Solicite um novo link.");
             }
         });
+
+        // Escutar evento PASSWORD_RECOVERY — disparado automaticamente pelo Supabase
+        // quando o link de recuperação é acessado (mesmo via hash token)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
+                setSessionReady(true);
+                setError(null);
+            }
+        });
+
+        // Timeout: se após 3 segundos ainda não há sessão, mostrar erro
+        const timer = setTimeout(() => {
+            supabase.auth.getSession().then(({ data: { session } }) => {
+                if (!session) {
+                    setError("Link de redefinição inválido ou expirado. Solicite um novo link.");
+                }
+            });
+        }, 3000);
+
+        return () => {
+            subscription.unsubscribe();
+            clearTimeout(timer);
+        };
     }, []);
+
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
