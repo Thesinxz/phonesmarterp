@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 /**
  * POST /api/onboarding/save-config
@@ -10,6 +10,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
  * Body: { chave: string, valor: any, empresa_id: string }
  */
 export async function POST(request: NextRequest) {
+    const supabaseAdmin = getSupabaseAdmin();
     try {
         const body = await request.json();
         const { configs, empresa_id } = body;

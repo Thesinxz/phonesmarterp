@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +13,7 @@ export const dynamic = 'force-dynamic';
  * Body: { userId: string } (ID do registro na tabela `usuarios`)
  */
 export async function DELETE(request: NextRequest) {
+    const supabaseAdmin = getSupabaseAdmin();
     try {
         const body = await request.json();
         const { userId } = body;

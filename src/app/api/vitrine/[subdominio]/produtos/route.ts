@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { ProdutoVitrine, ParcelaInfo, VitrineConfig, VitrineResponse } from "@/types/vitrine";
 import type { PaymentGateway, CategoriaMargin } from "@/types/configuracoes";
 
@@ -14,6 +14,7 @@ export async function GET(
     request: NextRequest,
     { params }: { params: { subdominio: string } }
 ) {
+    const supabaseAdmin = getSupabaseAdmin();
     try {
         const { subdominio } = params;
 

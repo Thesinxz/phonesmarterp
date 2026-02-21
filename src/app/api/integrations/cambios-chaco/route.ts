@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic'; // Não cachear a resposta da rota
 
 export async function GET() {
+    const supabaseAdmin = getSupabaseAdmin();
     try {
         console.log("Iniciando atualização de câmbio...");
 
