@@ -36,6 +36,7 @@ import { useFinanceConfig } from "@/hooks/useFinanceConfig";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { calculateSuggestedPrice } from "@/utils/product-pricing";
 import { cn } from "@/utils/cn";
+import { toast } from "sonner";
 
 export default function DetalheProdutoPage({ params }: { params: { id: string } }) {
     const router = useRouter();
@@ -163,12 +164,38 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if (!profile) return;
+
+        if (!profile) {
+            toast.error("Sua sessão pode ter expirado. Tente atualizar a página.");
+            return;
+        }
 
         setLoading(true);
         try {
-            const custoCentavos = Math.round(parseFloat(form.precoCusto.replace(/\./g, '').replace(',', '.')) * 100) || 0;
-            const vendaCentavos = Math.round(parseFloat(form.precoVenda.replace(/\./g, '').replace(',', '.')) * 100) || 0;
+            // Remove points (thousands separator) and replace comma with dot for proper float parsing
+            const cleanCusto = form.precoCusto.replace(/\./g, '').replace(',', '.').trim();
+            const cleanVenda = form.precoVenda.replace(/\./g, '').replace(',', '.').trim();
+
+            const custoVal = parseFloat(cleanCusto);
+            const vendaVal = parseFloat(cleanVenda);
+
+            if (isNaN(custoVal) || isNaN(vendaVal)) {
+                toast.error("Preço inválido. Use o formato 0,00");
+                setLoading(false);
+                return;
+            }
+
+            const custoCentavos = Math.round(custoVal * 100);
+            const vendaCentavos = Math.round(vendaVal * 100);
+
+            // Validar IMEI se preenchido (deve ter 15 dígitos)
+            if (form.imei && !/^\d{15}$/.test(form.imei)) {
+                toast.error("O IMEI deve conter exatamente 15 números.");
+                setLoading(false);
+                return;
+            }
+
+            console.log("Salvando produto:", params.id, { nome: form.nome, imei: form.imei });
 
             await updateProduto(params.id, {
                 nome: form.nome,
@@ -178,33 +205,34 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                 capacidade: form.capacidade || null,
                 preco_custo_centavos: custoCentavos,
                 preco_venda_centavos: vendaCentavos,
-                estoque_qtd: parseInt(form.estoqueQtd),
-                estoque_minimo: parseInt(form.estoqueMinimo),
+                estoque_qtd: parseInt(form.estoqueQtd) || 0,
+                estoque_minimo: parseInt(form.estoqueMinimo) || 0,
                 codigo_barras: form.codigoBarras || null,
-                sku: form.codigoBarras || null, // salva o mesmo pro SKU por ora, ou interno
+                sku: form.codigoBarras || null,
                 descricao: form.descricao || null,
-                // Avançados
                 condicao: form.condicao as any,
                 saude_bateria: form.saudeBateria ? parseInt(form.saudeBateria) : null,
                 memoria_ram: form.memoriaRam || null,
                 exibir_vitrine: form.exibirVitrine,
                 imagem_url: form.imagemUrl || null,
-                // Fiscal
                 ncm: form.ncm,
                 cfop: form.cfop,
                 origem: form.origem,
                 cest: form.cest || null,
-
-                fornecedor_id: null,
                 categoria: form.categoria || null,
                 subcategoria: form.subcategoria || null
             } as any);
 
-            router.push("/estoque");
-            router.refresh();
-        } catch (error) {
+            toast.success("Produto salvo com sucesso!");
+
+            setTimeout(() => {
+                router.push("/estoque");
+                router.refresh();
+            }, 800);
+        } catch (error: any) {
             console.error("Erro ao salvar produto:", error);
-            alert("Erro ao salvar produto.");
+            const msg = error.message || "Erro desconhecido";
+            toast.error(`Falha ao salvar: ${msg}`);
         } finally {
             setLoading(false);
         }

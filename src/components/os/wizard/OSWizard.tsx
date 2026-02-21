@@ -15,8 +15,6 @@ import {
     Loader2,
     Bug,
     Copy,
-    ChevronDown,
-    ChevronUp
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -27,6 +25,7 @@ import { createDetailedOS } from "@/services/os";
 // Steps Components
 import { OSStep1Cliente } from "./OSStep1Cliente";
 import { OSStep2Equipamento } from "./OSStep2Equipamento";
+import { OSStepDiagnostic } from "./OSStepDiagnostic";
 import { OSStep3Problema } from "./OSStep3Problema";
 import { OSStep4PecasServicos } from "./OSStep4PecasServicos";
 import { OSStep5AgendaPagamento } from "./OSStep5AgendaPagamento";
@@ -35,6 +34,7 @@ import { OSStep6Resumo } from "./OSStep6Resumo";
 const STEPS = [
     { id: "cliente", label: "Cliente", icon: User },
     { id: "equipamento", label: "Equipamento", icon: Smartphone },
+    { id: "diagnostico", label: "Diagnóstico", icon: Bug },
     { id: "problema", label: "Problema", icon: Wrench },
     { id: "servicos", label: "Peças & Serviços", icon: Package },
     { id: "agenda", label: "Agenda & Pagto", icon: Calendar },
@@ -97,7 +97,6 @@ export function OSWizard() {
 
     useEffect(() => {
         localStorage.setItem("smartos_nova_os_wizard", JSON.stringify(formData));
-        console.log("DEBUG: Novo estado do formData:", formData);
     }, [formData]);
 
     const nextStep = () => {
@@ -110,7 +109,7 @@ export function OSWizard() {
             toast.error("Marca e modelo são obrigatórios");
             return;
         }
-        if (currentStep === 2 && !formData.problema && formData.tags.length === 0) {
+        if (currentStep === 3 && !formData.problema && formData.tags.length === 0) {
             toast.error("Descreva o problema ou selecione tags");
             return;
         }
@@ -170,8 +169,6 @@ export function OSWizard() {
                 prioridade: formData.prioridade
             };
 
-            console.log("DEBUG: Payload de envio OS:", JSON.stringify(payload, null, 2));
-
             const os = await createDetailedOS(payload, profile.id);
             toast.success("Ordem de Serviço aberta com sucesso!");
             localStorage.removeItem("smartos_nova_os_wizard");
@@ -180,7 +177,6 @@ export function OSWizard() {
             const errorDetail = error?.code
                 ? `[${error.code}] ${error.message}${error.hint ? ' | Dica: ' + error.hint : ''}`
                 : (error.message || JSON.stringify(error));
-            console.error("DEBUG ERRO COMPLETO:", JSON.stringify(error, null, 2));
             setLastError(errorDetail);
             toast.error(`Erro: ${errorDetail}`);
         } finally {
@@ -199,7 +195,7 @@ export function OSWizard() {
                             "w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 shrink-0",
                             showDebug ? "bg-amber-100 text-amber-600 shadow-lg shadow-amber-500/20" : "bg-white text-slate-300 hover:text-slate-500 border border-slate-100"
                         )}
-                        title="Toggle Diagnostic Panel"
+                        title="Painel de Diagnóstico"
                     >
                         <Bug size={20} />
                     </button>
@@ -273,9 +269,9 @@ export function OSWizard() {
                     <div className="space-y-6">
                         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm">3</div>
-                            O que está acontecendo?
+                            Diagnóstico de Hardware
                         </h2>
-                        <OSStep3Problema
+                        <OSStepDiagnostic
                             data={formData}
                             onChange={(d) => setFormData(d)}
                         />
@@ -286,9 +282,9 @@ export function OSWizard() {
                     <div className="space-y-6">
                         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm">4</div>
-                            Materiais e Mão de Obra
+                            O que está acontecendo?
                         </h2>
-                        <OSStep4PecasServicos
+                        <OSStep3Problema
                             data={formData}
                             onChange={(d) => setFormData(d)}
                         />
@@ -299,9 +295,9 @@ export function OSWizard() {
                     <div className="space-y-6">
                         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm">5</div>
-                            Agenda, Responsável e Pagamento
+                            Materiais e Mão de Obra
                         </h2>
-                        <OSStep5AgendaPagamento
+                        <OSStep4PecasServicos
                             data={formData}
                             onChange={(d) => setFormData(d)}
                         />
@@ -312,6 +308,19 @@ export function OSWizard() {
                     <div className="space-y-6">
                         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm">6</div>
+                            Agenda, Responsável e Pagamento
+                        </h2>
+                        <OSStep5AgendaPagamento
+                            data={formData}
+                            onChange={(d) => setFormData(d)}
+                        />
+                    </div>
+                )}
+
+                {currentStep === 6 && (
+                    <div className="space-y-6">
+                        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm">7</div>
                             Confira os dados da Ordem de Serviço
                         </h2>
                         <OSStep6Resumo data={formData} />

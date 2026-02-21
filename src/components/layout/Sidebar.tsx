@@ -92,14 +92,14 @@ const navItems = [
         icon: FileText,
     },
     {
-        label: "Auditoria",
-        href: "/configuracoes/auditoria",
-        icon: HistoryIcon,
-    },
-    {
         label: "Configurações",
         href: "/configuracoes",
         icon: Settings,
+        children: [
+            { label: "Geral & Dados", href: "/configuracoes" },
+            { label: "Etiquetas", href: "/configuracoes/etiquetas/a4" },
+            { label: "Auditoria", href: "/configuracoes/auditoria" },
+        ]
     },
 ];
 

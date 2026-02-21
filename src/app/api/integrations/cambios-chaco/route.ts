@@ -35,11 +35,12 @@ export async function GET() {
 
         const newRate = Number(brlRate.saleArbitrage);
 
-        console.log(`Nova cotação encontrada: ${newRate}`);
-
-        if (!newRate || isNaN(newRate)) {
-            throw new Error('Valor de cotação inválido recebido');
+        if (!newRate || isNaN(newRate) || newRate <= 0) {
+            console.error("Cotação inválida recebida:", brlRate.saleArbitrage);
+            throw new Error(`Valor de cotação inválido recebido: ${brlRate.saleArbitrage}`);
         }
+
+        console.log(`Nova cotação encontrada: ${newRate} (saleArbitrage)`);
 
         // 3. Atualizar configurações no banco (Para todas as empresas)
         // Primeiro buscamos todas as configs financeiras
@@ -48,7 +49,10 @@ export async function GET() {
             .select('id, valor, empresa_id')
             .eq('chave', 'financeiro');
 
-        if (fetchError) throw fetchError;
+        if (fetchError) {
+            console.error("Erro ao buscar configs no Supabase:", fetchError);
+            throw fetchError;
+        }
 
         let updatedCount = 0;
         const updates = [];
@@ -83,10 +87,32 @@ export async function GET() {
         });
 
     } catch (error: any) {
-        console.error("Erro ao atualizar câmbio:", error);
+        console.error("Erro ao atualizar câmbio:", error.message);
+
+        // Fallback: Tentar buscar a última cotação conhecida no banco para não quebrar o dashboard
+        try {
+            const { data: config } = await supabaseAdmin
+                .from('configuracoes')
+                .select('valor')
+                .eq('chave', 'financeiro')
+                .limit(1)
+                .single();
+
+            if (config?.valor?.cotacao_dolar_paraguai) {
+                return NextResponse.json({
+                    success: false,
+                    error: `API Externa Offline (502). Usando última cotação: ${config.valor.cotacao_dolar_paraguai}`,
+                    rate: config.valor.cotacao_dolar_paraguai,
+                    fallback: true
+                });
+            }
+        } catch (dbErr) {
+            console.error("Erro no fallback de banco:", dbErr);
+        }
+
         return NextResponse.json(
             { success: false, error: error.message },
-            { status: 500 }
+            { status: 200 } // Retornamos 200 para evitar erros críticos no console do cliente
         );
     }
 }

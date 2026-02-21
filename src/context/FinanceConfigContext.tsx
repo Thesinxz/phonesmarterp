@@ -68,12 +68,13 @@ export function FinanceConfigProvider({ children }: { children: ReactNode }) {
     // Inicializa direto do sessionStorage para evitar flash de loading
     const cached = typeof window !== "undefined" ? readFromStorage() : null;
 
-    const [config, setConfig] = useState<FinanceiroConfig | null>(cached?.config ?? null);
-    const [defaultGateway, setDefaultGateway] = useState<PaymentGateway | null>(cached?.gateway ?? null);
-    const [loading, setLoading] = useState(!cached);
+    const [config, setConfig] = useState<FinanceiroConfig | null>(null);
+    const [defaultGateway, setDefaultGateway] = useState<PaymentGateway | null>(null);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const cambioChecked = useRef(false);
     const isFetching = useRef(false);
+    const initialized = useRef(false);
 
     const loadFromDB = useCallback(async () => {
         if (isFetching.current) return;
@@ -105,23 +106,37 @@ export function FinanceConfigProvider({ children }: { children: ReactNode }) {
 
     // Carrega na montagem do Provider (ocorre 1x por sessão de aba, no layout)
     useEffect(() => {
-        if (cached) return; // Já tem cache, não precisa buscar
+        if (initialized.current) return;
+        initialized.current = true;
 
-        // Só buscar do DB se houver sessão ativa
         const checkAndLoad = async () => {
             try {
+                // 1. Tentar carregar do storage primeiro (Client-side only)
+                const storage = readFromStorage();
+                if (storage) {
+                    setConfig(storage.config);
+                    setDefaultGateway(storage.gateway);
+                    setLoading(false);
+                    // Não retorna aqui, pois ainda precisamos verificar se o dólar mudou (abaixo)
+                }
+
+                // 2. Só buscar do DB se houver sessão ativa
                 const { data: { session } } = await supabase.auth.getSession();
                 if (session) {
-                    loadFromDB();
+                    // Se não tinha no storage, carrega do DB
+                    if (!storage) {
+                        await loadFromDB();
+                    }
                 } else {
                     setLoading(false);
                 }
-            } catch {
+            } catch (err) {
+                console.error("[FinanceConfig] Erro no checkAndLoad:", err);
                 setLoading(false);
             }
         };
         checkAndLoad();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [loadFromDB]);
 
     // Auto-refresh silencioso da cotação do dólar a cada 1h
     useEffect(() => {

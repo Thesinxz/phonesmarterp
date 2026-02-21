@@ -30,6 +30,15 @@ export function createClient() {
                         Accept: "application/json"
                     }
                 },
+                auth: {
+                    persistSession: true,
+                    autoRefreshToken: true,
+                    detectSessionInUrl: true,
+                    // Desativamos o Navigator LockManager (lock: null) porque ele causa 
+                    // NavigatorLockAcquireTimeoutError em muitos ambientes (inclusive Mac/Chrome).
+                    // Isso força o uso de um lock em memória, que é mais resiliente para dev local.
+                    lock: null,
+                },
                 cookieOptions: {
                     secure: process.env.NODE_ENV === "production",
                     sameSite: "lax" as const,

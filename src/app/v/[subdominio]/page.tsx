@@ -27,7 +27,7 @@ function formatBRL(centavos: number): string {
     });
 }
 
-function ProdutoCard({ produto, mostrarGrade }: { produto: ProdutoVitrine; mostrarGrade: boolean }) {
+function ProdutoCard({ produto, mostrarGrade, subdominio }: { produto: ProdutoVitrine; mostrarGrade: boolean; subdominio: string }) {
     // Encontrar a melhor parcela para exibir (maior número de parcelas disponível)
     const melhorParcela = produto.parcelas.length > 0
         ? produto.parcelas[produto.parcelas.length - 1]
@@ -40,7 +40,10 @@ function ProdutoCard({ produto, mostrarGrade }: { produto: ProdutoVitrine; mostr
         : null;
 
     return (
-        <div className="group relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 hover:bg-white/[0.08] transition-all duration-300 hover:shadow-[0_8px_40px_rgba(99,102,241,0.1)] hover:-translate-y-1">
+        <Link
+            href={`/v/${subdominio}/produto/${produto.id}`}
+            className="group relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 hover:bg-white/[0.08] transition-all duration-300 hover:shadow-[0_8px_40px_rgba(99,102,241,0.1)] hover:-translate-y-1 block cursor-pointer"
+        >
             {/* Badge de destaque / poucas unidades */}
             {produto.poucas_unidades && (
                 <div className="absolute top-3 right-3 z-10">
@@ -172,7 +175,7 @@ function ProdutoCard({ produto, mostrarGrade }: { produto: ProdutoVitrine; mostr
                     )}
                 </div>
             </div>
-        </div>
+        </Link>
     );
 }
 
@@ -367,6 +370,7 @@ export default function VitrinePage() {
                                 <ProdutoCard
                                     produto={produto}
                                     mostrarGrade={config.mostrar_grade}
+                                    subdominio={subdominio}
                                 />
                             </div>
                         ))}

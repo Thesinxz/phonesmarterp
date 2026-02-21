@@ -16,7 +16,9 @@ import {
     Tag,
     EyeOff,
     Printer,
-    Target
+    Target,
+    CheckSquare,
+    Square
 } from "lucide-react";
 import { getProdutos, type ProdutoFilters } from "@/services/estoque";
 import { createClient } from "@/lib/supabase/client";
@@ -37,14 +39,19 @@ export default function EstoquePage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
     useEffect(() => {
-        // Carga inicial
-        loadProdutos();
+        if (profile?.empresa_id) {
+            loadProdutos();
+        }
+    }, [filters, currentPage, profile?.empresa_id]);
+
+    useEffect(() => {
+        if (!profile?.empresa_id) return;
 
         const supabase = createClient();
-        const channelId = profile?.empresa_id ? `stock-realtime-${profile.empresa_id}` : 'stock-realtime-global';
-        const filter = profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined;
+        const channelId = `stock-realtime-${profile.empresa_id}`;
 
         const channel = supabase
             .channel(channelId)
@@ -54,18 +61,16 @@ export default function EstoquePage() {
                     event: "*",
                     schema: "public",
                     table: "produtos",
-                    filter: filter
+                    filter: `empresa_id=eq.${profile.empresa_id}`
                 },
                 (payload) => {
                     console.log("Realtime Estoque:", payload.eventType, payload);
 
                     if (payload.eventType === 'UPDATE') {
-                        // Atualiza o produto específico no estado local instantaneamente (Velocidade Firebase!)
                         setProdutos(current => current.map(p =>
                             p.id === payload.new.id ? { ...p, ...payload.new } : p
                         ));
                     } else if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
-                        // Para novos itens ou exclusão, recarregamos para manter ordem/filtros
                         loadProdutos();
                     }
                 }
@@ -77,7 +82,7 @@ export default function EstoquePage() {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [filters, currentPage, profile?.empresa_id]);
+    }, [profile?.empresa_id]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -101,6 +106,19 @@ export default function EstoquePage() {
         }
     }
 
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    };
+
+    const toggleSelectAll = () => {
+        if (produtos.length === 0) return;
+        if (selectedIds.length === produtos.length) {
+            setSelectedIds([]);
+        } else {
+            setSelectedIds(produtos.map(p => p.id));
+        }
+    };
+
     return (
         <div className="space-y-6 page-enter">
             {/* Header */}
@@ -110,6 +128,9 @@ export default function EstoquePage() {
                     <p className="text-slate-500 text-sm mt-0.5">Gerenciamento de produtos e peças</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <Link href="/estoque/etiquetas" className="bg-white/60 p-2.5 rounded-xl border border-white/60 text-slate-500 hover:text-brand-600 hover:bg-white transition-all shadow-sm" title="Central de Etiquetas">
+                        <Printer size={18} />
+                    </Link>
                     <Link href="/estoque/balanco" className="bg-white/60 px-4 py-2.5 rounded-xl border border-white/60 text-slate-700 flex items-center gap-2 text-sm font-bold hover:bg-white transition-all shadow-sm">
                         <Target size={18} className="text-indigo-500" />
                         Balanço / Scanner
@@ -191,9 +212,18 @@ export default function EstoquePage() {
             <GlassCard className="p-0 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="bg-slate-50/50 border-b border-slate-100 text-[10px] uppercase font-bold text-slate-400 tracking-widest">
-                            <tr>
-                                <th className="px-6 py-4">Status</th>
+                        <thead className="bg-slate-50/50">
+                            <tr className="text-left text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                                <th className="px-6 py-4 w-10">
+                                    <button onClick={toggleSelectAll} className="w-5 h-5 flex items-center justify-center rounded border border-slate-200 hover:border-indigo-400 transition-colors">
+                                        {selectedIds.length === produtos.length && produtos.length > 0 ? (
+                                            <CheckSquare className="w-4 h-4 text-indigo-600" />
+                                        ) : (
+                                            <Square className="w-4 h-4 text-slate-300" />
+                                        )}
+                                    </button>
+                                </th>
+                                <th className="px-6 py-4 w-10">Status</th>
                                 <th className="px-6 py-4">Produto</th>
                                 <th className="px-6 py-4">Identificação</th>
                                 <th className="px-6 py-4 text-center">Qtd</th>
@@ -205,12 +235,12 @@ export default function EstoquePage() {
                             {loading ? (
                                 Array.from({ length: 5 }).map((_, i) => (
                                     <tr key={i} className="animate-pulse">
-                                        <td colSpan={6} className="px-6 py-4 h-16 bg-slate-50/30" />
+                                        <td colSpan={7} className="px-6 py-4 h-16 bg-slate-50/30" />
                                     </tr>
                                 ))
                             ) : produtos.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400 italic">
+                                    <td colSpan={7} className="px-6 py-12 text-center text-slate-400 italic">
                                         Nenhum produto em estoque.
                                     </td>
                                 </tr>
@@ -219,8 +249,21 @@ export default function EstoquePage() {
                                     .filter(p => !categoriaFilter || p.categoria === categoriaFilter)
                                     .map((p) => {
                                         const isLowStock = p.estoque_qtd <= p.estoque_minimo;
+                                        const isSelected = selectedIds.includes(p.id);
                                         return (
-                                            <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
+                                            <tr key={p.id} className={cn(
+                                                "hover:bg-slate-50/50 transition-colors group",
+                                                isSelected && "bg-indigo-50/40"
+                                            )}>
+                                                <td className="px-6 py-4">
+                                                    <button onClick={() => toggleSelect(p.id)} className="w-5 h-5 flex items-center justify-center rounded border border-slate-200 hover:border-indigo-400 transition-colors bg-white">
+                                                        {isSelected ? (
+                                                            <CheckSquare className="w-4 h-4 text-indigo-600" />
+                                                        ) : (
+                                                            <Square className="w-4 h-4 text-slate-200" />
+                                                        )}
+                                                    </button>
+                                                </td>
                                                 <td className="px-6 py-4">
                                                     <div className={cn(
                                                         "w-2 h-2 rounded-full",
@@ -343,6 +386,34 @@ export default function EstoquePage() {
                     </div>
                 )}
             </GlassCard>
+
+            {/* Selected Items Floating Bar */}
+            {selectedIds.length > 0 && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-6 py-4 bg-slate-900/90 backdrop-blur text-white rounded-2xl shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-4 z-50">
+                    <div className="flex items-center gap-3 pr-6 border-r border-white/10">
+                        <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center font-bold text-sm">
+                            {selectedIds.length}
+                        </div>
+                        <p className="font-medium text-sm">itens selecionados</p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setSelectedIds([])}
+                            className="text-white/60 hover:text-white text-xs font-bold transition-colors"
+                        >
+                            Limpar seleção
+                        </button>
+                        <Link
+                            href={`/estoque/etiquetas?ids=${selectedIds.join(',')}`}
+                            className="bg-brand-500 hover:bg-brand-600 text-white px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-brand-500/20"
+                        >
+                            <Printer size={16} />
+                            Imprimir Etiquetas
+                        </Link>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

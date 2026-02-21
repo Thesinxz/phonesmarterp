@@ -665,12 +665,7 @@ export default function CalculoEmMassa() {
                 });
 
                 console.log("[Mass Import] Inserindo no Supabase...", produtosParaInserir.length, "itens");
-                const { data, error } = await supabase.from("produtos").insert(produtosParaInserir).select();
-
-                if (error) {
-                    console.error("[Mass Import] Erro Supabase:", error);
-                    throw new Error(error.message);
-                }
+                const data = await createProdutos(produtosParaInserir);
 
                 console.log("[Mass Import] Inserção concluída:", data?.length);
                 return data;

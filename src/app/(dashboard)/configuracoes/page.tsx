@@ -21,6 +21,7 @@ import {
     DollarSign,
     Percent,
     Trash2,
+    History as HistoryIcon,
     Globe,
     CreditCard,
     ExternalLink,
@@ -32,13 +33,14 @@ import {
     Copy,
     Link2
 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
 
-type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "ai_config" | "vitrine";
+type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "ai_config" | "vitrine" | "etiquetas" | "auditoria";
 
 import { type WhatsappConfig, type FinanceiroConfig } from "@/types/configuracoes";
 
@@ -442,6 +444,8 @@ export default function ConfiguracoesPage() {
         { id: "financeiro", label: "Margens & Taxas", icon: DollarSign, desc: "Calculadoras e Lucro" },
         { id: "ai_config", label: "IA e OCR", icon: Sparkles, desc: "Gemini 2.5 e Google Vision" },
         { id: "vitrine", label: "Vitrine Online", icon: ShoppingBag, desc: "Catálogo público + TV" },
+        { id: "etiquetas", label: "Etiquetas", icon: Scan, desc: "Modelos Térmicos e A4" },
+        { id: "auditoria", label: "Auditoria", icon: HistoryIcon, desc: "Log de alterações e segurança" },
     ];
 
     return (
@@ -1448,12 +1452,63 @@ export default function ConfiguracoesPage() {
                                     <p className="font-bold">Dica: Modo TV 📺</p>
                                 </div>
                                 <p className="text-sm text-slate-300 leading-relaxed">
-                                    Abra o link do <strong>Modo TV</strong> em um navegador conectado à televisão da loja.
-                                    Os produtos irão rolar automaticamente com preços gigantes. Use <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-xs">Space</kbd> para pausar,
-                                    <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-xs">F</kbd> para fullscreen e
-                                    <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-xs">+/-</kbd> para velocidade.
+                                    Abra o link do <strong>Modo TV</strong> em sua Smart TV.
+                                    Os produtos serão exibidos em um <strong>slideshow cinematográfico</strong> com QR Codes para compra imediata.
+                                    Use <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-xs">Espaço</kbd> para pausar,
+                                    <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-xs">F</kbd> para tela cheia e
+                                    <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-xs">+/-</kbd> para ajustar o tempo de cada slide.
                                 </p>
                             </div>
+                        </div>
+                    )}
+                    {/* ── TAB: Etiquetas ── */}
+                    {activeTab === "etiquetas" && (
+                        <div className="space-y-6">
+                            <GlassCard title="Configuração de Etiquetas" icon={Scan}>
+                                <div className="p-6 text-center space-y-4">
+                                    <div className="w-16 h-16 bg-brand-50 text-brand-500 rounded-full flex items-center justify-center mx-auto">
+                                        <Scan size={32} />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-slate-800">Modelos de Impressão</p>
+                                        <p className="text-sm text-slate-500 max-w-sm mx-auto mt-1">
+                                            Configure as dimensões para folhas A4 (Pimaco) ou utilize os modelos padrão para impressoras térmicas.
+                                        </p>
+                                    </div>
+                                    <div className="flex justify-center gap-3 pt-4">
+                                        <Link href="/estoque/etiquetas" className="btn-secondary">
+                                            Ir para Central de Impressão
+                                        </Link>
+                                        <Link href="/configuracoes/etiquetas/a4" className="btn-primary">
+                                            Configurar Folha A4 (Pimaco)
+                                        </Link>
+                                    </div>
+                                </div>
+                            </GlassCard>
+                        </div>
+                    )}
+
+                    {/* ── TAB: Auditoria ── */}
+                    {activeTab === "auditoria" && (
+                        <div className="space-y-6">
+                            <GlassCard title="Logs de Auditoria" icon={HistoryIcon}>
+                                <div className="p-6 text-center space-y-4">
+                                    <div className="w-16 h-16 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center mx-auto">
+                                        <HistoryIcon size={32} />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-slate-800">Segurança e Histórico</p>
+                                        <p className="text-sm text-slate-500 max-w-sm mx-auto mt-1">
+                                            Acompanhe todas as alterações feitas no sistema, desde mudanças de estoque até edições de vendas.
+                                        </p>
+                                    </div>
+                                    <div className="flex justify-center pt-4">
+                                        <Link href="/configuracoes/auditoria" className="btn-primary">
+                                            Acessar Logs de Auditoria
+                                        </Link>
+                                    </div>
+                                </div>
+                            </GlassCard>
                         </div>
                     )}
                 </div>

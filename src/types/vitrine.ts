@@ -19,6 +19,8 @@ export interface ProdutoVitrine {
     preco_debito: number;    // centavos — preço no débito
     parcelas: ParcelaInfo[];
     imagem_url: string | null;
+    imagens?: string[];      // Lista de URLs para galeria
+    descricao?: string | null;
 }
 
 export interface ParcelaInfo {
