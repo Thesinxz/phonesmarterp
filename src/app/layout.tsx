@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { AuthProvider } from "@/context/AuthContext";
+import { RealtimeProvider } from "@/context/RealtimeContext";
+import { NotificationCenter } from "@/components/layout/NotificationCenter";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const inter = Inter({
@@ -43,7 +47,15 @@ export default function RootLayout({
 }) {
     return (
         <html lang="pt-BR" className={inter.variable}>
-            <body>{children}</body>
+            <body>
+                <AuthProvider>
+                    <RealtimeProvider>
+                        {children}
+                        <NotificationCenter />
+                        <Toaster position="top-right" richColors />
+                    </RealtimeProvider>
+                </AuthProvider>
+            </body>
         </html>
     );
 }

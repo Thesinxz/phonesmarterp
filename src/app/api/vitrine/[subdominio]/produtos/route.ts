@@ -168,6 +168,7 @@ export async function GET(
         // 6. Montar resposta
         const response: VitrineResponse = {
             empresa: {
+                id: empresa.id,
                 nome: empresa.nome,
                 logo_url: empresa.logo_url,
                 subdominio: empresa.subdominio,

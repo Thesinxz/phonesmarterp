@@ -18,12 +18,26 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { cn } from "@/utils/cn";
 import { useAuth } from "@/context/AuthContext";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 
 export default function FinanceiroPage() {
     const { profile } = useAuth();
     const [resumoReceber, setResumoReceber] = useState<any>(null);
     const [resumoPagar, setResumoPagar] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+
+    // Realtime Sync
+    useRealtimeSubscription({
+        table: "titulos",
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: () => loadData()
+    });
+
+    useRealtimeSubscription({
+        table: "financeiro",
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: () => loadData()
+    });
 
     useEffect(() => {
         if (profile?.empresa_id) {

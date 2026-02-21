@@ -41,6 +41,7 @@ export interface VitrineConfig {
 }
 
 export interface VitrineEmpresa {
+    id: string;
     nome: string;
     logo_url: string | null;
     subdominio: string;

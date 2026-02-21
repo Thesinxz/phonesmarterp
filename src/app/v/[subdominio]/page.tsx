@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { VitrineResponse, ProdutoVitrine } from "@/types/vitrine";
 import Link from "next/link";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 
 function formatBRL(centavos: number): string {
     return (centavos / 100).toLocaleString("pt-BR", {
@@ -190,24 +191,37 @@ export default function VitrinePage() {
     const [filtroGrade, setFiltroGrade] = useState<string>("todos");
     const [filtroCategoria, setFiltroCategoria] = useState<string>("todos");
 
-    useEffect(() => {
-        async function fetchVitrine() {
-            try {
-                setLoading(true);
-                const res = await fetch(`/api/vitrine/${subdominio}/produtos`);
-                if (!res.ok) {
-                    const err = await res.json();
-                    throw new Error(err.error || "Erro ao carregar vitrine");
-                }
-                const data: VitrineResponse = await res.json();
-                setVitrineData(data);
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
+    async function fetchVitrine() {
+        try {
+            setLoading(true);
+            const res = await fetch(`/api/vitrine/${subdominio}/produtos`);
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Erro ao carregar vitrine");
             }
+            const data: VitrineResponse = await res.json();
+            setVitrineData(data);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
         }
+    }
 
+    // Realtime Sync
+    useRealtimeSubscription({
+        table: "produtos",
+        filter: vitrineData?.empresa.id ? `empresa_id=eq.${vitrineData.empresa.id}` : undefined,
+        callback: () => fetchVitrine()
+    });
+
+    useRealtimeSubscription({
+        table: "configuracoes",
+        filter: vitrineData?.empresa.id ? `empresa_id=eq.${vitrineData.empresa.id}` : undefined,
+        callback: () => fetchVitrine()
+    });
+
+    useEffect(() => {
         if (subdominio) fetchVitrine();
     }, [subdominio]);
 

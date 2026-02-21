@@ -21,6 +21,7 @@ import {
     QrCode
 } from "lucide-react";
 import type { VitrineResponse, ProdutoVitrine } from "@/types/vitrine";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 
 function formatBRL(centavos: number): string {
     return (centavos / 100).toLocaleString("pt-BR", {
@@ -209,10 +210,21 @@ export default function VitrineTV() {
         }
     }, [subdominio]);
 
+    // Realtime Sync
+    useRealtimeSubscription({
+        table: "produtos",
+        filter: vitrineData?.empresa.id ? `empresa_id=eq.${vitrineData.empresa.id}` : undefined,
+        callback: () => fetchData()
+    });
+
+    useRealtimeSubscription({
+        table: "configuracoes",
+        filter: vitrineData?.empresa.id ? `empresa_id=eq.${vitrineData.empresa.id}` : undefined,
+        callback: () => fetchData()
+    });
+
     useEffect(() => {
         if (subdominio) fetchData();
-        const interval = setInterval(fetchData, 5 * 60 * 1000);
-        return () => clearInterval(interval);
     }, [subdominio, fetchData]);
 
     // ── Relógio ──

@@ -15,11 +15,11 @@ import {
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { getVendas } from "@/services/vendas";
-import { createClient } from "@/lib/supabase/client";
 import { formatDate } from "@/utils/formatDate";
 import { cn } from "@/utils/cn";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 
 export default function VendasPage() {
     const { profile } = useAuth();
@@ -33,46 +33,27 @@ export default function VendasPage() {
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
 
+    // Realtime Sync
+    useRealtimeSubscription({
+        table: "vendas",
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: (payload: any) => {
+            console.log("Realtime Vendas:", payload.eventType, payload);
+
+            if (payload.eventType === 'UPDATE') {
+                setVendas(current => current.map(v =>
+                    v.id === payload.new.id ? { ...v, ...payload.new } : v
+                ));
+            } else if (payload.eventType === 'INSERT') {
+                loadData();
+            } else if (payload.eventType === 'DELETE') {
+                setVendas(current => current.filter(v => v.id !== payload.old.id));
+            }
+        }
+    });
+
     useEffect(() => {
-        // Carga inicial
         loadData();
-
-        const supabase = createClient();
-        const channelId = profile?.empresa_id ? `vendas-realtime-${profile.empresa_id}` : 'vendas-realtime-global';
-        const filter = profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined;
-
-        const channel = supabase
-            .channel(channelId)
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "vendas",
-                    filter: filter
-                },
-                (payload) => {
-                    console.log("Realtime Vendas:", payload.eventType, payload);
-
-                    if (payload.eventType === 'UPDATE') {
-                        setVendas(current => current.map(v =>
-                            v.id === payload.new.id ? { ...v, ...payload.new } : v
-                        ));
-                    } else if (payload.eventType === 'INSERT') {
-                        // Para novas vendas, a carga completa traz os joins (cliente)
-                        loadData();
-                    } else if (payload.eventType === 'DELETE') {
-                        setVendas(current => current.filter(v => v.id !== payload.old.id));
-                    }
-                }
-            )
-            .subscribe((status) => {
-                console.log(`Realtime Vendas Status [${channelId}]:`, status);
-            });
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
     }, [profile?.empresa_id, currentPage]);
 
     async function loadData() {

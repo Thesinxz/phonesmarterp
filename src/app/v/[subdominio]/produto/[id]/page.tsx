@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import type { VitrineResponse, ProdutoVitrine, VitrineConfig } from "@/types/vitrine";
 import Link from "next/link";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 
 function formatBRL(centavos: number): string {
     return (centavos / 100).toLocaleString("pt-BR", {
@@ -40,24 +41,37 @@ export default function ProdutoDetailPage() {
     const [error, setError] = useState<string | null>(null);
     const [showInstallments, setShowInstallments] = useState(false);
 
-    useEffect(() => {
-        async function fetchProduto() {
-            try {
-                setLoading(true);
-                const res = await fetch(`/api/vitrine/${subdominio}/produtos/${id}`);
-                if (!res.ok) {
-                    const err = await res.json();
-                    throw new Error(err.error || "Erro ao carregar produto");
-                }
-                const json = await res.json();
-                setData(json);
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
+    async function fetchProduto() {
+        try {
+            setLoading(true);
+            const res = await fetch(`/api/vitrine/${subdominio}/produtos/${id}`);
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Erro ao carregar produto");
             }
+            const json = await res.json();
+            setData(json);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
         }
+    }
 
+    // Realtime Sync
+    useRealtimeSubscription({
+        table: "produtos",
+        filter: id ? `id=eq.${id}` : undefined,
+        callback: () => fetchProduto()
+    });
+
+    useRealtimeSubscription({
+        table: "configuracoes",
+        filter: data?.empresa.id ? `empresa_id=eq.${data.empresa.id}` : undefined,
+        callback: () => fetchProduto()
+    });
+
+    useEffect(() => {
         if (subdominio && id) fetchProduto();
     }, [subdominio, id]);
 

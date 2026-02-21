@@ -23,9 +23,9 @@ import { finalizarVenda } from "@/services/vendas";
 import { getClientes } from "@/services/clientes";
 import { notifyVenda } from "@/actions/notifications";
 import { type Produto, type Cliente } from "@/types/database";
-import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useFinanceConfig } from "@/hooks/useFinanceConfig";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
 import { FileCode2 } from "lucide-react";
@@ -83,46 +83,27 @@ export default function PDVPage() {
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [cart, selectedClient, paymentMethod]);
 
+    // Realtime Sync
+    useRealtimeSubscription({
+        table: "produtos",
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: (payload: any) => {
+            console.log("Realtime PDV:", payload.eventType, payload);
+            if (payload.eventType === 'UPDATE') {
+                // Atualiza instantaneamente o estoque disponível na tela do PDV
+                setProducts(current => current.map(p =>
+                    p.id === payload.new.id ? { ...p, ...payload.new } : p
+                ));
+            } else {
+                // Para novos itens, recarregamos
+                loadProducts(searchTerm);
+            }
+        }
+    });
+
     useEffect(() => {
         // Carga inicial rápida
         loadProducts();
-
-        const supabase = createClient();
-        const channelId = profile?.empresa_id ? `pdv-sync-${profile.empresa_id}` : 'pdv-sync-global';
-        const filter = profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined;
-
-        console.log("Realtime: PDV Stock Sync iniciando...", channelId);
-
-        const channel = supabase
-            .channel(channelId)
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "produtos",
-                    filter: filter
-                },
-                (payload: any) => {
-                    console.log("Realtime PDV:", payload.eventType, payload);
-                    if (payload.eventType === 'UPDATE') {
-                        // Atualiza instantaneamente o estoque disponível na tela do PDV
-                        setProducts(current => current.map(p =>
-                            p.id === payload.new.id ? { ...p, ...payload.new } : p
-                        ));
-                    } else {
-                        // Para novos itens, recarregamos
-                        loadProducts(searchTerm);
-                    }
-                }
-            )
-            .subscribe((status: any) => {
-                console.log(`Realtime PDV Status [${channelId}]:`, status);
-            });
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
     }, [profile?.empresa_id]);
 
     useEffect(() => {

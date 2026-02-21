@@ -37,6 +37,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
 
@@ -80,14 +81,11 @@ const codigosUF: Record<string, string> = {
 export default function ConfiguracoesPage() {
     const { profile, isLoading } = useAuth();
     const { refresh: refreshFinanceConfig } = useFinanceConfig();
-    const supabase = createClient();
     const [activeTab, setActiveTab] = useState<Tab>("empresa");
     const [saving, setSaving] = useState(false);
     const [sefazStatus, setSefazStatus] = useState<"checking" | "online" | "offline" | "unconfigured">("unconfigured");
     const [showSenha, setShowSenha] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
-
-
 
     const [emitente, setEmitente] = useState<EmitenteConfig>({
         razao_social: "", nome_fantasia: "", cnpj: "", ie: "", crt: "1",
@@ -152,6 +150,48 @@ export default function ConfiguracoesPage() {
     const [searchingCnpj, setSearchingCnpj] = useState(false);
     const [configsLoaded, setConfigsLoaded] = useState(false);
 
+    // Realtime Sync
+    useRealtimeSubscription({
+        table: "configuracoes",
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: (payload: any) => {
+            console.log("Realtime Configuração alterada:", payload.eventType, payload);
+
+            if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+                const chave = payload.new.chave;
+                const valor = payload.new.valor;
+
+                // Atualiza instantaneamente a tela de acordo com a chave modificada
+                if (chave === "nfe_emitente") setEmitente(valor as EmitenteConfig);
+                if (chave === "nfe_certificado") {
+                    const cert = valor as CertConfig;
+                    setCertConfig({ ...cert, pfx_base64: cert.pfx_base64 ? "***CARREGADO***" : "" });
+                }
+                if (chave === "whatsapp") setWhatsappConfig(valor as any);
+                if (chave === "financeiro") {
+                    const config = valor as FinanceiroConfig;
+                    if (config.gateways) {
+                        config.gateways = config.gateways.map(gw => ({
+                            ...gw,
+                            taxa_pix_pct: gw.taxa_pix_pct ?? config.taxa_pix_pct ?? 0,
+                            taxa_debito_pct: gw.taxa_debito_pct ?? config.taxa_debito_pct ?? 0,
+                            taxas_credito: gw.taxas_credito ?? config.taxas_credito ?? Array.from({ length: 21 }, (_, i) => ({ parcela: i + 1, taxa: 0 })),
+                        }));
+                    }
+                    setFinanceiroConfig(config);
+                }
+                if (chave === "google_vision") setGoogleVisionConfig(valor as any);
+                if (chave === "gemini") setGeminiConfig(valor as any);
+                if (chave === "vitrine") setVitrineConfig((prev: any) => ({ ...prev, ...valor as any }));
+
+                toast.info(`Configuração "${chave}" foi atualizada remotamente.`, {
+                    duration: 3000,
+                    icon: '🔄'
+                });
+            }
+        }
+    });
+
     // ── Carregar configs: roda na montagem e quando empresa_id muda ──
     useEffect(() => {
         if (!profile?.empresa_id) return;
@@ -165,18 +205,11 @@ export default function ConfiguracoesPage() {
             setConfigsLoaded(false);
 
             try {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const { data, error } = await (supabase as any)
-                    .from("configuracoes")
-                    .select("chave, valor")
-                    .in("chave", ["nfe_emitente", "nfe_certificado", "whatsapp", "financeiro", "google_vision", "gemini", "vitrine"]);
+                const res = await fetch('/api/configuracoes/all');
+                if (!res.ok) throw new Error("Erro ao carregar configurações");
+                const data = await res.json();
 
-                if (ignore) return; // Componente desmontou durante o fetch
-
-                if (error) {
-                    console.error("[Config] ❌ Erro ao carregar configs:", error);
-                    return;
-                }
+                if (ignore) return;
 
                 if (!data || data.length === 0) {
                     console.warn("[Config] ⚠ Nenhuma configuração encontrada no banco.");
@@ -184,24 +217,16 @@ export default function ConfiguracoesPage() {
                     return;
                 }
 
-                const chaves = data.map((r: any) => r.chave);
-                console.log(`[Config] ✅ ${data.length} configs carregadas:`, chaves);
+                console.log(`[Config] ✅ ${data.length} configs carregadas`);
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 data.forEach((row: any) => {
-                    if (row.chave === "nfe_emitente") {
-                        console.log("[Config]   → nfe_emitente:", row.valor?.cnpj || "(sem CNPJ)", row.valor?.razao_social || "(sem razão)");
-                        setEmitente(row.valor as EmitenteConfig);
-                    }
+                    if (row.chave === "nfe_emitente") setEmitente(row.valor as EmitenteConfig);
                     if (row.chave === "nfe_certificado") {
                         const cert = row.valor as CertConfig;
-                        console.log("[Config]   → nfe_certificado:", cert.pfx_base64 ? "PFX presente" : "SEM PFX");
                         setCertConfig({ ...cert, pfx_base64: cert.pfx_base64 ? "***CARREGADO***" : "" });
                     }
-                    if (row.chave === "whatsapp") {
-                        console.log("[Config]   → whatsapp: enabled=", row.valor?.enabled);
-                        setWhatsappConfig(row.valor as any);
-                    }
+                    if (row.chave === "whatsapp") setWhatsappConfig(row.valor as any);
                     if (row.chave === "financeiro") {
                         const config = row.valor as FinanceiroConfig;
                         if (config.gateways) {
@@ -212,17 +237,14 @@ export default function ConfiguracoesPage() {
                                 taxas_credito: gw.taxas_credito ?? config.taxas_credito ?? Array.from({ length: 21 }, (_, i) => ({ parcela: i + 1, taxa: 0 })),
                             }));
                         }
-                        console.log("[Config]   → financeiro: gateways=", config.gateways?.length || 0);
                         setFinanceiroConfig(config);
                     }
                     if (row.chave === "google_vision") setGoogleVisionConfig(row.valor as any);
                     if (row.chave === "gemini") setGeminiConfig(row.valor as any);
-                    if (row.chave === "vitrine") setVitrineConfig(prev => ({ ...prev, ...row.valor as any }));
+                    if (row.chave === "vitrine") setVitrineConfig((prev: any) => ({ ...prev, ...row.valor as any }));
                 });
 
                 setConfigsLoaded(true);
-                console.log("[Config] ✅ Estado atualizado com sucesso");
-
             } catch (err) {
                 console.error("[Config] ❌ Erro inesperado:", err);
             }
@@ -230,65 +252,8 @@ export default function ConfiguracoesPage() {
 
         fetchConfigs();
 
-        // ── Início Realtime Configurações ──
-        const channelId = `config-realtime-${profile.empresa_id}`;
-
-        console.log(`[Config] 🎧 Registrando escuta Realtime em ${channelId}...`);
-        const channel = supabase
-            .channel(channelId)
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "configuracoes",
-                    filter: `empresa_id=eq.${profile.empresa_id}`
-                },
-                (payload: any) => {
-                    console.log("Realtime Configuração alterada:", payload.eventType, payload);
-
-                    if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-                        const chave = payload.new.chave;
-                        const valor = payload.new.valor;
-
-                        // Atualiza instantaneamente a tela de acordo com a chave modificada
-                        if (chave === "nfe_emitente") setEmitente(valor as EmitenteConfig);
-                        if (chave === "nfe_certificado") {
-                            const cert = valor as CertConfig;
-                            setCertConfig({ ...cert, pfx_base64: cert.pfx_base64 ? "***CARREGADO***" : "" });
-                        }
-                        if (chave === "whatsapp") setWhatsappConfig(valor as any);
-                        if (chave === "financeiro") {
-                            const config = valor as FinanceiroConfig;
-                            if (config.gateways) {
-                                config.gateways = config.gateways.map(gw => ({
-                                    ...gw,
-                                    taxa_pix_pct: gw.taxa_pix_pct ?? config.taxa_pix_pct ?? 0,
-                                    taxa_debito_pct: gw.taxa_debito_pct ?? config.taxa_debito_pct ?? 0,
-                                    taxas_credito: gw.taxas_credito ?? config.taxas_credito ?? Array.from({ length: 21 }, (_, i) => ({ parcela: i + 1, taxa: 0 })),
-                                }));
-                            }
-                            setFinanceiroConfig(config);
-                        }
-                        if (chave === "google_vision") setGoogleVisionConfig(valor as any);
-                        if (chave === "gemini") setGeminiConfig(valor as any);
-                        if (chave === "vitrine") setVitrineConfig(prev => ({ ...prev, ...valor as any }));
-
-                        toast.info(`Configuração "${chave}" foi atualizada remotamente.`, {
-                            duration: 3000,
-                            icon: '🔄'
-                        });
-                    }
-                }
-            )
-            .subscribe((status: string) => {
-                console.log(`[Config] Realtime Status [${channelId}]:`, status);
-            });
-        // ── Fim Realtime Configurações ──
-
         return () => {
             ignore = true;
-            supabase.removeChannel(channel);
         };
     }, [profile?.empresa_id]);
 
@@ -337,7 +302,7 @@ export default function ConfiguracoesPage() {
             if (!res.ok) throw new Error("CNPJ não encontrado");
             const data = await res.json();
 
-            setEmitente(prev => ({
+            setEmitente((prev: any) => ({
                 ...prev,
                 razao_social: data.razao_social || "",
                 nome_fantasia: data.nome_fantasia || data.razao_social || "",
@@ -379,6 +344,7 @@ export default function ConfiguracoesPage() {
 
             console.log(`[Config] Chamando RPC 'upsert_config' para ${chave}...`);
 
+            const supabase = createClient();
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const { data, error } = await (supabase as any).rpc('upsert_config', {
                 p_chave: chave,
