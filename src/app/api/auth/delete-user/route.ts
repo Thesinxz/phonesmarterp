@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
+export const dynamic = 'force-dynamic';
+
 /**
  * DELETE /api/auth/delete-user
  * 
