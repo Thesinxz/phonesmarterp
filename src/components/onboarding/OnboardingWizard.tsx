@@ -55,7 +55,7 @@ const STEP_META = [
 ];
 
 export default function OnboardingWizard() {
-    const { status, updateStatus, completeOnboarding, loading } = useOnboardingStatus();
+    const { status, updateStatus, completeOnboarding, skipOnboarding, loading } = useOnboardingStatus();
     const { profile } = useAuth();
     const supabase = createClient();
 
@@ -125,10 +125,26 @@ export default function OnboardingWizard() {
             return;
         }
         setSearchingCnpj(true);
+        console.log("[OnboardingWizard] Buscando CNPJ:", cnpjClean);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
         try {
-            const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjClean}`);
-            if (!res.ok) throw new Error("CNPJ não encontrado");
+            const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjClean}`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                console.error("[OnboardingWizard] Erro BrasilAPI:", res.status, errorData);
+                throw new Error("CNPJ não encontrado ou serviço indisponível");
+            }
+
             const data = await res.json();
+            console.log("[OnboardingWizard] Dados recebidos:", data);
+
             setEmitente(prev => ({
                 ...prev,
                 razao_social: data.razao_social || "",
@@ -145,8 +161,13 @@ export default function OnboardingWizard() {
                 codigo_uf: codigosUF[data.uf] || "35",
             }));
             toast.success("Dados carregados da Receita Federal!");
-        } catch {
-            toast.error("Erro ao buscar CNPJ. Verifique se está correto.");
+        } catch (err: any) {
+            console.error("[OnboardingWizard] Falha na busca de CNPJ:", err);
+            if (err.name === 'AbortError') {
+                toast.error("O serviço da Receita demorou muito a responder. Tente preencher manualmente.");
+            } else {
+                toast.error("Erro ao buscar CNPJ. Verifique se está correto.");
+            }
         } finally {
             setSearchingCnpj(false);
         }
@@ -239,10 +260,17 @@ export default function OnboardingWizard() {
     }
 
     async function handleSkip() {
-        if (currentStep < TOTAL_STEPS) {
-            const next = currentStep + 1;
-            await updateStatus({ step: next });
-            setCurrentStep(next);
+        if (window.confirm("Deseja pular a configuração inicial? Você poderá configurar tudo depois no menu Configurações.")) {
+            setSaving(true);
+            try {
+                await skipOnboarding();
+                window.location.reload();
+            } catch (err) {
+                console.error("Erro ao pular onboarding:", err);
+                toast.error("Erro ao pular configuração.");
+            } finally {
+                setSaving(false);
+            }
         }
     }
 
@@ -805,10 +833,10 @@ export default function OnboardingWizard() {
                                 {/* Mobile step indicator */}
                                 <span className="text-xs text-slate-400 font-medium md:hidden">{currentStep}/{TOTAL_STEPS}</span>
 
-                                {currentStep < TOTAL_STEPS && currentStep > 1 && (
+                                {currentStep < TOTAL_STEPS && (
                                     <button onClick={handleSkip} disabled={saving}
-                                        className="px-4 py-2 text-slate-400 hover:text-slate-500 text-sm font-medium transition-colors">
-                                        Pular
+                                        className="px-4 py-2 text-slate-400 hover:text-red-400 text-xs font-bold transition-colors uppercase tracking-widest">
+                                        Pular Configuração
                                     </button>
                                 )}
 

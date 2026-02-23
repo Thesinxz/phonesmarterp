@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
             .from("usuarios")
             .select("empresa_id")
             .eq("auth_user_id", user.id)
-            .single();
+            .maybeSingle();
 
         if (!userProfile || userProfile.empresa_id !== empresa_id) {
             return NextResponse.json(

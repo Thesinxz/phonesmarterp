@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const { data } = await (supabase.from("empresas") as any)
                 .select("*")
                 .eq("id", empresaId)
-                .single();
+                .maybeSingle();
             if (data) setEmpresa(data as Empresa);
         } catch (err) {
             console.error("Error fetching empresa:", err);

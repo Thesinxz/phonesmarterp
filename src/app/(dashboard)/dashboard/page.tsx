@@ -1,7 +1,6 @@
 "use client";
 
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
-import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
 import {
     ClipboardList,
     Users,
@@ -94,7 +93,6 @@ export default function DashboardPage() {
 
     return (
         <div className="space-y-6 page-enter">
-            <OnboardingWizard />
 
             {/* Page Header */}
             <div className="flex items-center justify-between">

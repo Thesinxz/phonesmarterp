@@ -24,7 +24,7 @@ export function Header({ title }: HeaderProps) {
                     .from("configuracoes")
                     .select("valor")
                     .eq("chave", "nfe_emitente")
-                    .single();
+                    .maybeSingle();
 
                 if (configData && (configData as any).valor?.municipio) {
                     const val = (configData as any).valor;

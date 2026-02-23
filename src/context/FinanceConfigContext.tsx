@@ -85,7 +85,7 @@ export function FinanceConfigProvider({ children }: { children: ReactNode }) {
             const { data, error: sbError } = await (supabase.from("configuracoes") as any)
                 .select("valor")
                 .eq("chave", "financeiro")
-                .single();
+                .maybeSingle();
 
             if (sbError) throw sbError;
 

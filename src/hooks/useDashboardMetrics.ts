@@ -179,7 +179,7 @@ export function useDashboardMetrics() {
                 if (itensVenda) {
                     for (const item of itensVenda as any[]) {
                         if (item.produto_id) {
-                            const { data: prod } = await (supabase as any).from("produtos").select("preco_custo_centavos").eq("id", item.produto_id).single();
+                            const { data: prod } = await (supabase as any).from("produtos").select("preco_custo_centavos").eq("id", item.produto_id).maybeSingle();
                             if (prod) custoVendasHoje += (prod.preco_custo_centavos || 0) * item.quantidade;
                         }
                     }
