@@ -10,14 +10,26 @@ interface OSKanbanCardProps {
         cliente: { nome: string },
         equipamento: { marca: string, modelo: string } | null,
         tecnico: { nome: string } | null,
-        created_at: string
+        created_at: string;
+        updated_at: string;
+        prioridade: string;
+        problema_relatado: string;
     };
     onClick?: () => void;
     onMoveStatus?: (osId: string, status: string) => void;
 }
 
 export function OSKanbanCard({ os, onClick, onMoveStatus }: OSKanbanCardProps) {
-    const priorityColor = os.valor_total_centavos > 50000 ? "border-l-amber-500" : "border-l-brand-400";
+    const priorityColors: any = {
+        baixa: "border-l-slate-300",
+        media: "border-l-blue-400",
+        alta: "border-l-amber-500",
+        urgente: "border-l-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.1)]"
+    };
+
+    const priorityColor = priorityColors[os.prioridade?.toLowerCase()] || "border-l-slate-400";
+
+    const diffDays = Math.floor((new Date().getTime() - new Date(os.updated_at || os.created_at).getTime()) / (1000 * 60 * 60 * 24));
 
     return (
         <div
@@ -74,38 +86,55 @@ export function OSKanbanCard({ os, onClick, onMoveStatus }: OSKanbanCardProps) {
                 </div>
             </div>
 
-            <div onClick={onClick} className="cursor-pointer">
+            <div onClick={onClick} className="cursor-pointer space-y-2">
+                <div>
+                    <h4 className="font-bold text-slate-800 text-sm mb-0.5 truncate leading-tight">
+                        {os.equipamento?.modelo || (os as any).modelo_equipamento || "Sem Modelo"}
+                    </h4>
+                    <p className="text-[10px] text-slate-400 truncate uppercase tracking-tight">{os.equipamento?.marca || (os as any).marca_equipamento || "Sem Marca"}</p>
+                </div>
+
+                <div className="bg-slate-50/80 rounded-lg p-2 border border-slate-100/50">
+                    <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">
+                        <span className="font-bold text-[9px] uppercase text-slate-400 block mb-0.5">Problema:</span>
+                        {os.problema_relatado}
+                    </p>
+                </div>
+
                 {os.valor_total_centavos > 0 && (
-                    <span className="block text-xs font-bold text-brand-600 mb-1">
-                        R$ {(os.valor_total_centavos / 100).toFixed(2)}
-                    </span>
+                    <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Orçamento</span>
+                        <span className="text-xs font-black text-brand-600">
+                            R$ {(os.valor_total_centavos / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                    </div>
                 )}
 
-                <h4 className="font-bold text-slate-800 text-sm mb-1 truncate leading-tight">
-                    {os.equipamento?.modelo || (os as any).modelo_equipamento || "Sem Modelo"}
-                </h4>
-                <p className="text-[10px] text-slate-400 mb-3 truncate">{os.equipamento?.marca || (os as any).marca_equipamento || "Sem Marca"}</p>
-
-                <div className="flex items-center gap-2 text-xs text-slate-500 mb-3">
-                    <User size={12} className="text-slate-400" />
-                    <span className="truncate">{os.cliente?.nome || "Cliente não identificado"}</span>
+                <div className="flex items-center gap-2 text-xs text-slate-600">
+                    <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                        <User size={10} className="text-slate-400" />
+                    </div>
+                    <span className="truncate font-medium">{os.cliente?.nome || "Cliente avulso"}</span>
                 </div>
             </div>
 
             <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-400 capitalize">
-                    <Clock size={12} />
-                    <span>{formatRelative(os.created_at)}</span>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                    <Clock size={12} className={cn(diffDays >= 3 ? "text-amber-500" : "text-slate-300")} />
+                    <span className={cn(diffDays >= 3 && "text-amber-600")}>
+                        {diffDays === 0 ? "Hoje" : diffDays === 1 ? "1 dia" : `${diffDays} dias`}
+                    </span>
                 </div>
 
                 {os.tecnico ? (
-                    <div className="flex items-center gap-1">
-                        <div className="w-5 h-5 rounded-full bg-brand-100 flex items-center justify-center text-[10px] font-bold text-brand-700 uppercase">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-bold text-slate-300 uppercase shrink-0">{os.tecnico.nome.split(' ')[0]}</span>
+                        <div className="w-6 h-6 rounded-full bg-brand-500 border-2 border-white shadow-sm flex items-center justify-center text-[10px] font-black text-white uppercase shrink-0">
                             {os.tecnico.nome.substring(0, 1)}
                         </div>
                     </div>
                 ) : (
-                    <div className="text-[10px] text-amber-600 font-semibold flex items-center gap-1">
+                    <div className="px-2 py-0.5 bg-amber-50 border border-amber-100 rounded-md text-[9px] text-amber-600 font-bold uppercase flex items-center gap-1">
                         <AlertCircle size={10} />
                         Sem técnico
                     </div>

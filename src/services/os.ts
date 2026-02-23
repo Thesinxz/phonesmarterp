@@ -8,6 +8,8 @@ export interface OSFilters {
     tecnico_id?: string;
     cliente_id?: string;
     search?: string;
+    startDate?: string;
+    endDate?: string;
 }
 
 export async function getOrdensServico(page = 1, limit = 50, filters?: OSFilters) {
@@ -33,6 +35,20 @@ export async function getOrdensServico(page = 1, limit = 50, filters?: OSFilters
     }
     if (filters?.cliente_id) {
         query = query.eq("cliente_id", filters.cliente_id);
+    }
+    if (filters?.startDate) {
+        query = query.gte("created_at", filters.startDate);
+    }
+    if (filters?.endDate) {
+        query = query.lte("created_at", filters.endDate);
+    }
+    if (filters?.search) {
+        const s = `%${filters.search}%`;
+        // Busca complexa no supabase exige sintaxe 'or'
+        // Busca em campos da própria tabela e via joins se possível (aqui focamos nos campos indexáveis da OS)
+        query = query.or(`problema_relatado.ilike.${s},marca_equipamento.ilike.${s},modelo_equipamento.ilike.${s},imei_equipamento.ilike.${s}`);
+        // Nota: Busca no nome do cliente via join no supabase or() é limitado. 
+        // Idealmente usaríamos search vector ou RPC se o volume for muito alto.
     }
 
     const { data, count, error } = await query;

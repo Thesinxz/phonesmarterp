@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Calendar, User, CreditCard, Shield, Clock, AlertCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/utils/cn";
+import { useAuth } from "@/context/AuthContext";
 
 interface OSStep5AgendaPagamentoProps {
     data: any;
@@ -11,19 +12,27 @@ interface OSStep5AgendaPagamentoProps {
 }
 
 export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagamentoProps) {
+    const { profile } = useAuth();
     const [tecnicos, setTecnicos] = useState<any[]>([]);
 
     useEffect(() => {
         const loadTecnicos = async () => {
+            if (!profile?.empresa_id) return;
             const supabase = createClient();
-            const { data: users } = await supabase
+            const { data: users, error } = await supabase
                 .from("usuarios")
                 .select("id, nome")
+                .eq("empresa_id", profile.empresa_id)
                 .eq("ativo", true);
+
+            if (error) {
+                console.error("Erro ao carregar técnicos:", error);
+                return;
+            }
             setTecnicos(users || []);
         };
         loadTecnicos();
-    }, []);
+    }, [profile?.empresa_id]);
 
     const PAGAMENTOS = [
         { id: "pix", label: "PIX", icon: "⚡" },

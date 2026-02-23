@@ -26,23 +26,32 @@ export function OSStep1Cliente({ onSelect, selectedId }: OSStep1ClienteProps) {
     const [recentClients, setRecentClients] = useState<any[]>([]);
 
     const loadRecentClients = async () => {
+        if (!profile?.empresa_id) return;
         const supabase = createClient();
-        console.log("DEBUG: Carregando clientes recentes...");
+        console.log("DEBUG: Carregando clientes recentes para empresa:", profile.empresa_id);
         try {
-            const { data } = await supabase
+            const { data, error } = await supabase
                 .from("clientes")
                 .select("id, nome, telefone, email, cpf_cnpj")
+                .eq("empresa_id", profile.empresa_id)
                 .order("created_at", { ascending: false })
-                .limit(5);
+                .limit(10);
+
+            if (error) {
+                console.error("Erro ao carregar clientes recentes:", error);
+                return;
+            }
             setRecentClients(data || []);
         } catch (err) {
-            console.error("Erro ao carregar clientes recentes:", err);
+            console.error("Erro inesperado ao carregar clientes recentes:", err);
         }
     };
 
     useEffect(() => {
-        loadRecentClients();
-    }, []);
+        if (profile?.empresa_id) {
+            loadRecentClients();
+        }
+    }, [profile?.empresa_id]);
 
     // Form para novo cliente (espelhando a página de clientes)
     const [newClient, setNewClient] = useState({
@@ -80,25 +89,37 @@ export function OSStep1Cliente({ onSelect, selectedId }: OSStep1ClienteProps) {
             return;
         }
 
+        if (!profile?.empresa_id) {
+            console.warn("Busca abortada: profile.empresa_id não disponível");
+            return;
+        }
+
         setSearching(true);
         const supabase = createClient();
 
-        // Constrói a query de forma mais segura para evitar matches globais (%%)
+        // Constrói a query de forma mais segura
         let orQuery = `nome.ilike.%${val.trim()}%`;
         if (onlyDigits.length >= 3) {
             orQuery += `,cpf_cnpj.ilike.%${onlyDigits}%,telefone.ilike.%${onlyDigits}%`;
         }
 
         try {
-            const { data } = await supabase
+            const { data, error } = await supabase
                 .from("clientes")
                 .select("id, nome, telefone, email, cpf_cnpj")
+                .eq("empresa_id", profile.empresa_id)
                 .or(orQuery)
-                .limit(5);
+                .limit(10);
+
+            if (error) {
+                console.error("Erro na busca de clientes:", error);
+                toast.error("Erro ao buscar clientes no banco de dados");
+                return;
+            }
 
             setResults(data || []);
         } catch (err) {
-            console.error("Erro na busca:", err);
+            console.error("Erro inesperado na busca:", err);
         } finally {
             setSearching(false);
         }

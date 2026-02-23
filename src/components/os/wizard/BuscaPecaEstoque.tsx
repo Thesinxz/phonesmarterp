@@ -35,13 +35,16 @@ export function BuscaPecaEstoque({ onSelect }: BuscaPecaEstoqueProps) {
             return;
         }
 
+        if (!profile?.empresa_id) return;
+
         setLoading(true);
-        console.log(`DEBUG: Buscando peças com termo: "${val}"`);
+        console.log(`DEBUG: Buscando peças com termo: "${val}" para empresa: ${profile.empresa_id}`);
         const supabase = createClient();
         try {
             const { data, error } = await supabase
                 .from("produtos")
                 .select("id, nome, preco_venda_centavos, preco_custo_centavos, estoque_qtd, categoria")
+                .eq("empresa_id", profile.empresa_id)
                 .ilike("nome", `%${val}%`)
                 .limit(10);
 
@@ -49,7 +52,6 @@ export function BuscaPecaEstoque({ onSelect }: BuscaPecaEstoqueProps) {
                 console.error("DEBUG: Erro na busca de produtos:", error);
                 toast.error("Erro ao buscar no estoque");
             } else {
-                console.log(`DEBUG: Resultado da busca: ${data?.length || 0} itens encontrados`);
                 setResults(data || []);
             }
         } catch (err) {
