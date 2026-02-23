@@ -188,6 +188,7 @@ export default function OnboardingWizard() {
     // ── Save via API Route server-side (bypassa RLS e client issues) ──
     async function saveConfig(chave: string, valor: any) {
         if (!profile?.empresa_id) return;
+        console.log(`[OnboardingWizard] Salvador config: ${chave}`, valor);
 
         const res = await fetch("/api/onboarding/save-config", {
             method: "POST",
@@ -202,51 +203,75 @@ export default function OnboardingWizard() {
             }),
         });
 
+        console.log(`[OnboardingWizard] Resposta API (${chave}):`, res.status);
         const data = await res.json();
         if (!data.success) {
+            console.error(`[OnboardingWizard] Erro API (${chave}):`, data);
             throw new Error(data.error || `Erro ao salvar ${chave}`);
         }
+        console.log(`[OnboardingWizard] Config ${chave} salva com sucesso`);
     }
 
     // ── Navigation ──
     async function handleNext() {
+        console.log("[OnboardingWizard] handleNext iniciado. Passo atual:", currentStep);
         setSaving(true);
         try {
             if (currentStep === 1 || currentStep === 2) {
-                await saveConfig("nfe_emitente", emitente);
-                await (supabase.from("empresas") as any)
-                    .update({
-                        nome: emitente.nome_fantasia || emitente.razao_social,
-                        cnpj: emitente.cnpj,
-                    })
-                    .eq("id", profile?.empresa_id);
+                console.log("[OnboardingWizard] Salvando dados do emitente e empresa via API...");
+                const res = await fetch("/api/onboarding/save-config", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        empresa_id: profile?.empresa_id,
+                        empresa_data: {
+                            nome: emitente.nome_fantasia || emitente.razao_social,
+                            cnpj: emitente.cnpj,
+                        },
+                        configs: [{
+                            chave: "nfe_emitente",
+                            valor: emitente,
+                        }],
+                    }),
+                });
+
+                if (!res.ok) throw new Error("Erro ao salvar dados da empresa");
+                console.log("[OnboardingWizard] Dados da empresa/emitente salvos com sucesso.");
             }
             if (currentStep === 3) {
+                console.log("[OnboardingWizard] Salvando certificado e config fiscal...");
                 await saveConfig("nfe_emitente", emitente);
                 if (certConfig.pfx_base64 && certConfig.pfx_base64 !== "***CARREGADO***") {
                     await saveConfig("nfe_certificado", certConfig);
                 }
             }
             if (currentStep === 4 || currentStep === 5) {
+                console.log("[OnboardingWizard] Salvando financeiro...");
                 await saveConfig("financeiro", financeiroConfig);
             }
             if (currentStep === 6) {
+                console.log("[OnboardingWizard] Salvando integrações...");
                 if (whatsappConfig.api_token) await saveConfig("whatsapp", whatsappConfig);
                 if (googleVisionConfig.api_key) await saveConfig("google_vision", googleVisionConfig);
             }
 
             if (currentStep < TOTAL_STEPS) {
                 const next = currentStep + 1;
+                console.log("[OnboardingWizard] Atualizando status remoto para passo:", next);
                 await updateStatus({ step: next });
+                console.log("[OnboardingWizard] Status remoto atualizado.");
                 setCurrentStep(next);
             } else {
+                console.log("[OnboardingWizard] Finalizando onboarding...");
                 await completeOnboarding();
+                console.log("[OnboardingWizard] Onboarding finalizado. Recarregando...");
                 window.location.reload();
             }
         } catch (err: any) {
-            console.error("Erro ao salvar passo:", err);
+            console.error("[OnboardingWizard] Erro em handleNext:", err);
             toast.error("Erro ao salvar: " + (err.message || "Tente novamente"));
         } finally {
+            console.log("[OnboardingWizard] handleNext finalizado.");
             setSaving(false);
         }
     }

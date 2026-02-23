@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 
 export interface OnboardingStatus {
     completed: boolean;
@@ -53,6 +54,7 @@ export function useOnboardingStatus() {
             console.warn("[Onboarding] updateStatus: empresa_id ausente, ignorando.");
             return;
         }
+        console.log("[Onboarding] updateStatus iniciado:", newStatus);
 
         try {
             const currentStatus = status || { completed: false, step: 1, skipped: false };
@@ -60,6 +62,7 @@ export function useOnboardingStatus() {
 
             // Atualizar localmente primeiro (otimistic)
             setStatus(updated);
+            console.log("[Onboarding] Estado local atualizado (otimisticamente):", updated);
 
             // Salvar via API Route (bypassa RLS e client issues)
             const res = await fetch("/api/onboarding/save-config", {
@@ -69,19 +72,18 @@ export function useOnboardingStatus() {
                     empresa_id: profile.empresa_id,
                     configs: [{
                         chave: "system_onboarding",
-                        valor: updated,
-                        is_secret: false,
-                    }],
-                }),
+                        valor: updated
+                    }]
+                })
             });
 
             const data = await res.json();
-            if (!data.success) {
+            if (!res.ok) {
                 console.error("[Onboarding] Erro ao salvar status:", data);
                 throw new Error(data.error || "Erro ao salvar status");
             }
 
-            console.log("[Onboarding] Status salvo:", updated);
+            console.log("[Onboarding] Status salvo com sucesso:", updated);
         } catch (err) {
             console.error("[Onboarding] Erro ao atualizar status:", err);
             throw err;
@@ -93,8 +95,20 @@ export function useOnboardingStatus() {
     }, [updateStatus]);
 
     const skipOnboarding = useCallback(async () => {
-        await updateStatus({ skipped: true });
+        await updateStatus({ skipped: true, completed: true, step: 7 });
     }, [updateStatus]);
+
+    // Real-time Sync across instances (DashboardLayout vs OnboardingWizard)
+    useRealtimeSubscription({
+        table: "configuracoes",
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: (payload: any) => {
+            if (payload.new && payload.new.chave === "system_onboarding") {
+                console.log("[Onboarding] Sincronização em tempo real recebida:", payload.new.valor);
+                setStatus(payload.new.valor as OnboardingStatus);
+            }
+        }
+    });
 
     return {
         status,

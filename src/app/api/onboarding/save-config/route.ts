@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin();
     try {
         const body = await request.json();
-        const { configs, empresa_id } = body;
+        const { configs, empresa_id, empresa_data } = body;
 
         if (!configs || !empresa_id) {
             return NextResponse.json(
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 2. Verificar que o usuário pertence à empresa
+        // 1. Verificar se o usuário pertence à empresa (segurança)
         const { data: userProfile } = await supabaseAdmin
             .from("usuarios")
             .select("empresa_id")
@@ -61,40 +61,59 @@ export async function POST(request: NextRequest) {
             .maybeSingle();
 
         if (!userProfile || userProfile.empresa_id !== empresa_id) {
-            return NextResponse.json(
-                { success: false, error: "Empresa inválida" },
-                { status: 403 }
-            );
+            return NextResponse.json({ success: false, error: "Acesso negado" }, { status: 403 });
         }
 
-        // 3. Salvar cada config usando supabaseAdmin (bypassa RLS)
-        const results: { chave: string; ok: boolean; error?: string }[] = [];
+        const results = [];
+        let hasErrors = false;
 
-        for (const cfg of configs) {
-            const { chave, valor, is_secret = false } = cfg;
+        // 2. Atualizar dados da empresa se fornecidos
+        if (empresa_data) {
+            const { error: empError } = await supabaseAdmin
+                .from("empresas")
+                .update(empresa_data)
+                .eq("id", empresa_id);
 
-            const { error } = await supabaseAdmin
-                .from("configuracoes")
-                .upsert({
-                    empresa_id,
-                    chave,
-                    valor,
-                    is_secret,
-                    descricao: `Configuração: ${chave}`,
-                    updated_at: new Date().toISOString(),
-                }, { onConflict: "empresa_id,chave" });
-
-            results.push({
-                chave,
-                ok: !error,
-                error: error?.message,
-            });
+            if (empError) {
+                console.error("[Onboarding API] Erro ao atualizar empresa:", empError);
+                results.push({ type: "empresa", error: empError });
+                hasErrors = true;
+            } else {
+                results.push({ type: "empresa", success: true });
+            }
         }
 
-        const hasErrors = results.some(r => !r.ok);
+        // 3. Upsert das configurações
+        if (configs && Array.isArray(configs)) {
+            for (const config of configs) {
+                const { chave, valor } = config;
+
+                const { error: upsertError } = await supabaseAdmin
+                    .from("configuracoes")
+                    .upsert({
+                        empresa_id,
+                        chave,
+                        valor,
+                        updated_at: new Date().toISOString()
+                    }, {
+                        onConflict: "empresa_id,chave"
+                    });
+
+                if (upsertError) {
+                    console.error(`[Onboarding API] Erro ao salvar config ${chave}:`, upsertError);
+                    results.push({ chave, error: upsertError });
+                    hasErrors = true;
+                } else {
+                    results.push({ chave, success: true });
+                }
+            }
+        }
+
+        // Determine overall success based on any errors encountered
+        const finalHasErrors = results.some(r => r.error);
 
         return NextResponse.json({
-            success: !hasErrors,
+            success: !finalHasErrors,
             results,
         }, { status: hasErrors ? 207 : 200 });
 
