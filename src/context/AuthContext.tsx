@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const { data, error } = await (supabase.from("usuarios") as any)
                 .select("*")
                 .eq("auth_user_id", userId)
-                .single();
+                .maybeSingle();
 
             if (data) {
                 setProfile(data);
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const { data: rawEmailData, error: emailError } = await (supabase.from("usuarios") as any)
                     .select("*")
                     .eq("email", userEmail)
-                    .single();
+                    .maybeSingle();
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const emailData = rawEmailData as any;
@@ -116,43 +116,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             .replace(/-+/g, "-")
                             .replace(/^-|-$/g, "");
 
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const { data: empresaData, error: empErr } = await (supabase.from("empresas") as any)
-                            .insert({
-                                nome: pendingData.nomeEmpresa || "Minha Empresa",
-                                subdominio: subdominio + "-" + Date.now().toString(36),
-                                plano: "starter",
-                            })
-                            .select()
-                            .single();
+                        const { data: provisionData, error: provErr } = await (supabase as any).rpc('provision_new_company', {
+                            p_nome_empresa: nomeEmpresaFinal,
+                            p_subdominio: subdominio + "-" + Date.now().toString(36),
+                            p_nome_usuario: pendingData.nome || "Admin",
+                            p_email_usuario: userEmail,
+                            p_auth_user_id: userId
+                        });
 
-                        if (empErr) {
-                            console.error("[AuthContext] Erro ao criar empresa:", empErr);
+                        if (provErr) {
+                            console.error("[AuthContext] Erro no auto-provisionamento via RPC:", provErr);
+                            toast.error("Erro ao configurar sua empresa no sistema inicial.");
                         }
 
-                        if (empresaData) {
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            const { data: newProfile, error: profErr } = await (supabase.from("usuarios") as any)
-                                .insert({
-                                    empresa_id: empresaData.id,
-                                    auth_user_id: userId,
-                                    nome: pendingData.nome || "Admin",
-                                    email: userEmail,
-                                    papel: "admin",
-                                    permissoes_json: {},
-                                    ativo: true,
-                                })
-                                .select()
-                                .single();
+                        if (provisionData && provisionData.length > 0) {
+                            const { empresa_id: newEmpId, usuario_id: newUserId } = provisionData[0];
 
-                            if (profErr) {
-                                console.error("[AuthContext] Erro ao criar perfil:", profErr);
-                                toast.error("Não conseguimos criar seu perfil de usuário. Por favor, tente recarregar.");
-                            }
+                            // Buscar os dados completos criados
+                            const { data: userData } = await (supabase.from("usuarios") as any).select("*").eq("id", newUserId).maybeSingle();
+                            const { data: empData } = await (supabase.from("empresas") as any).select("*").eq("id", newEmpId).maybeSingle();
 
-                            if (newProfile) {
-                                setProfile(newProfile);
-                                setEmpresa(empresaData as Empresa);
+                            if (userData && empData) {
+                                setProfile(userData);
+                                setEmpresa(empData as Empresa);
                                 try { localStorage.removeItem("smartos_pending_signup"); } catch { }
                                 console.log("[AuthContext] Auto-provisão concluída com sucesso!");
                                 toast.success("Conta provisionada com sucesso!");
