@@ -15,15 +15,13 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { configs, empresa_id, empresa_data } = body;
 
-        if (!configs || !empresa_id) {
-            return NextResponse.json(
-                { success: false, error: "configs e empresa_id são obrigatórios" },
-                { status: 400 }
-            );
+        if (!empresa_id) {
+            return NextResponse.json({ success: false, error: "empresa_id obrigatório" }, { status: 400 });
         }
 
-        // 1. Verificar autenticação do solicitante
-        const supabaseResponse = NextResponse.next({ request });
+        // 1. Verificar autenticação do solicitante e gerenciar cookies
+        let supabaseResponse = NextResponse.next({ request });
+
         const supabase = createServerClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -33,13 +31,13 @@ export async function POST(request: NextRequest) {
                         return request.cookies.getAll();
                     },
                     setAll(cookiesToSet: { name: string; value: string; options?: CookieOptions }[]) {
-                        cookiesToSet.forEach(({ name, value, options }) =>
+                        cookiesToSet.forEach(({ name, value, options }) => {
                             supabaseResponse.cookies.set(name, value, {
                                 ...options,
                                 sameSite: "lax",
                                 secure: process.env.NODE_ENV === "production",
-                            })
-                        );
+                            });
+                        });
                     },
                 },
             }
@@ -53,7 +51,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 1. Verificar se o usuário pertence à empresa (segurança)
+        // 2. Verificar se o usuário pertence à empresa (segurança)
         const { data: userProfile } = await supabaseAdmin
             .from("usuarios")
             .select("empresa_id")
@@ -112,10 +110,20 @@ export async function POST(request: NextRequest) {
         // Determine overall success based on any errors encountered
         const finalHasErrors = results.some(r => r.error);
 
-        return NextResponse.json({
+        const finalResponse = NextResponse.json({
             success: !finalHasErrors,
             results,
         }, { status: hasErrors ? 207 : 200 });
+
+        // COPIAR COOKIES (Refresh Token fix)
+        // Isso resolve o bug onde o usuário precisa limpar os cookies
+        supabaseResponse.cookies.getAll().forEach(cookie => {
+            finalResponse.cookies.set(cookie.name, cookie.value, {
+                ...cookie
+            } as any);
+        });
+
+        return finalResponse;
 
     } catch (error: any) {
         console.error("[API save-config] Erro:", error);

@@ -65,7 +65,7 @@ export async function DELETE(request: NextRequest) {
             .from("usuarios")
             .select("papel, empresa_id")
             .eq("auth_user_id", requester.id)
-            .single();
+            .maybeSingle();
 
         if (!requesterProfile || requesterProfile.papel !== "admin") {
             return NextResponse.json(
@@ -79,7 +79,7 @@ export async function DELETE(request: NextRequest) {
             .from("usuarios")
             .select("id, auth_user_id, empresa_id, email")
             .eq("id", userId)
-            .single();
+            .maybeSingle();
 
         if (!targetUser) {
             return NextResponse.json(
@@ -130,10 +130,19 @@ export async function DELETE(request: NextRequest) {
             }
         }
 
-        return NextResponse.json({
+        const finalResponse = NextResponse.json({
             success: true,
             message: `Usuário ${targetUser.email} deletado com sucesso`,
         });
+
+        // COPIAR COOKIES (Refresh Token fix)
+        supabaseResponse.cookies.getAll().forEach(cookie => {
+            finalResponse.cookies.set(cookie.name, cookie.value, {
+                ...cookie
+            } as any);
+        });
+
+        return finalResponse;
 
     } catch (error: any) {
         console.error("Erro ao deletar usuário:", error);

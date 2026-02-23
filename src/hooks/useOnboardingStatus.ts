@@ -12,15 +12,25 @@ export interface OnboardingStatus {
 }
 
 export function useOnboardingStatus() {
-    const { profile } = useAuth();
+    const { profile, isLoading: authLoading } = useAuth();
     const [status, setStatus] = useState<OnboardingStatus | null>(null);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
 
     useEffect(() => {
-        if (!profile?.empresa_id) return;
+        // Se o Auth ainda está carregando, não tomamos nenhuma decisão
+        if (authLoading) return;
+
+        // Se o Auth terminou e não temos empresa_id, liberamos o loading
+        // permitindo que o layout decida o que mostrar (provavelmente erro ou login)
+        if (!profile?.empresa_id) {
+            console.log("[Onboarding] Auth finalizado sem empresa_id. Liberando layout.");
+            setLoading(false);
+            return;
+        }
 
         const loadStatus = async () => {
+            console.log("[Onboarding] Carregando status remoto para empresa:", profile.empresa_id);
             try {
                 // SELECT usa o client normal (leitura nunca travou)
                 const { data, error } = await (supabase.from("configuracoes") as any)
@@ -34,12 +44,14 @@ export function useOnboardingStatus() {
                 }
 
                 if (data?.valor) {
+                    console.log("[Onboarding] Status carregado:", data.valor);
                     setStatus(data.valor as OnboardingStatus);
                 } else {
+                    console.log("[Onboarding] Nenhum status encontrado, iniciando padrão.");
                     setStatus({ completed: false, step: 1, skipped: false });
                 }
             } catch (err) {
-                console.error("[Onboarding] Exceção:", err);
+                console.error("[Onboarding] Exceção ao carregar:", err);
                 setStatus({ completed: false, step: 1, skipped: false });
             } finally {
                 setLoading(false);
@@ -47,7 +59,7 @@ export function useOnboardingStatus() {
         };
 
         loadStatus();
-    }, [profile?.empresa_id]);
+    }, [profile?.empresa_id, authLoading]);
 
     const updateStatus = useCallback(async (newStatus: Partial<OnboardingStatus>) => {
         if (!profile?.empresa_id) {
