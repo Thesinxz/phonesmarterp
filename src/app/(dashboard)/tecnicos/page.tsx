@@ -14,17 +14,20 @@ import {
     MoreVertical
 } from "lucide-react";
 import { getTecnicos } from "@/services/tecnicos";
+import { useAuth } from "@/context/AuthContext";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
 
 export default function TecnicosPage() {
+    const { profile } = useAuth();
     const [tecnicos, setTecnicos] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
 
     useEffect(() => {
+        if (!profile?.empresa_id) return;
         loadTecnicos();
-    }, []);
+    }, [profile?.empresa_id]);
 
     async function loadTecnicos() {
         setLoading(true);

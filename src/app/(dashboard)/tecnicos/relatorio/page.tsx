@@ -14,19 +14,22 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { getRelatorioComissoes } from "@/services/comissoes";
+import { useAuth } from "@/context/AuthContext";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { cn } from "@/utils/cn";
 
 export default function RelatorioComissoesPage() {
+    const { profile } = useAuth();
     const [loading, setLoading] = useState(true);
     const [relatorio, setRelatorio] = useState<any[]>([]);
     const [mes, setMes] = useState(new Date().getMonth() + 1);
     const [ano, setAno] = useState(new Date().getFullYear());
 
     useEffect(() => {
+        if (!profile?.empresa_id) return;
         loadData();
-    }, [mes, ano]);
+    }, [mes, ano, profile?.empresa_id]);
 
     async function loadData() {
         setLoading(true);

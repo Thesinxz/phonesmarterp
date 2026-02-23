@@ -102,6 +102,7 @@ export default function PDVPage() {
     });
 
     useEffect(() => {
+        if (!profile?.empresa_id) return;
         // Carga inicial rápida
         loadProducts();
     }, [profile?.empresa_id]);

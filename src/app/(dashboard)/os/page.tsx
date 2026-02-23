@@ -43,6 +43,7 @@ export default function OSPage() {
     const [totalItems, setTotalItems] = useState(0);
 
     useEffect(() => {
+        if (!profile?.empresa_id) return;
         loadOS();
     }, [profile?.empresa_id, currentPage, viewMode]);
 

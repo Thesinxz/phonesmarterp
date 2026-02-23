@@ -44,8 +44,9 @@ export default function EquipePage() {
     }, []);
 
     useEffect(() => {
+        if (!profile?.empresa_id) return;
         loadData();
-    }, [loadData]);
+    }, [loadData, profile?.empresa_id]);
 
     const filteredMembros = membros.filter(m => {
         const matchesSearch = m.nome.toLowerCase().includes(search.toLowerCase()) ||

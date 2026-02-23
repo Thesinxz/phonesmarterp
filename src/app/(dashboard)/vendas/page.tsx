@@ -53,6 +53,7 @@ export default function VendasPage() {
     });
 
     useEffect(() => {
+        if (!profile?.empresa_id) return;
         loadData();
     }, [profile?.empresa_id, currentPage]);
 

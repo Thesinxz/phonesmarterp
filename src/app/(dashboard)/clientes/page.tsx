@@ -29,6 +29,7 @@ export default function ClientesPage() {
     }, [searchTerm]);
 
     useEffect(() => {
+        if (!profile?.empresa_id) return;
         loadClientes();
     }, [filters, profile?.empresa_id]);
 

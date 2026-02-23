@@ -205,9 +205,13 @@ export default function ConfiguracoesPage() {
             setConfigsLoaded(false);
 
             try {
-                const res = await fetch('/api/configuracoes/all');
-                if (!res.ok) throw new Error("Erro ao carregar configurações");
-                const data = await res.json();
+                const supabase = createClient();
+                const { data, error } = await supabase
+                    .from('configuracoes')
+                    .select('chave, valor')
+                    .eq('empresa_id', profile.empresa_id);
+
+                if (error) throw error;
 
                 if (ignore) return;
 
@@ -247,6 +251,7 @@ export default function ConfiguracoesPage() {
                 setConfigsLoaded(true);
             } catch (err) {
                 console.error("[Config] ❌ Erro inesperado:", err);
+                setConfigsLoaded(true);
             }
         }
 

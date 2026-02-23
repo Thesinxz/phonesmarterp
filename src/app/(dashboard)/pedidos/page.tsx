@@ -38,8 +38,9 @@ export default function PedidosPage() {
     const [activeTab, setActiveTab] = useState<string>("todos");
 
     useEffect(() => {
+        if (!profile?.empresa_id) return;
         loadData();
-    }, [activeTab]);
+    }, [activeTab, profile?.empresa_id]);
 
     async function loadData() {
         setLoading(true);

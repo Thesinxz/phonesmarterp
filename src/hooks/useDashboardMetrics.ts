@@ -368,6 +368,7 @@ export function useDashboardMetrics() {
     });
 
     useEffect(() => {
+        if (!profile?.empresa_id) return;
         fetchMetrics();
     }, [profile?.empresa_id]);
 
