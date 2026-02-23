@@ -80,3 +80,95 @@ export async function deleteCliente(id: string) {
 
     if (error) throw error;
 }
+
+export async function getClienteStats(clienteId: string) {
+    // 1. Buscar OSs
+    const { data: oss, error: osError } = await supabase
+        .from("ordens_servico")
+        .select("valor_total_centavos, status")
+        .eq("cliente_id", clienteId);
+
+    if (osError) throw osError;
+
+    // 2. Buscar Vendas
+    const { data: vendas, error: vendaError } = await supabase
+        .from("vendas" as any)
+        .select("total_centavos")
+        .eq("cliente_id", clienteId);
+
+    if (vendaError) throw vendaError;
+
+    const totalOs = (oss as any[]).length;
+    const totalVendas = (vendas as any[]).length;
+
+    const gastoOs = (oss as any[])
+        .filter(os => ["finalizada", "entregue"].includes(os.status))
+        .reduce((acc, os) => acc + (os.valor_total_centavos || 0), 0);
+
+    const gastoVendas = (vendas as any[]).reduce((acc, v) => acc + (v.total_centavos || 0), 0);
+
+    return {
+        totalOs,
+        totalVendas,
+        totalGastoCentavos: gastoOs + gastoVendas
+    };
+}
+
+export async function getClienteTimeline(clienteId: string) {
+    // 1. Buscar OSs com joins básicos
+    const { data: oss, error: osError } = await supabase
+        .from("ordens_servico")
+        .select(`
+            id,
+            numero,
+            created_at,
+            status,
+            valor_total_centavos,
+            problema_relatado,
+            marca_equipamento,
+            modelo_equipamento
+        `)
+        .eq("cliente_id", clienteId)
+        .order("created_at", { ascending: false });
+
+    if (osError) throw osError;
+
+    // 2. Buscar Vendas com joins básicos
+    const { data: vendas, error: vendaError } = await (supabase.from("vendas" as any))
+        .select(`
+            id,
+            numero,
+            created_at,
+            total_centavos,
+            forma_pagamento
+        `)
+        .eq("cliente_id", clienteId)
+        .order("created_at", { ascending: false });
+
+    if (vendaError) throw vendaError;
+
+    // 3. Unificar e formatar
+    const timeline = [
+        ...(oss as any[]).map(os => ({
+            id: os.id,
+            tipo: "os" as const,
+            data: os.created_at,
+            numero: os.numero,
+            status: os.status,
+            valor: os.valor_total_centavos,
+            descricao: `${os.marca_equipamento} ${os.modelo_equipamento} - ${os.problema_relatado}`
+        })),
+        ...(vendas as any[]).map(v => ({
+            id: v.id,
+            tipo: "venda" as const,
+            data: v.data || v.created_at, // Suporte a campos de data diferentes se houver
+            numero: v.numero,
+            status: "concluída",
+            valor: v.total_centavos,
+            descricao: `Venda no PDV (${v.forma_pagamento || 'N/A'})`
+        }))
+    ];
+
+    // Ordenar por data decrescente
+    return timeline.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+}

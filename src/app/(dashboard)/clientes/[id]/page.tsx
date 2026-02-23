@@ -17,17 +17,22 @@ import {
     Save,
     Trash2
 } from "lucide-react";
-import { getClienteById, updateCliente } from "@/services/clientes";
+import { getClienteById, updateCliente, getClienteStats, getClienteTimeline } from "@/services/clientes";
 import { getEquipamentosByCliente, createEquipamento, deleteEquipamento } from "@/services/equipamentos";
 import { type Cliente, type Equipamento } from "@/types/database";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { formatDate } from "@/utils/formatDate";
+import { formatCurrency } from "@/utils/formatCurrency";
+import { ShoppingBag, ChevronRight, CheckCircle2, TrendingUp, Wrench } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 export default function ClienteDetalhesPage() {
     const { id } = useParams() as { id: string };
     const router = useRouter();
     const [cliente, setCliente] = useState<Cliente | null>(null);
     const [equipamentos, setEquipamentos] = useState<Equipamento[]>([]);
+    const [stats, setStats] = useState<any>(null);
+    const [timeline, setTimeline] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAddingEquipamento, setIsAddingEquipamento] = useState(false);
 
@@ -47,12 +52,16 @@ export default function ClienteDetalhesPage() {
     async function loadData() {
         setLoading(true);
         try {
-            const [clienteData, equipData] = await Promise.all([
+            const [clienteData, equipData, statsData, timelineData] = await Promise.all([
                 getClienteById(id),
-                getEquipamentosByCliente(id)
+                getEquipamentosByCliente(id),
+                getClienteStats(id),
+                getClienteTimeline(id)
             ]);
             setCliente(clienteData);
             setEquipamentos(equipData);
+            setStats(statsData);
+            setTimeline(timelineData);
         } catch (error) {
             console.error("Erro ao carregar dados:", error);
         } finally {
@@ -186,21 +195,25 @@ export default function ClienteDetalhesPage() {
                     </GlassCard>
 
                     <GlassCard title="Fidelidade" icon={Calendar}>
-                        <div className="space-y-3">
-                            {/* 
-                            TODO: Implement real calculations for these metrics
-                            <div className="flex justify-between text-sm text-slate-600">
-                                <span>Total de OS</span>
-                                <span className="font-semibold text-slate-800">-</span>
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-slate-500 font-medium">Total de OS</span>
+                                <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold">{stats?.totalOs || 0}</span>
                             </div>
-                            <div className="flex justify-between text-sm text-slate-600">
-                                <span>Total Gasto</span>
-                                <span className="font-semibold text-brand-600">-</span>
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-slate-500 font-medium">Outros Pedidos</span>
+                                <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-bold">{stats?.totalVendas || 0}</span>
                             </div>
-                            */}
-                            <div className="flex justify-between text-sm text-slate-600">
-                                <span>Pontos Acumulados</span>
-                                <span className="font-semibold text-amber-600">{cliente.pontos_fidelidade || 0} pts</span>
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-slate-500 font-medium font-bold">Total Gasto</span>
+                                <span className="text-brand-600 font-black text-base">{formatCurrency(stats?.totalGastoCentavos || 0)}</span>
+                            </div>
+                            <div className="pt-3 border-t border-slate-100 flex justify-between items-center text-sm">
+                                <span className="text-slate-500 font-medium">Pontos Acumulados</span>
+                                <span className="text-amber-600 font-black flex items-center gap-1">
+                                    <TrendingUp size={14} />
+                                    {cliente.pontos_fidelidade || 0} pts
+                                </span>
                             </div>
                         </div>
                     </GlassCard>
@@ -328,6 +341,64 @@ export default function ClienteDetalhesPage() {
                                 </div>
                             ))
                         )}
+                    </div>
+
+                    {/* Timeline de Atividades 360º */}
+                    <div className="space-y-4 pt-4">
+                        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <History className="w-5 h-5 text-brand-500" />
+                            Histórico de Interações (360º)
+                        </h2>
+
+                        <div className="space-y-4 relative before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
+                            {timeline.length === 0 ? (
+                                <div className="glass-card py-10 text-center text-slate-400 italic before:hidden">
+                                    Nenhuma interação registrada no histórico.
+                                </div>
+                            ) : (
+                                timeline.map((item) => (
+                                    <div key={item.id} className="flex gap-4 relative group">
+                                        <div className={cn(
+                                            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 z-10 transition-all",
+                                            item.tipo === 'os' ? "bg-blue-100 text-blue-600 group-hover:bg-blue-500 group-hover:text-white" : "bg-emerald-100 text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white"
+                                        )}>
+                                            {item.tipo === 'os' ? <Wrench size={18} /> : <ShoppingBag size={18} />}
+                                        </div>
+
+                                        <div className="flex-1 glass-card hover:bg-white/80 transition-all cursor-pointer">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={cn(
+                                                            "text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-widest",
+                                                            item.tipo === 'os' ? "bg-blue-50 text-blue-500" : "bg-emerald-50 text-emerald-500"
+                                                        )}>
+                                                            {item.tipo === 'os' ? `Ordem #${String(item.numero).padStart(4, '0')}` : `Venda #${String(item.numero || '').padStart(4, '0')}`}
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-400 font-medium">{formatDate(item.data)}</span>
+                                                    </div>
+                                                    <p className="text-sm font-bold text-slate-800 mt-1">{item.descricao}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-sm font-black text-slate-700">{formatCurrency(item.valor)}</p>
+                                                    <div className="flex items-center gap-1 justify-end mt-0.5">
+                                                        <CheckCircle2 size={10} className="text-emerald-500" />
+                                                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-tighter">{item.status}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <Link
+                                                href={item.tipo === 'os' ? `/os/${item.id}` : `/financeiro/vendas`}
+                                                className="text-[10px] font-bold text-brand-500 uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all mt-3"
+                                            >
+                                                Ver Detalhes <ChevronRight size={10} />
+                                            </Link>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
