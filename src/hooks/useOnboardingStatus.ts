@@ -103,11 +103,11 @@ export function useOnboardingStatus() {
     }, [profile?.empresa_id, status]);
 
     const completeOnboarding = useCallback(async () => {
-        await updateStatus({ completed: true, step: 7 });
+        await updateStatus({ completed: true, step: 8 });
     }, [updateStatus]);
 
     const skipOnboarding = useCallback(async () => {
-        await updateStatus({ skipped: true, completed: true, step: 7 });
+        await updateStatus({ skipped: true, completed: true, step: 8 });
     }, [updateStatus]);
 
     // Real-time Sync across instances (DashboardLayout vs OnboardingWizard)

@@ -124,10 +124,6 @@ export default function ConfiguracoesPage() {
         ]
     });
 
-    const [googleVisionConfig, setGoogleVisionConfig] = useState({
-        api_key: "",
-        enabled: false
-    });
 
     const [geminiConfig, setGeminiConfig] = useState({
         api_key: "",
@@ -170,7 +166,7 @@ export default function ConfiguracoesPage() {
                 if (chave === "whatsapp") setWhatsappConfig(valor as any);
                 if (chave === "financeiro") {
                     const config = valor as FinanceiroConfig;
-                    if (config.gateways) {
+                    if (config.gateways && Array.isArray(config.gateways)) {
                         config.gateways = config.gateways.map(gw => ({
                             ...gw,
                             taxa_pix_pct: gw.taxa_pix_pct ?? config.taxa_pix_pct ?? 0,
@@ -178,9 +174,9 @@ export default function ConfiguracoesPage() {
                             taxas_credito: gw.taxas_credito ?? config.taxas_credito ?? Array.from({ length: 21 }, (_, i) => ({ parcela: i + 1, taxa: 0 })),
                         }));
                     }
+                    if (!config.categorias) config.categorias = [];
                     setFinanceiroConfig(config);
                 }
-                if (chave === "google_vision") setGoogleVisionConfig(valor as any);
                 if (chave === "gemini") setGeminiConfig(valor as any);
                 if (chave === "vitrine") setVitrineConfig((prev: any) => ({ ...prev, ...valor as any }));
 
@@ -233,7 +229,7 @@ export default function ConfiguracoesPage() {
                     if (row.chave === "whatsapp") setWhatsappConfig(row.valor as any);
                     if (row.chave === "financeiro") {
                         const config = row.valor as FinanceiroConfig;
-                        if (config.gateways) {
+                        if (config.gateways && Array.isArray(config.gateways)) {
                             config.gateways = config.gateways.map(gw => ({
                                 ...gw,
                                 taxa_pix_pct: gw.taxa_pix_pct ?? config.taxa_pix_pct ?? 0,
@@ -241,9 +237,9 @@ export default function ConfiguracoesPage() {
                                 taxas_credito: gw.taxas_credito ?? config.taxas_credito ?? Array.from({ length: 21 }, (_, i) => ({ parcela: i + 1, taxa: 0 })),
                             }));
                         }
+                        if (!config.categorias) config.categorias = [];
                         setFinanceiroConfig(config);
                     }
-                    if (row.chave === "google_vision") setGoogleVisionConfig(row.valor as any);
                     if (row.chave === "gemini") setGeminiConfig(row.valor as any);
                     if (row.chave === "vitrine") setVitrineConfig((prev: any) => ({ ...prev, ...row.valor as any }));
                 });
@@ -341,31 +337,25 @@ export default function ConfiguracoesPage() {
             return;
         }
 
-        console.log("[Config] Perfil validado:", { empresa_id: profile.empresa_id });
         setSaving(true);
-
         try {
-            const isSecret = ["nfe_certificado", "whatsapp", "google_vision", "gemini"].includes(chave);
+            console.log(`[Config] Chamando API segura para salvar ${chave}...`);
 
-            console.log(`[Config] Chamando RPC 'upsert_config' para ${chave}...`);
-
-            const supabase = createClient();
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data, error } = await (supabase as any).rpc('upsert_config', {
-                p_chave: chave,
-                p_valor: valor,
-                p_is_secret: isSecret,
-                p_descricao: `Configuração: ${chave}`
+            const res = await fetch("/api/onboarding/save-config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    empresa_id: profile.empresa_id,
+                    configs: [{ chave, valor }]
+                }),
             });
 
-            console.log("[Config] Retorno do RPC:", { data, error });
-
-            if (error) {
-                console.error("[Config] Erro detectado no retorno do RPC:", error);
-                throw error;
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || "Erro ao salvar na API");
             }
 
-            console.log("[Config] Salvo com sucesso!");
+            console.log("[Config] Salvo com sucesso via API!");
             toast.success("Configurações salvas!");
 
             if (chave === "financeiro") {
@@ -413,7 +403,7 @@ export default function ConfiguracoesPage() {
         { id: "certificado", label: "Certificado Digital", icon: Shield, desc: "A1 (.pfx) + CSC" },
         { id: "whatsapp", label: "WhatsApp", icon: MessageSquare, desc: "Notificações automáticas" },
         { id: "financeiro", label: "Margens & Taxas", icon: DollarSign, desc: "Calculadoras e Lucro" },
-        { id: "ai_config", label: "IA e OCR", icon: Sparkles, desc: "Gemini 2.5 e Google Vision" },
+        { id: "ai_config", label: "IA e OCR", icon: Sparkles, desc: "Gemini 2.5 Flash" },
         { id: "vitrine", label: "Vitrine Online", icon: ShoppingBag, desc: "Catálogo público + TV" },
         { id: "etiquetas", label: "Etiquetas", icon: Scan, desc: "Modelos Térmicos e A4" },
         { id: "auditoria", label: "Auditoria", icon: HistoryIcon, desc: "Log de alterações e segurança" },
@@ -918,7 +908,7 @@ export default function ConfiguracoesPage() {
 
                             <GlassCard title="Categorias e Margens de Lucro" icon={Building2}>
                                 <div className="space-y-4">
-                                    {financeiroConfig.categorias.map((cat, idx) => (
+                                    {(financeiroConfig.categorias || []).map((cat, idx) => (
                                         <div key={idx} className="grid grid-cols-12 gap-3 items-end bg-white/50 p-4 rounded-2xl border border-slate-100 hover:border-brand-100 transition-all">
                                             <div className="col-span-3">
                                                 <label className="text-[10px] font-bold text-slate-400 uppercase">Nome</label>
@@ -1082,7 +1072,7 @@ export default function ConfiguracoesPage() {
                                                     <div>
                                                         <label className="label-sm block mb-2">Tabela de Crédito Parcelado (1x a 21x)</label>
                                                         <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
-                                                            {gw.taxas_credito.map((taxa, tIdx) => (
+                                                            {(gw.taxas_credito || []).map((taxa, tIdx) => (
                                                                 <div key={tIdx} className="space-y-1">
                                                                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{taxa.parcela}x (%)</label>
                                                                     <input
@@ -1183,7 +1173,7 @@ export default function ConfiguracoesPage() {
                                             <input
                                                 type={showSenha ? "text" : "password"}
                                                 className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all font-medium text-slate-700 shadow-sm"
-                                                placeholder="Insira sua API Key do Gemini (opcional - usa a do Vision se estiver vazia)"
+                                                placeholder="Insira sua API Key do Gemini"
                                                 value={geminiConfig.api_key}
                                                 onChange={(e) => setGeminiConfig({ ...geminiConfig, api_key: e.target.value })}
                                             />
@@ -1205,53 +1195,6 @@ export default function ConfiguracoesPage() {
                                 </div>
                             </GlassCard>
 
-                            <GlassCard>
-                                <div className="space-y-6 p-4 opacity-80 hover:opacity-100 transition-opacity">
-                                    <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center text-white">
-                                                <Scan size={20} />
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-slate-700">Google Vision (Tradicional)</p>
-                                                <p className="text-xs text-slate-500">Mapeamento de layout espacial eficiente</p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => setGoogleVisionConfig({ ...googleVisionConfig, enabled: !googleVisionConfig.enabled })}
-                                            className={cn(
-                                                "w-12 h-6 rounded-full transition-all relative",
-                                                googleVisionConfig.enabled ? "bg-blue-500" : "bg-slate-200"
-                                            )}
-                                        >
-                                            <div className={cn(
-                                                "absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm",
-                                                googleVisionConfig.enabled ? "left-7" : "left-1"
-                                            )} />
-                                        </button>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        <div className="relative group">
-                                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
-                                            <input
-                                                type={showSenha ? "text" : "password"}
-                                                className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium text-slate-700 shadow-sm"
-                                                placeholder="Insira sua API Key do Google Cloud"
-                                                value={googleVisionConfig.api_key}
-                                                onChange={(e) => setGoogleVisionConfig({ ...googleVisionConfig, api_key: e.target.value })}
-                                            />
-                                        </div>
-
-                                        <div className="flex justify-end">
-                                            <button onClick={() => saveConfig("google_vision", googleVisionConfig)} disabled={saving} className="btn-secondary">
-                                                <Save size={16} />
-                                                Salvar Google Vision
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </GlassCard>
                         </div>
                     )}
 

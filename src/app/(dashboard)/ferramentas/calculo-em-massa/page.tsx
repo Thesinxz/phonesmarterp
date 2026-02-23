@@ -32,7 +32,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import Tesseract from 'tesseract.js';
-import { extractProductsWithGoogleVision } from "@/services/googleVision";
 import { extractProductsWithGemini } from "@/services/gemini";
 import { createProdutos } from "@/services/estoque";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -79,8 +78,7 @@ export default function CalculoEmMassa() {
     const [knownProducts, setKnownProducts] = useState<{ item: string; categoria: string }[]>([]);
     const [dollarRate, setDollarRate] = useState<number>(0);
     const [rawText, setRawText] = useState("");
-    const [ocrMode, setOcrMode] = useState<'local' | 'google' | 'gemini'>('gemini');
-    const [gvEnabled, setGvEnabled] = useState(false);
+    const [ocrMode, setOcrMode] = useState<'local' | 'gemini'>('gemini');
     const [showDebug, setShowDebug] = useState(false);
     const [debugLines, setDebugLines] = useState<{ original: string; cleaned: string; status: 'success' | 'skip' | 'fail'; reason?: string }[]>([]);
     const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -106,45 +104,38 @@ export default function CalculoEmMassa() {
             setDollarRate(config.cotacao_dolar_paraguai || 5.32);
         }
 
-        // Check if AI (Vision or Gemini) is configured (com cache)
+        // Check if AI (Gemini) is configured (com cache)
         const checkAI = async () => {
             const cacheKey = "smartos_ai_config";
             try {
                 const cached = sessionStorage.getItem(cacheKey);
                 if (cached) {
                     const val = JSON.parse(cached);
-                    if (val.gvEnabled || val.geminiEnabled) {
-                        setGvEnabled(true);
+                    if (val.geminiEnabled) {
                         setOcrMode('gemini');
                     }
-                    if (val.geminiApiKey || val.gvApiKey) return; // Se já tem as chaves cacheadas, sai
+                    if (val.geminiApiKey) return;
                 }
             } catch { /* ignore */ }
 
             const { data: configs } = await supabase
                 .from("configuracoes")
                 .select("chave, valor")
-                .in("chave", ["google_vision", "gemini"]) as any;
+                .in("chave", ["gemini"]) as any;
 
-            const gv = configs?.find((c: any) => c.chave === "google_vision")?.valor;
             const gemini = configs?.find((c: any) => c.chave === "gemini")?.valor;
+            const isGeminiActive = gemini?.enabled || gemini?.api_key;
 
-            const isGvActive = gv?.enabled && gv?.api_key;
-            const isGeminiActive = gemini?.enabled; // Gemini can use GV key, so we check just enabled
-
-            if (isGvActive || isGeminiActive) {
-                setGvEnabled(true);
+            if (isGeminiActive) {
                 setOcrMode('gemini');
                 try {
                     sessionStorage.setItem(cacheKey, JSON.stringify({
-                        gvEnabled: isGvActive,
-                        geminiEnabled: isGeminiActive,
-                        gvApiKey: gv?.api_key || "",
+                        geminiEnabled: true,
                         geminiApiKey: gemini?.api_key || ""
                     }));
                 } catch { /* ignore */ }
             } else {
-                try { sessionStorage.setItem(cacheKey, JSON.stringify({ gvEnabled: false, geminiEnabled: false, gvApiKey: "", geminiApiKey: "" })); } catch { /* ignore */ }
+                try { sessionStorage.setItem(cacheKey, JSON.stringify({ geminiEnabled: false, geminiApiKey: "" })); } catch { /* ignore */ }
             }
         };
         checkAI();
@@ -155,10 +146,9 @@ export default function CalculoEmMassa() {
                 .from("produtos")
                 .select("nome") as { data: { nome: string }[] | null };
             if (data) {
-                // Mapear para o formato de busca
                 setKnownProducts(data.map(p => ({
                     item: p.nome,
-                    categoria: "" // Categorias não existem na tabela produtos no momento
+                    categoria: ""
                 })));
             }
         };
@@ -323,7 +313,7 @@ export default function CalculoEmMassa() {
         });
     };
 
-    // Helper to convert any Image URL/Blob to clean Base64 for Google Vision
+    // Helper to convert any Image URL/Blob to clean Base64 for OCR Engine
     const getBase64FromUrl = (url: string): Promise<string> => {
         return new Promise((resolve) => {
             const img = new Image();
@@ -384,7 +374,7 @@ export default function CalculoEmMassa() {
 
                 for (let i = 1; i <= maxPages; i++) {
                     const page = await pdf.getPage(i);
-                    const viewport = page.getViewport({ scale: 3.0 }); // Aumentar escala para Google Vision
+                    const viewport = page.getViewport({ scale: 3.0 }); // Aumentar escala para melhor leitura
                     const canvas = document.createElement('canvas');
                     const context = canvas.getContext('2d');
 
@@ -423,7 +413,7 @@ export default function CalculoEmMassa() {
                     const cached = sessionStorage.getItem(cacheKey);
                     if (cached) {
                         const val = JSON.parse(cached);
-                        currentApiKey = val.geminiApiKey || val.gvApiKey || "";
+                        currentApiKey = val.geminiApiKey || "";
                     }
                 } catch { /* ignore */ }
 

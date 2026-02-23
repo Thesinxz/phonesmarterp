@@ -27,7 +27,8 @@ import {
     Upload,
     CheckCircle2,
     AlertTriangle,
-    ExternalLink
+    ExternalLink,
+    Scan
 } from "lucide-react";
 import {
     type EmitenteConfig,
@@ -37,7 +38,7 @@ import {
     type CategoriaMargin,
 } from "@/types/configuracoes";
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 const ufs = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 const codigosUF: Record<string, string> = {
@@ -50,8 +51,9 @@ const STEP_META = [
     { step: 3, label: "Fiscal", icon: FileText, desc: "Ambiente e NFe" },
     { step: 4, label: "Categorias", icon: DollarSign, desc: "Margens e produtos" },
     { step: 5, label: "Pagamento", icon: CreditCard, desc: "Gateways e taxas" },
-    { step: 6, label: "APIs", icon: Sparkles, desc: "WhatsApp e Vision" },
-    { step: 7, label: "Pronto!", icon: Check, desc: "Revisão final" },
+    { step: 6, label: "WhatsApp", icon: MessageSquare, desc: "Notificações" },
+    { step: 7, label: "IA", icon: Sparkles, desc: "Gemini AI OCR" },
+    { step: 8, label: "Pronto!", icon: Check, desc: "Revisão final" },
 ];
 
 export default function OnboardingWizard() {
@@ -105,9 +107,10 @@ export default function OnboardingWizard() {
     const [whatsappConfig, setWhatsappConfig] = useState<WhatsappConfig>({
         api_token: "", phone_number_id: "", business_account_id: "", welcome_template: "", status_template: "", enabled: false,
     });
+    const [geminiConfig, setGeminiConfig] = useState({
+        api_key: "", enabled: false
+    });
 
-    // ── State: Google Vision ──
-    const [googleVisionConfig, setGoogleVisionConfig] = useState({ api_key: "", enabled: false });
 
     // ── State: Gateway expandido ──
     const [expandedGatewayId, setExpandedGatewayId] = useState<string | null>("standard");
@@ -198,7 +201,7 @@ export default function OnboardingWizard() {
                 configs: [{
                     chave,
                     valor,
-                    is_secret: ["nfe_certificado", "whatsapp", "google_vision"].includes(chave),
+                    is_secret: ["nfe_certificado", "whatsapp"].includes(chave),
                 }],
             }),
         });
@@ -252,7 +255,10 @@ export default function OnboardingWizard() {
             if (currentStep === 6) {
                 console.log("[OnboardingWizard] Salvando integrações...");
                 if (whatsappConfig.api_token) await saveConfig("whatsapp", whatsappConfig);
-                if (googleVisionConfig.api_key) await saveConfig("google_vision", googleVisionConfig);
+            }
+            if (currentStep === 7) {
+                console.log("[OnboardingWizard] Salvando config Gemini...");
+                if (geminiConfig.api_key) await saveConfig("gemini", geminiConfig);
             }
 
             if (currentStep < TOTAL_STEPS) {
@@ -725,86 +731,73 @@ export default function OnboardingWizard() {
                                 </div>
                             )}
 
-                            {/* ── STEP 6: APIs ── */}
-                            {currentStep === 6 && (
+                            {/* ── STEP 7: Gemini IA ── */}
+                            {currentStep === 7 && (
                                 <div className="space-y-6 animate-slide-up">
-                                    <h2 className="text-xl font-black text-slate-800">Integrações & APIs</h2>
-                                    <p className="text-slate-500 text-sm -mt-4">Configure WhatsApp e inteligência artificial. Pode pular e configurar depois.</p>
-
-                                    {/* WhatsApp */}
-                                    <div className="p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl space-y-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white">
-                                                <MessageSquare size={20} />
-                                            </div>
-                                            <div className="flex-1">
-                                                <p className="font-bold text-emerald-800">WhatsApp Business API</p>
-                                                <p className="text-xs text-emerald-600">Notificações automáticas de OS e vendas</p>
-                                            </div>
-                                            <button onClick={() => setWhatsappConfig(p => ({ ...p, enabled: !p.enabled }))}
-                                                className={cn("w-12 h-6 rounded-full transition-all relative",
-                                                    whatsappConfig.enabled ? "bg-emerald-500" : "bg-slate-200")}>
-                                                <div className={cn("w-5 h-5 bg-white rounded-full shadow absolute top-0.5 transition-all",
-                                                    whatsappConfig.enabled ? "left-6" : "left-0.5")} />
-                                            </button>
+                                    <div className="flex items-center gap-4 mb-2">
+                                        <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm">
+                                            <Sparkles size={24} />
                                         </div>
-                                        {whatsappConfig.enabled && (
-                                            <div className="space-y-3 animate-in fade-in">
-                                                <div>
-                                                    <label className="label-sm">Token de Acesso (Meta Business)</label>
-                                                    <input className="input-glass mt-1 font-mono text-xs" type="password" placeholder="EAABs..."
-                                                        value={whatsappConfig.api_token}
-                                                        onChange={e => setWhatsappConfig(p => ({ ...p, api_token: e.target.value }))} />
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <div>
-                                                        <label className="label-sm">Phone Number ID</label>
-                                                        <input className="input-glass mt-1 font-mono" placeholder="123..."
-                                                            value={whatsappConfig.phone_number_id}
-                                                            onChange={e => setWhatsappConfig(p => ({ ...p, phone_number_id: e.target.value }))} />
-                                                    </div>
-                                                    <div>
-                                                        <label className="label-sm">Template Status</label>
-                                                        <input className="input-glass mt-1 font-mono" placeholder="os_update"
-                                                            value={whatsappConfig.status_template}
-                                                            onChange={e => setWhatsappConfig(p => ({ ...p, status_template: e.target.value }))} />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
+                                        <div>
+                                            <h2 className="text-xl font-black text-slate-800">Cérebro Artificial (Gemini)</h2>
+                                            <p className="text-slate-500 text-sm">IA para cadastro automático de produtos via foto da nota ou produto.</p>
+                                        </div>
                                     </div>
 
-                                    {/* Google Vision */}
-                                    <div className="p-5 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center text-white">
-                                                <Sparkles size={20} />
+                                    <div className="p-6 bg-indigo-50/50 border border-indigo-100 rounded-3xl space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                                                    <Scan size={18} className="text-indigo-500" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-slate-800 text-sm">Ativar Gemini 2.5 Flash</p>
+                                                    <p className="text-[10px] text-slate-500">OCR avançado e categorização inteligente</p>
+                                                </div>
                                             </div>
-                                            <div className="flex-1">
-                                                <p className="font-bold text-blue-800">Google Cloud Vision</p>
-                                                <p className="text-xs text-blue-600">OCR profissional para faturas e notas</p>
-                                            </div>
-                                            <button onClick={() => setGoogleVisionConfig(p => ({ ...p, enabled: !p.enabled }))}
+                                            <button onClick={() => setGeminiConfig(p => ({ ...p, enabled: !p.enabled }))}
                                                 className={cn("w-12 h-6 rounded-full transition-all relative",
-                                                    googleVisionConfig.enabled ? "bg-brand-500" : "bg-slate-200")}>
+                                                    geminiConfig.enabled ? "bg-indigo-500" : "bg-slate-200")}>
                                                 <div className={cn("w-5 h-5 bg-white rounded-full shadow absolute top-0.5 transition-all",
-                                                    googleVisionConfig.enabled ? "left-6" : "left-0.5")} />
+                                                    geminiConfig.enabled ? "left-6" : "left-0.5")} />
                                             </button>
                                         </div>
-                                        {googleVisionConfig.enabled && (
-                                            <div className="animate-in fade-in">
-                                                <label className="label-sm">API Key (Google Cloud)</label>
-                                                <input className="input-glass mt-1 font-mono text-xs" type="password" placeholder="SUA_CHAVE_AQUI..."
-                                                    value={googleVisionConfig.api_key}
-                                                    onChange={e => setGoogleVisionConfig(p => ({ ...p, api_key: e.target.value }))} />
+
+                                        {geminiConfig.enabled && (
+                                            <div className="space-y-3 pt-2 animate-in slide-in-from-top-2 duration-300">
+                                                <div className="relative group">
+                                                    <label className="label-sm mb-1.5 block">Chave de API do Gemini</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            className="input-glass pr-10 font-mono text-sm tracking-tight"
+                                                            type={showSenha ? "text" : "password"}
+                                                            placeholder="AIzaSy..."
+                                                            value={geminiConfig.api_key}
+                                                            onChange={e => setGeminiConfig(p => ({ ...p, api_key: e.target.value }))}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowSenha(!showSenha)}
+                                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-500 transition-colors"
+                                                        >
+                                                            {showSenha ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                        </button>
+                                                    </div>
+                                                    <div className="mt-2 flex items-start gap-2 p-2.5 bg-white/60 rounded-xl border border-indigo-100/50">
+                                                        <AlertTriangle size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                                                        <p className="text-[10px] text-slate-500 leading-tight">
+                                                            A chave gratuita permite até 15 requisições/min. Obtenha a sua no <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-indigo-600 font-bold hover:underline inline-flex items-center gap-0.5">Google AI Studio <ExternalLink size={10} /></a>
+                                                        </p>
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
                                 </div>
                             )}
 
-                            {/* ── STEP 7: Conclusão ── */}
-                            {currentStep === 7 && (
+                            {/* ── STEP 8: Conclusão ── */}
+                            {currentStep === 8 && (
                                 <div className="space-y-6 animate-slide-up flex flex-col items-center justify-center h-full text-center py-8">
                                     <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shadow-lg shadow-emerald-200/50">
                                         <Check size={40} strokeWidth={3} />
@@ -825,12 +818,10 @@ export default function OnboardingWizard() {
                                             <span className="font-medium text-slate-800">{emitente.ambiente === "producao" ? "🚀 Produção" : "🧪 Homologação"}</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
-                                            <span className="text-slate-500">Categorias:</span>
-                                            <span className="font-medium text-slate-800">{financeiroConfig.categorias.length} configuradas</span>
-                                        </div>
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-slate-500">Gateways:</span>
-                                            <span className="font-medium text-slate-800">{financeiroConfig.gateways.length} configurados</span>
+                                            <span className="text-slate-500">IA / Gemini:</span>
+                                            <span className={cn("font-medium", geminiConfig.enabled ? "text-indigo-600" : "text-slate-400")}>
+                                                {geminiConfig.enabled ? "Ativo" : "Desativado"}
+                                            </span>
                                         </div>
                                         <div className="flex justify-between text-sm">
                                             <span className="text-slate-500">WhatsApp:</span>

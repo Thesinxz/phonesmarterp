@@ -48,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 .maybeSingle();
 
             if (data) {
+                console.log("[AuthContext] Profile found by auth_user_id:", userId);
                 setProfile(data);
                 await fetchEmpresa(data.empresa_id);
                 return;
@@ -64,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const emailData = rawEmailData as any;
 
                 if (emailData && !emailError) {
+                    console.log("[AuthContext] Profile found by email fallback:", userEmail);
                     setProfile(emailData);
                     await fetchEmpresa(emailData.empresa_id);
                     if (!emailData.auth_user_id) {
@@ -180,17 +182,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(newSession?.user ?? null);
 
             if (newSession?.user) {
+                console.log("[AuthContext] User detected, fetching profile...");
                 await fetchProfile(newSession.user.id, newSession.user.email);
             } else {
+                console.log("[AuthContext] No user session found.");
                 setProfile(null);
                 setEmpresa(null);
             }
 
+            console.log("[AuthContext] Auth flow complete, releasing loading state.");
             setIsLoading(false);
         });
 
+        // Timeout safety: if auth doesn't respond in 10s, release loading to show login/error
+        const timeout = setTimeout(() => {
+            if (mounted && isLoading) {
+                console.warn("[AuthContext] Auth session detection timed out. Forcing stop loading.");
+                setIsLoading(false);
+            }
+        }, 10000);
+
         return () => {
             mounted = false;
+            clearTimeout(timeout);
             subscription.unsubscribe();
         };
     }, [supabase, fetchProfile]);
