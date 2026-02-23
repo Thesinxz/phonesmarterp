@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
-            if (error && userEmail) {
+            if (!data && userEmail) {
                 // Fallback: busca por email se auth_user_id não estiver vinculado
                 const { data: rawEmailData, error: emailError } = await (supabase.from("usuarios") as any)
                     .select("*")
