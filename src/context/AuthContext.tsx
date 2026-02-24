@@ -77,26 +77,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
 
             if (!data && userEmail) {
-                // ... (mantém lógica de fallback por email e auto-provisionamento)
-                const { data: rawEmailData, error: emailError } = await (supabase.from("usuarios") as any)
-                    .select("*")
-                    .eq("email", userEmail)
-                    .maybeSingle();
+                // 1. Tentar reivindicar um convite pendente (Ignora RLS pois usa SECURITY DEFINER na RPC)
+                try {
+                    const { data: claimData, error: claimError } = await (supabase as any).rpc('claim_user_profile', {
+                        p_email_usuario: userEmail
+                    });
 
-                const emailData = rawEmailData as any;
-
-                if (emailData && !emailError) {
-                    setProfile(emailData);
-                    await fetchEmpresa(emailData.empresa_id);
-                    if (!emailData.auth_user_id) {
-                        await (supabase.from("usuarios") as any)
-                            .update({ auth_user_id: userId })
-                            .eq("id", emailData.id);
+                    if (!claimError && claimData && claimData.success) {
+                        console.log("[AuthContext] Perfil pendente reivindicado com sucesso!", claimData);
+                        // Reiniciar o fetchProfile agora que o vinculo e o auth_user_id existem
+                        return fetchProfile(userId, userEmail);
                     }
-                    return;
+                } catch (e) {
+                    console.error("[AuthContext] Erro ao tentar reivindicar perfil:", e);
                 }
 
-                // (Omissão de logica de auto-provisão para brevidade do edit, mas ela deve ser mantida se não houver vínculos)
                 // Se chegar aqui sem profile, o fluxo de auto-provisão original (rpc) deve rodar.
                 // Mas para multi-empresa, se já temos vínculos (companies.length > 0), não deveríamos auto-provisionar.
                 if (companies.length === 0) {

@@ -80,7 +80,7 @@ export default function NovoTecnicoPage() {
     }
 
     return (
-        <div className="space-y-6 page-enter max-w-3xl mx-auto pb-12">
+        <div className="space-y-6 page-enter pb-12">
             {/* Header */}
             <div className="flex items-center gap-4">
                 <Link href="/tecnicos" className="p-2 hover:bg-white/50 rounded-lg transition-colors">

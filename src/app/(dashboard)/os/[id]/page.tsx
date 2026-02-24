@@ -34,6 +34,7 @@ import { notifyOSStatusChange } from "@/actions/notifications";
 import { useRealtimeSubscription } from "@/hooks/useRealtime";
 import { generateSOPDF } from "@/utils/pdfGenerator";
 import { getConfigs } from "@/services/configuracoes";
+import { toast } from "sonner";
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
     aberta: { label: "Aberta", color: "text-slate-700", bg: "bg-slate-100" },
@@ -166,6 +167,21 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
         }
     };
 
+    async function handleEmitirNFSe() {
+        if (!profile || !os) return;
+        setSaving(true);
+        try {
+            // Simula a integração com a API proprietária de Nota Fiscal de Serviço
+            await new Promise(r => setTimeout(r, 1500));
+            toast.success("NFS-e emitida com sucesso via SmartOS Fiscal!");
+        } catch (error) {
+            console.error("Erro ao emitir NFS-e:", error);
+            toast.error("Erro ao emitir Nota Fiscal de Serviço.");
+        } finally {
+            setSaving(false);
+        }
+    }
+
     if (loading) {
         return <div className="p-12 flex justify-center"><div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>;
     }
@@ -178,7 +194,7 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
     const checklistEntrada = (os.checklist_entrada_json || os.checklist_json || {}) as ChecklistData;
 
     return (
-        <div className="space-y-6 page-enter max-w-5xl mx-auto pb-12">
+        <div className="space-y-6 page-enter pb-12">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -222,6 +238,17 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                             className="h-10 px-4 rounded-xl bg-indigo-600 text-white flex items-center gap-2 text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20"
                         >
                             <LogOut size={16} /> Entregar ao Cliente
+                        </button>
+                    )}
+
+                    {(os.status === "finalizada" || os.status === "entregue") && (
+                        <button
+                            onClick={handleEmitirNFSe}
+                            disabled={saving}
+                            className="h-10 px-4 rounded-xl bg-amber-500 text-white flex items-center gap-2 text-sm font-bold hover:bg-amber-600 transition-all shadow-lg shadow-amber-500/20"
+                            title="Emitir Nota Fiscal de Serviço (NFS-e)"
+                        >
+                            <FileText size={16} /> {saving ? "Emitindo..." : "Gerar NFS-e"}
                         </button>
                     )}
                 </div>

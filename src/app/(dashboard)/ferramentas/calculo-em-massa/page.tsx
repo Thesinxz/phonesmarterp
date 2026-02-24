@@ -1230,7 +1230,7 @@ export default function CalculoEmMassa() {
             {step === 3 && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32">
                     {/* Toolbar / Global Settings */}
-                    <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden">
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-8 opacity-5">
                             <TrendingUp size={120} className="text-slate-900" />
                         </div>
@@ -1295,7 +1295,7 @@ export default function CalculoEmMassa() {
                     </div>
 
                     {/* Cards Grid */}
-                    <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                         {ocrResult.map((res, i) => {
                             const costBrl = parseFloat(res.cost) * (currencyType === 'USD' ? dollarRate : 1);
                             const totalBaseCost = ocrResult.reduce((acc, curr) => acc + (parseFloat(curr.cost) || 0), 0);
@@ -1472,7 +1472,7 @@ export default function CalculoEmMassa() {
 
                     {/* Consolidated Harvest Summary - Fixed Bottom */}
                     <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-xl border-t border-slate-100 z-[100] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] animate-in slide-in-from-bottom-full duration-700">
-                        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                             <div className="flex flex-wrap items-center gap-8">
                                 <div>
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Itens Processados</p>

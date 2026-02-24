@@ -112,7 +112,7 @@ export default function ContasReceberPage() {
     };
 
     return (
-        <div className="space-y-6 page-enter pb-10 max-w-7xl mx-auto">
+        <div className="space-y-6 page-enter pb-10">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>

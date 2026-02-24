@@ -50,6 +50,9 @@ export interface Database {
                     endereco_json: Json | null;
                     pontos_fidelidade: number;
                     segmento: "novo" | "vip" | "atacadista" | null;
+                    inscricao_estadual: string | null;
+                    indicador_ie: number | null;
+                    inscricao_municipal: string | null;
                     created_at: string;
                     updated_at: string;
                 };
@@ -337,10 +340,163 @@ export interface Database {
                     data_emissao: string | null;
                     status_processamento: "pendente" | "processado" | "erro";
                     arquivo_url: string | null;
+                    // MD-e extended fields
+                    numero_nf: string | null;
+                    serie: string | null;
+                    natureza_operacao: string | null;
+                    xml_base64: string | null;
+                    pdf_url: string | null;
+                    itens_json: Json | null;
+                    status_manifestacao: "pendente" | "ciencia" | "confirmacao" | "desconhecimento" | "nao_realizada" | null;
+                    compra_registrada: boolean;
+                    compra_id: string | null;
                     created_at: string;
                 };
                 Insert: Omit<Database["public"]["Tables"]["xml_importacoes"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["xml_importacoes"]["Insert"]>;
+            };
+            fornecedores: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    nome: string;
+                    cnpj: string | null;
+                    cpf: string | null;
+                    ie: string | null;
+                    im: string | null;
+                    telefone: string | null;
+                    email: string | null;
+                    contato: string | null;
+                    endereco_json: Json | null;
+                    observacoes: string | null;
+                    ativo: boolean;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: Omit<{
+                    id: string; empresa_id: string; nome: string; cnpj: string | null; cpf: string | null;
+                    ie: string | null; im: string | null; telefone: string | null; email: string | null;
+                    contato: string | null; endereco_json: Json | null; observacoes: string | null;
+                    ativo: boolean; created_at: string; updated_at: string;
+                }, "id" | "created_at" | "updated_at">;
+                Update: Partial<{ nome: string; cnpj: string | null; cpf: string | null; ie: string | null; im: string | null; telefone: string | null; email: string | null; contato: string | null; endereco_json: Json | null; observacoes: string | null; ativo: boolean; }>;
+            };
+            compras: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    fornecedor_id: string | null;
+                    numero_nf: string | null;
+                    serie: string | null;
+                    chave_acesso: string | null;
+                    xml_importacao_id: string | null;
+                    data_compra: string;
+                    data_vencimento: string | null;
+                    status: "pendente" | "concluida" | "cancelada";
+                    valor_subtotal_centavos: number;
+                    valor_frete_centavos: number;
+                    valor_desconto_centavos: number;
+                    valor_total_centavos: number;
+                    forma_pagamento: string | null;
+                    observacoes: string | null;
+                    titulo_id: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: Omit<{
+                    id: string; empresa_id: string; fornecedor_id: string | null; numero_nf: string | null;
+                    serie: string | null; chave_acesso: string | null; xml_importacao_id: string | null;
+                    data_compra: string; data_vencimento: string | null; status: "pendente" | "concluida" | "cancelada";
+                    valor_subtotal_centavos: number; valor_frete_centavos: number; valor_desconto_centavos: number;
+                    valor_total_centavos: number; forma_pagamento: string | null; observacoes: string | null;
+                    titulo_id: string | null; created_at: string; updated_at: string;
+                }, "id" | "created_at" | "updated_at">;
+                Update: Partial<{ fornecedor_id: string | null; data_compra: string; data_vencimento: string | null; status: "pendente" | "concluida" | "cancelada"; valor_total_centavos: number; forma_pagamento: string | null; observacoes: string | null; titulo_id: string | null; }>;
+            };
+            compra_itens: {
+                Row: {
+                    id: string;
+                    compra_id: string;
+                    empresa_id: string;
+                    produto_id: string | null;
+                    nome_produto: string;
+                    ncm: string | null;
+                    cfop: string | null;
+                    ean: string | null;
+                    unidade: string | null;
+                    quantidade: number;
+                    custo_unitario_centavos: number;
+                    total_centavos: number;
+                    created_at: string;
+                };
+                Insert: Omit<{
+                    id: string; compra_id: string; empresa_id: string; produto_id: string | null;
+                    nome_produto: string; ncm: string | null; cfop: string | null; ean: string | null;
+                    unidade: string | null; quantidade: number; custo_unitario_centavos: number;
+                    total_centavos: number; created_at: string;
+                }, "id" | "created_at">;
+                Update: Partial<{ produto_id: string | null; nome_produto: string; ncm: string | null; cfop: string | null; ean: string | null; unidade: string | null; quantidade: number; custo_unitario_centavos: number; total_centavos: number; }>;
+            };
+            documentos_fiscais: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    tipo: string;
+                    ambiente: string;
+                    status: string;
+                    numero: number | null;
+                    serie: number | null;
+                    chave_acesso: string | null;
+                    recibo: string | null;
+                    protocolo: string | null;
+                    xml_enviado: string | null;
+                    xml_autorizado: string | null;
+                    pdf_url: string | null;
+                    mensagem_sefaz: string | null;
+                    dados_json: Json | null;
+                    valor_total_centavos: number | null;
+                    data_emissao: string | null;
+                    cliente_id: string | null;
+                    venda_id: string | null;
+                    os_id: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    empresa_id: string;
+                    tipo: string;
+                    ambiente: string;
+                    status: string;
+                    numero?: number | null;
+                    serie?: number | null;
+                    chave_acesso?: string | null;
+                    recibo?: string | null;
+                    protocolo?: string | null;
+                    xml_enviado?: string | null;
+                    xml_autorizado?: string | null;
+                    pdf_url?: string | null;
+                    mensagem_sefaz?: string | null;
+                    dados_json?: Json | null;
+                    valor_total_centavos?: number | null;
+                    data_emissao?: string | null;
+                    cliente_id?: string | null;
+                    venda_id?: string | null;
+                    os_id?: string | null;
+                };
+                Update: {
+                    status?: string;
+                    numero?: number | null;
+                    serie?: number | null;
+                    chave_acesso?: string | null;
+                    recibo?: string | null;
+                    protocolo?: string | null;
+                    xml_enviado?: string | null;
+                    xml_autorizado?: string | null;
+                    pdf_url?: string | null;
+                    mensagem_sefaz?: string | null;
+                    dados_json?: Json | null;
+                    valor_total_centavos?: number | null;
+                };
             };
             audit_logs: {
                 Row: {

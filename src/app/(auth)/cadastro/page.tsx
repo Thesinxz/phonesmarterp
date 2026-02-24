@@ -16,6 +16,7 @@ export default function CadastroPage() {
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isInvited, setIsInvited] = useState(false);
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
         setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -79,39 +80,49 @@ export default function CadastroPage() {
             }
 
             // 3. Sessão criada imediatamente (confirmação desabilitada no Supabase)
-            // Criar empresa e usuário público
-            const subdominio = form.nomeEmpresa
-                .toLowerCase()
-                .replace(/[^a-z0-9]/g, "-")
-                .replace(/-+/g, "-")
-                .replace(/^-|-$/g, "");
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data: empresaData, error: empresaError } = await (supabase.from("empresas") as any).insert({
-                nome: form.nomeEmpresa,
-                subdominio,
-                plano: "starter",
-            }).select().single();
-
-            if (empresaError || !empresaData) {
-                setError("Conta criada, mas houve um erro ao configurar a empresa. Entre em contato com o suporte.");
-                setLoading(false);
-                return;
-            }
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { error: usuarioError } = await (supabase.from("usuarios") as any).insert({
-                empresa_id: empresaData.id,
-                auth_user_id: authData.user.id,
-                nome: form.nome,
-                email: form.email,
-                papel: "admin",
-                permissoes_json: {},
-                ativo: true,
+            // PRIMEIRO: Tentar clamar perfil de convite pendente
+            const { data: claimData, error: claimError } = await (supabase as any).rpc('claim_user_profile', {
+                p_email_usuario: form.email
             });
 
-            if (usuarioError) {
-                console.error("Erro ao criar usuário público:", usuarioError);
+            // SEGUNDO: Criar empresa nova se o usuário não marcou "Fui convidado"
+            if (!isInvited && form.nomeEmpresa.trim() !== "") {
+                const subdominio = form.nomeEmpresa
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]/g, "-")
+                    .replace(/-+/g, "-")
+                    .replace(/^-|-$/g, "");
+
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const { data: empresaData, error: empresaError } = await (supabase.from("empresas") as any).insert({
+                    nome: form.nomeEmpresa,
+                    subdominio,
+                    plano: "starter",
+                }).select().single();
+
+                if (!empresaError && empresaData) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    await (supabase.from("usuarios") as any).insert({
+                        empresa_id: empresaData.id,
+                        auth_user_id: authData.user.id,
+                        nome: form.nome,
+                        email: form.email,
+                        papel: "admin",
+                        permissoes_json: {},
+                        ativo: true,
+                    });
+
+                    // Criar vínculo multi-empresa
+                    await (supabase.from("usuario_vinculos_empresa") as any).insert({
+                        usuario_id: authData.user.id,
+                        empresa_id: empresaData.id,
+                        papel: "admin",
+                        permissoes_custom_json: {}
+                    });
+                } else {
+                    console.error("Erro ao configurar a nova empresa:", empresaError);
+                }
             }
 
             router.push("/dashboard");
@@ -141,21 +152,37 @@ export default function CadastroPage() {
 
                 <div className="glass-dark rounded-3xl p-8">
                     <form onSubmit={handleCadastro} className="space-y-4">
-                        {/* Nome da empresa */}
-                        <div className="space-y-1.5">
-                            <label className="text-white/70 text-sm font-medium">Nome da empresa</label>
-                            <div className="relative">
-                                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                                <input
-                                    name="nomeEmpresa"
-                                    value={form.nomeEmpresa}
-                                    onChange={handleChange}
-                                    placeholder="Minha Assistência Técnica"
-                                    required
-                                    className="w-full bg-white/10 border border-white/20 rounded-xl pl-10 pr-4 py-3 text-white placeholder:text-white/30 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400/50 transition-all"
-                                />
-                            </div>
+                        {/* Tipo de Cadastro */}
+                        <div className="flex items-center gap-3 bg-white/5 p-3 rounded-xl border border-white/10">
+                            <input
+                                type="checkbox"
+                                id="convidado"
+                                checked={isInvited}
+                                onChange={(e) => setIsInvited(e.target.checked)}
+                                className="w-5 h-5 rounded border-white/20 bg-white/10 text-brand-500 focus:ring-brand-500/50 cursor-pointer"
+                            />
+                            <label htmlFor="convidado" className="text-white/80 text-sm font-medium cursor-pointer select-none">
+                                Fui convidado para entrar em uma equipe
+                            </label>
                         </div>
+
+                        {/* Nome da empresa (Só aparece se NÃO for convidado) */}
+                        {!isInvited && (
+                            <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
+                                <label className="text-white/70 text-sm font-medium">Nome da empresa</label>
+                                <div className="relative">
+                                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                                    <input
+                                        name="nomeEmpresa"
+                                        value={form.nomeEmpresa}
+                                        onChange={handleChange}
+                                        placeholder="Minha Assistência Técnica"
+                                        required={!isInvited}
+                                        className="w-full bg-white/10 border border-white/20 rounded-xl pl-10 pr-4 py-3 text-white placeholder:text-white/30 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400/50 transition-all"
+                                    />
+                                </div>
+                            </div>
+                        )}
 
                         {/* Nome */}
                         <div className="space-y-1.5">

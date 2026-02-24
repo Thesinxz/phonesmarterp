@@ -66,6 +66,9 @@ export function OSStep1Cliente({ onSelect, selectedId }: OSStep1ClienteProps) {
         bairro: "",
         cidade: "",
         uf: "",
+        inscricaoEstadual: "",
+        indicadorIe: "9",
+        inscricaoMunicipal: "",
     });
 
     const handleSearch = async (val: string) => {
@@ -195,6 +198,9 @@ export function OSStep1Cliente({ onSelect, selectedId }: OSStep1ClienteProps) {
                 segmento: newClient.segmento as any,
                 endereco_json: endereco,
                 pontos_fidelidade: 0,
+                inscricao_estadual: newClient.inscricaoEstadual || null,
+                indicador_ie: parseInt(newClient.indicadorIe, 10),
+                inscricao_municipal: newClient.inscricaoMunicipal || null,
             });
 
             console.log("DEBUG: Cliente cadastrado com sucesso. ID:", data.id);
@@ -491,6 +497,48 @@ export function OSStep1Cliente({ onSelect, selectedId }: OSStep1ClienteProps) {
                                     value={newClient.uf}
                                     onChange={e => setNewClient(p => ({ ...p, uf: e.target.value.toUpperCase() }))}
                                 />
+                            </div>
+                        </div>
+
+                        {/* Campos Fiscais */}
+                        <div className="pt-4 border-t border-slate-50 mt-4">
+                            <h4 className="text-xs font-bold text-slate-800 uppercase mb-3 flex items-center gap-1.5">
+                                <FileText size={14} className="text-indigo-500" />
+                                Dados Fiscais
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Indicador IE</label>
+                                    <select
+                                        className="w-full h-10 px-3 rounded-lg border border-slate-100 bg-slate-50 focus:bg-white text-sm outline-none transition-all appearance-none"
+                                        value={newClient.indicadorIe}
+                                        onChange={e => setNewClient(p => ({ ...p, indicadorIe: e.target.value }))}
+                                    >
+                                        <option value="1">1 - Contribuinte ICMS</option>
+                                        <option value="2">2 - Contribuinte Isento</option>
+                                        <option value="9">9 - Não Contribuinte</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Insc. Estadual</label>
+                                    <input
+                                        type="text"
+                                        className="w-full h-10 px-3 rounded-lg border border-slate-100 bg-slate-50 focus:bg-white text-sm outline-none transition-all"
+                                        placeholder={newClient.indicadorIe === "9" ? "Não Contribuinte" : "Isento ou Nº IE"}
+                                        value={newClient.inscricaoEstadual}
+                                        onChange={e => setNewClient(p => ({ ...p, inscricaoEstadual: e.target.value }))}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Insc. Municipal</label>
+                                    <input
+                                        type="text"
+                                        className="w-full h-10 px-3 rounded-lg border border-slate-100 bg-slate-50 focus:bg-white text-sm outline-none transition-all"
+                                        placeholder="Apenas para NFS-e"
+                                        value={newClient.inscricaoMunicipal}
+                                        onChange={e => setNewClient(p => ({ ...p, inscricaoMunicipal: e.target.value }))}
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>

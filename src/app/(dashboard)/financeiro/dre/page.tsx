@@ -46,7 +46,7 @@ export default function DrePage() {
     };
 
     return (
-        <div className="space-y-6 page-enter pb-10 max-w-5xl mx-auto">
+        <div className="space-y-6 page-enter pb-10">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -147,7 +147,7 @@ export default function DrePage() {
                         </div>
 
                         <div className="p-6">
-                            <div className="max-w-3xl mx-auto font-mono text-sm space-y-2">
+                            <div className="font-mono text-sm space-y-2">
                                 {/* Receita */}
                                 <div className="flex justify-between items-center py-2 border-b border-slate-100">
                                     <span className="font-bold text-slate-800 flex items-center gap-2">

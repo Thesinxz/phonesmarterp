@@ -47,6 +47,7 @@ import { syncConfigToAll } from "@/services/configuracoes";
 type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "ai_config" | "vitrine" | "etiquetas" | "auditoria" | "contador";
 
 import { type WhatsappConfig, type FinanceiroConfig } from "@/types/configuracoes";
+import { getFiscalConfig, upsertFiscalConfig, ConfiguracaoFiscal } from "@/services/fiscal";
 
 interface EmitenteConfig {
     razao_social: string;
@@ -103,11 +104,21 @@ export default function ConfiguracoesPage() {
         razao_social: "", nome_fantasia: "", cnpj: "", ie: "", crt: "1",
         logradouro: "", numero: "", bairro: "", municipio: "", codigo_municipio: "",
         uf: "SP", cep: "", telefone: "", email: "", codigo_uf: "35",
-        ambiente: "homologacao",
+        ambiente: "homologacao", // manter para back-compatibilidade
     });
 
-    const [certConfig, setCertConfig] = useState<CertConfig>({
-        pfx_base64: "", senha: "", csc: "", csc_id: "", nome_cert: "",
+    const [fiscalConfig, setFiscalConfig] = useState<ConfiguracaoFiscal>({
+        empresa_id: "",
+        ambiente: "homologacao",
+        regime_tributario: "simples_nacional",
+        certificado_base64: "",
+        certificado_senha: "",
+        serie_nfe: 1,
+        numero_nfe: 1,
+        serie_nfce: 1,
+        numero_nfce: 1,
+        csc_nfce: "",
+        csc_id_nfce: "",
     });
 
     const [whatsappConfig, setWhatsappConfig] = useState<WhatsappConfig>({
@@ -182,10 +193,7 @@ export default function ConfiguracoesPage() {
 
                 // Atualiza instantaneamente a tela de acordo com a chave modificada
                 if (chave === "nfe_emitente") setEmitente(valor as EmitenteConfig);
-                if (chave === "nfe_certificado") {
-                    const cert = valor as CertConfig;
-                    setCertConfig({ ...cert, pfx_base64: cert.pfx_base64 ? "***CARREGADO***" : "" });
-                }
+                // "nfe_certificado" was deprecated for realtime. Realtime table for configuracoes_fiscais requires generic subscription
                 if (chave === "whatsapp") setWhatsappConfig(valor as any);
                 if (chave === "financeiro") {
                     const config = valor as FinanceiroConfig;
@@ -246,10 +254,6 @@ export default function ConfiguracoesPage() {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 data.forEach((row: any) => {
                     if (row.chave === "nfe_emitente") setEmitente(row.valor as EmitenteConfig);
-                    if (row.chave === "nfe_certificado") {
-                        const cert = row.valor as CertConfig;
-                        setCertConfig({ ...cert, pfx_base64: cert.pfx_base64 ? "***CARREGADO***" : "" });
-                    }
                     if (row.chave === "whatsapp") setWhatsappConfig(row.valor as any);
                     if (row.chave === "financeiro") {
                         const config = row.valor as FinanceiroConfig;
@@ -268,6 +272,18 @@ export default function ConfiguracoesPage() {
                     if (row.chave === "vitrine") setVitrineConfig((prev: any) => ({ ...prev, ...row.valor as any }));
                     if (row.chave === "contador") setContadorConfig(row.valor as any);
                 });
+
+                // Ler as configurações fiscais reais da nova tabela (Phase 13)
+                try {
+                    const fconf = await getFiscalConfig(profile.empresa_id);
+                    if (fconf) {
+                        setFiscalConfig(fconf);
+                    } else {
+                        setFiscalConfig(prev => ({ ...prev, empresa_id: profile.empresa_id }));
+                    }
+                } catch (e) {
+                    console.error("Erro ao carregar fiscalConfig", e);
+                }
 
                 setConfigsLoaded(true);
             } catch (err) {
@@ -395,6 +411,20 @@ export default function ConfiguracoesPage() {
         }
     }
 
+    async function saveFiscalConfigSettings() {
+        if (!profile || !profile.empresa_id) return;
+        setSaving(true);
+        try {
+            await upsertFiscalConfig(profile.empresa_id, fiscalConfig);
+            toast.success("Configurações Fiscais salvas com sucesso!");
+        } catch (error) {
+            console.error(error);
+            toast.error("Erro ao salvar opções fiscais.");
+        } finally {
+            setSaving(false);
+        }
+    }
+
     const handleSyncAll = async (key: string, value: any) => {
         if (!user || !profile) return;
         try {
@@ -416,11 +446,11 @@ export default function ConfiguracoesPage() {
         const reader = new FileReader();
         reader.onload = (ev) => {
             const base64 = (ev.target?.result as string).split(",")[1];
-            setCertConfig(prev => ({
+            setFiscalConfig(prev => ({
                 ...prev,
-                pfx_base64: base64,
-                nome_cert: file.name,
+                certificado_base64: base64,
             }));
+            toast.success("Certificado carregado na memória. Salve para gravar definitivamente.");
         };
         reader.readAsDataURL(file);
     }
@@ -639,10 +669,10 @@ export default function ConfiguracoesPage() {
                                         {(["homologacao", "producao"] as const).map(amb => (
                                             <button
                                                 key={amb}
-                                                onClick={() => setEmitente(p => ({ ...p, ambiente: amb }))}
+                                                onClick={() => setFiscalConfig(p => ({ ...p, ambiente: amb }))}
                                                 className={cn(
                                                     "p-4 rounded-xl border-2 text-left transition-all",
-                                                    emitente.ambiente === amb
+                                                    fiscalConfig.ambiente === amb
                                                         ? amb === "producao"
                                                             ? "border-emerald-500 bg-emerald-50"
                                                             : "border-brand-500 bg-brand-50"
@@ -650,7 +680,7 @@ export default function ConfiguracoesPage() {
                                                 )}
                                             >
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    {emitente.ambiente === amb
+                                                    {fiscalConfig.ambiente === amb
                                                         ? <CheckCircle2 size={16} className={amb === "producao" ? "text-emerald-600" : "text-brand-600"} />
                                                         : <div className="w-4 h-4 rounded-full border-2 border-slate-200" />
                                                     }
@@ -665,7 +695,7 @@ export default function ConfiguracoesPage() {
                                         ))}
                                     </div>
 
-                                    {emitente.ambiente === "producao" && (
+                                    {fiscalConfig.ambiente === "producao" && (
                                         <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2">
                                             <AlertTriangle size={16} className="text-amber-600 mt-0.5 shrink-0" />
                                             <p className="text-xs text-amber-700">
@@ -673,11 +703,60 @@ export default function ConfiguracoesPage() {
                                             </p>
                                         </div>
                                     )}
+                                </GlassCard>
+
+                                <GlassCard title="Tributação e Numeração" icon={Settings}>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="col-span-2">
+                                            <label className="label-sm">Regime Tributário</label>
+                                            <select
+                                                className="input-glass mt-1 appearance-none"
+                                                value={fiscalConfig.regime_tributario}
+                                                onChange={e => setFiscalConfig(p => ({ ...p, regime_tributario: e.target.value as any }))}
+                                            >
+                                                <option value="simples_nacional">1 — Simples Nacional</option>
+                                                <option value="lucro_presumido">3 — Regime Normal (Lucro Presumido)</option>
+                                                <option value="lucro_real">3 — Regime Normal (Lucro Real)</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="border border-slate-100 p-4 rounded-xl col-span-2 md:col-span-1">
+                                            <p className="font-bold text-slate-700 text-sm mb-3 border-b pb-2">NF-e (Mod. 55)</p>
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className="label-sm">Próxima Série NF-e</label>
+                                                    <input type="number" className="input-glass mt-1" value={fiscalConfig.serie_nfe || 1}
+                                                        onChange={e => setFiscalConfig(p => ({ ...p, serie_nfe: parseInt(e.target.value) || 1 }))} />
+                                                </div>
+                                                <div>
+                                                    <label className="label-sm">Próximo Número NF-e</label>
+                                                    <input type="number" className="input-glass mt-1" value={fiscalConfig.numero_nfe || 1}
+                                                        onChange={e => setFiscalConfig(p => ({ ...p, numero_nfe: parseInt(e.target.value) || 1 }))} />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="border border-slate-100 p-4 rounded-xl col-span-2 md:col-span-1">
+                                            <p className="font-bold text-slate-700 text-sm mb-3 border-b pb-2">NFC-e (Mod. 65)</p>
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className="label-sm">Próxima Série NFC-e</label>
+                                                    <input type="number" className="input-glass mt-1" value={fiscalConfig.serie_nfce || 1}
+                                                        onChange={e => setFiscalConfig(p => ({ ...p, serie_nfce: parseInt(e.target.value) || 1 }))} />
+                                                </div>
+                                                <div>
+                                                    <label className="label-sm">Próximo Número NFC-e</label>
+                                                    <input type="number" className="input-glass mt-1" value={fiscalConfig.numero_nfce || 1}
+                                                        onChange={e => setFiscalConfig(p => ({ ...p, numero_nfce: parseInt(e.target.value) || 1 }))} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     <div className="flex justify-end mt-4">
-                                        <button onClick={() => saveConfig("nfe_emitente", emitente)} disabled={saving} className="btn-primary">
-                                            <Save size={16} />
-                                            Salvar Ambiente
+                                        <button onClick={saveFiscalConfigSettings} disabled={saving} className="btn-primary">
+                                            {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
+                                            Salvar Opções Fiscais
                                         </button>
                                     </div>
                                 </GlassCard>
@@ -708,17 +787,12 @@ export default function ConfiguracoesPage() {
                                             className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center cursor-pointer hover:border-brand-300 hover:bg-brand-50/20 transition-all group"
                                         >
                                             <Upload size={32} className="mx-auto mb-3 text-slate-300 group-hover:text-brand-400 transition-colors" />
-                                            {certConfig.nome_cert && certConfig.nome_cert !== "***CARREGADO***" ? (
-                                                <div>
-                                                    <p className="font-bold text-brand-600">{certConfig.nome_cert}</p>
-                                                    <p className="text-xs text-slate-400 mt-1">Clique para trocar o certificado</p>
-                                                </div>
-                                            ) : certConfig.pfx_base64 === "***CARREGADO***" ? (
+                                            {fiscalConfig.certificado_base64 && fiscalConfig.certificado_base64.length > 50 ? (
                                                 <div>
                                                     <p className="font-bold text-emerald-600 flex items-center justify-center gap-2">
-                                                        <CheckCircle2 size={16} /> Certificado carregado
+                                                        <CheckCircle2 size={16} /> Certificado PFX Carregado (Base64)
                                                     </p>
-                                                    <p className="text-xs text-slate-400 mt-1">Clique para substituir</p>
+                                                    <p className="text-xs text-slate-400 mt-1">Clique para substituir por um novo arquivo .pfx</p>
                                                 </div>
                                             ) : (
                                                 <div>
@@ -736,8 +810,8 @@ export default function ConfiguracoesPage() {
                                                     type={showSenha ? "text" : "password"}
                                                     className="input-glass pr-10 font-mono"
                                                     placeholder="Senha do arquivo .pfx"
-                                                    value={certConfig.senha}
-                                                    onChange={e => setCertConfig(p => ({ ...p, senha: e.target.value }))}
+                                                    value={fiscalConfig.certificado_senha || ""}
+                                                    onChange={e => setFiscalConfig(p => ({ ...p, certificado_senha: e.target.value }))}
                                                 />
                                                 <button
                                                     type="button"
@@ -757,30 +831,26 @@ export default function ConfiguracoesPage() {
                                     </p>
                                     <div className="grid grid-cols-3 gap-4">
                                         <div className="col-span-2">
-                                            <label className="label-sm">CSC (Token)</label>
+                                            <label className="label-sm">CSC (Token Numérico)</label>
                                             <input className="input-glass mt-1 font-mono text-xs" placeholder="Ex: 000D06E3..."
-                                                value={certConfig.csc}
-                                                onChange={e => setCertConfig(p => ({ ...p, csc: e.target.value }))} />
+                                                value={fiscalConfig.csc_nfce || ""}
+                                                onChange={e => setFiscalConfig(p => ({ ...p, csc_nfce: e.target.value }))} />
                                         </div>
                                         <div>
                                             <label className="label-sm">CSC ID</label>
                                             <input className="input-glass mt-1 font-mono" placeholder="Ex: 0001"
-                                                value={certConfig.csc_id}
-                                                onChange={e => setCertConfig(p => ({ ...p, csc_id: e.target.value }))} />
+                                                value={fiscalConfig.csc_id_nfce || ""}
+                                                onChange={e => setFiscalConfig(p => ({ ...p, csc_id_nfce: e.target.value }))} />
                                         </div>
                                     </div>
                                     <div className="flex justify-end mt-6">
                                         <button
-                                            onClick={() => {
-                                                const toSave = { ...certConfig };
-                                                if (toSave.pfx_base64 === "***CARREGADO***") delete (toSave as any).pfx_base64;
-                                                saveConfig("nfe_certificado", toSave);
-                                            }}
+                                            onClick={saveFiscalConfigSettings}
                                             disabled={saving}
                                             className="btn-primary"
                                         >
-                                            <Shield size={16} />
-                                            Salvar Certificado
+                                            {saving ? <RefreshCw size={16} className="animate-spin" /> : <Shield size={16} />}
+                                            Salvar Certificado e CSC
                                         </button>
                                     </div>
                                 </GlassCard>

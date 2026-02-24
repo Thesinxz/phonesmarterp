@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
     FileText,
     ShieldCheck,
@@ -13,16 +14,43 @@ import {
     CheckCircle2,
     XCircle,
     Calendar,
-    Settings
+    Settings,
+    QrCode,
+    Wrench
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { formatDate } from "@/utils/formatDate";
+import { getDocumentosFiscais, DocumentoFiscal } from "@/services/fiscal";
+import { useAuth } from "@/context/AuthContext";
 
 export default function FiscalPage() {
+    const { profile } = useAuth();
     const [sefazStatus, setSefazStatus] = useState<"online" | "offline" | "checking">("online");
-    const [documentos, setDocumentos] = useState<any[]>([]);
+    const [documentos, setDocumentos] = useState<DocumentoFiscal[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!profile?.empresa_id) return;
+
+        async function loadData() {
+            setLoading(true);
+            try {
+                const docs = await getDocumentosFiscais(profile!.empresa_id);
+                setDocumentos(docs);
+            } catch (error) {
+                console.error("Erro ao carregar documentos fiscais:", error);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        loadData();
+    }, [profile?.empresa_id]);
+
+    const totalEmitidas = documentos.length;
+    const somaTotal = documentos.reduce((acc, doc) => acc + (doc.valor_total_centavos || 0), 0);
 
     return (
         <div className="space-y-6 page-enter pb-12">
@@ -33,14 +61,14 @@ export default function FiscalPage() {
                     <p className="text-slate-500 text-sm mt-0.5">Gestão de documentos fiscais e conformidade tributária</p>
                 </div>
                 <div className="flex gap-3">
-                    <button className="bg-white/60 h-10 px-4 rounded-xl border border-white/60 text-slate-600 flex items-center gap-2 text-sm font-medium hover:bg-white/80 transition-all opacity-50 cursor-not-allowed">
+                    <button className="bg-white/60 h-10 px-4 rounded-xl border border-white/60 text-slate-600 flex items-center gap-2 text-sm font-medium hover:bg-white/80 transition-all">
                         <Calendar size={16} />
                         Este Mês
                     </button>
-                    <button className="btn-primary opacity-50 cursor-not-allowed">
+                    <Link href="/fiscal/nfe/nova" className="btn-primary">
                         <FileText size={18} />
                         Emitir NF-e Avulsa
-                    </button>
+                    </Link>
                 </div>
             </div>
 
@@ -63,14 +91,14 @@ export default function FiscalPage() {
                 <GlassCard className="p-5">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Notas Emitidas</p>
                     <div className="flex items-end justify-between">
-                        <span className="text-2xl font-black text-slate-800">0</span>
+                        <span className="text-2xl font-black text-slate-800">{totalEmitidas}</span>
                     </div>
                 </GlassCard>
 
                 <GlassCard className="p-5">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Fiscal</p>
                     <div className="flex items-end justify-between">
-                        <span className="text-2xl font-black text-slate-800">{formatCurrency(0)}</span>
+                        <span className="text-2xl font-black text-slate-800">{formatCurrency(somaTotal)}</span>
                         <BarChart2 size={24} className="text-slate-300 mb-1" />
                     </div>
                 </GlassCard>
@@ -133,10 +161,10 @@ export default function FiscalPage() {
                                                 <span className="badge badge-slate">{doc.tipo}</span>
                                             </td>
                                             <td className="px-6 py-4 text-slate-600 font-medium">
-                                                {formatDate(doc.data)}
+                                                {formatDate(doc.data_emissao || doc.created_at || "")}
                                             </td>
                                             <td className="px-6 py-4 font-black text-slate-800">
-                                                {formatCurrency(doc.valor)}
+                                                {formatCurrency(doc.valor_total_centavos)}
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all opacity-0 group-hover:opacity-100">
@@ -182,24 +210,30 @@ export default function FiscalPage() {
 
                     <GlassCard title="Ações Fiscais" icon={Settings} className="bg-slate-900 border-none">
                         <div className="space-y-3 py-2">
+                            <Link href="/fiscal/importar" className="w-full flex items-center justify-between p-3 rounded-xl bg-brand-500/20 hover:bg-brand-500/30 border border-brand-500/50 transition-all group cursor-pointer">
+                                <div className="flex items-center gap-3">
+                                    <Download size={18} className="text-brand-300" />
+                                    <span className="text-brand-100 text-sm font-bold">Importar XML (NFe Entrada)</span>
+                                </div>
+                            </Link>
                             <button className="w-full flex items-center justify-between p-3 rounded-xl bg-white/10 hover:bg-white/15 transition-all group opacity-50 cursor-not-allowed">
                                 <div className="flex items-center gap-3">
                                     <Download size={18} className="text-white/60" />
                                     <span className="text-white text-sm font-medium">Exportar XML (Mês)</span>
                                 </div>
                             </button>
-                            <button className="w-full flex items-center justify-between p-3 rounded-xl bg-white/10 hover:bg-white/15 transition-all group opacity-50 cursor-not-allowed">
+                            <Link href="/fiscal/nfce/nova" className="w-full flex items-center justify-between p-3 rounded-xl bg-white/10 hover:bg-white/15 transition-all group cursor-pointer">
                                 <div className="flex items-center gap-3">
-                                    <FileText size={18} className="text-white/60" />
-                                    <span className="text-white text-sm font-medium">Inutilizar Numeração</span>
+                                    <QrCode size={18} className="text-emerald-400" />
+                                    <span className="text-white text-sm font-medium">Emitir NFC-e (Mod. 65)</span>
                                 </div>
-                            </button>
-                            <button className="w-full flex items-center justify-between p-3 rounded-xl bg-white/10 hover:bg-white/15 transition-all group opacity-50 cursor-not-allowed">
-                                <div className="flex items-center gap-3 text-red-400">
-                                    <AlertCircle size={18} />
-                                    <span className="text-sm font-medium">Carta de Correção</span>
+                            </Link>
+                            <Link href="/fiscal/nfse/nova" className="w-full flex items-center justify-between p-3 rounded-xl bg-white/10 hover:bg-white/15 transition-all group cursor-pointer">
+                                <div className="flex items-center gap-3 text-amber-400">
+                                    <Wrench size={18} />
+                                    <span className="text-sm font-medium text-white">Emitir NFS-e (Serviços)</span>
                                 </div>
-                            </button>
+                            </Link>
                         </div>
                     </GlassCard>
                 </div>

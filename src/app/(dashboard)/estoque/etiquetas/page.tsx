@@ -169,7 +169,7 @@ function EtiquetasContent() {
     if (loading) return <div className="p-12 text-center">Carregando central de etiquetas...</div>;
 
     return (
-        <div className="max-w-6xl mx-auto space-y-6 page-enter pb-20">
+        <div className="space-y-6 page-enter pb-20">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">

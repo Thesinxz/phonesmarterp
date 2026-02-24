@@ -76,7 +76,11 @@ const navItems = [
         label: "Estoque",
         href: "/estoque",
         icon: Package,
-        permission: "estoque"
+        permission: "estoque",
+        children: [
+            { label: "Produtos", href: "/estoque" },
+            { label: "Compras / Entradas", href: "/compras" },
+        ]
     },
     {
         label: "Financeiro",
@@ -124,7 +128,14 @@ const navItems = [
         label: "Fiscal",
         href: "/fiscal",
         icon: FileText,
-        permission: "financeiro"
+        permission: "financeiro",
+        children: [
+            { label: "Visão Geral", href: "/fiscal" },
+            { label: "NF-e (Produto)", href: "/fiscal/nfe" },
+            { label: "NFC-e (Consumidor)", href: "/fiscal/nfce" },
+            { label: "NFS-e (Serviços)", href: "/fiscal/nfse" },
+            { label: "Importar XML", href: "/fiscal/importar" }
+        ]
     },
     {
         label: "Configurações",

@@ -2,15 +2,22 @@ import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/types/database";
 
 // ─── Singleton ───────────────────────────────────────────────────
-// IMPORTANTE: O Supabase Client usa Navigator Locks para gerenciar
-// token refresh. Múltiplas instâncias causam timeout (NavigatorLockAcquireTimeoutError).
-// Durante o "Fast Refresh" (HMR) do Next.js no desenvolvimento local,
-// este módulo pode ser reavaliado, recriando clientes e gerando travamentos (Locks).
-// Por isso, amarramos a instância globalmente no objeto `window` no navegador.
+// O Supabase Client usa Navigator Locks para gerenciar token refresh.
+// Múltiplas instâncias / Fast Refresh do Next.js causam timeout (NavigatorLockAcquireTimeoutError).
+// Usamos um singleton amarrado ao `window` e substituímos o lock por um no-op.
+
+// No-op lock: executa o callback imediatamente sem aguardar lock nenhum,
+// eliminando o NavigatorLockAcquireTimeoutError de 10s em desenvolvimento e produção.
+async function noopLock<T>(
+    _name: string,
+    _options: { mode: "exclusive" | "shared" } | null,
+    fn: () => Promise<T>
+): Promise<T> {
+    return fn();
+}
 
 export function createClient() {
-    // Se estivermos rodando no servidor (SSR), criamos um cliente anônimo descartável
-    // (O SSR de verdade deve usar as funções em server.ts)
+    // SSR: cliente descartável sem session
     if (typeof window === "undefined") {
         return createBrowserClient<Database>(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,7 +25,7 @@ export function createClient() {
         );
     }
 
-    // No navegador (Client-side), garantimos um singleton absoluto entre HMRs
+    // Browser: singleton absoluto entre HMRs
     const win = window as any;
     if (!win.__supabaseBrowserClient) {
         win.__supabaseBrowserClient = createBrowserClient<Database>(
@@ -26,18 +33,15 @@ export function createClient() {
             process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
             {
                 global: {
-                    headers: {
-                        Accept: "application/json"
-                    }
+                    headers: { Accept: "application/json" }
                 },
                 auth: {
                     persistSession: true,
                     autoRefreshToken: true,
                     detectSessionInUrl: true,
-                    // Desativamos o Navigator LockManager porque ele causa 
-                    // NavigatorLockAcquireTimeoutError em muitos ambientes.
-                    // Isso força o desuso de travas, evitando o travamento de 10s no recarregamento da página.
-                    lock: false,
+                    // Substitui o NavigatorLockManager por um no-op para evitar
+                    // o timeout de 10s causado por lock contention entre abas/HMR.
+                    lock: noopLock,
                 },
                 cookieOptions: {
                     secure: process.env.NODE_ENV === "production",

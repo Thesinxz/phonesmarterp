@@ -25,6 +25,10 @@ export default function NovoClientePage() {
         bairro: "",
         cidade: "",
         uf: "",
+        // Fiscal
+        inscricaoEstadual: "",
+        indicadorIe: "9", // 9 - Não Contribuinte
+        inscricaoMunicipal: "",
     });
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -60,6 +64,9 @@ export default function NovoClientePage() {
                 segmento: form.segmento as any,
                 endereco_json: endereco,
                 pontos_fidelidade: 0,
+                inscricao_estadual: form.inscricaoEstadual || null,
+                indicador_ie: parseInt(form.indicadorIe, 10),
+                inscricao_municipal: form.inscricaoMunicipal || null,
             });
 
             router.push("/clientes");
@@ -73,7 +80,7 @@ export default function NovoClientePage() {
     };
 
     return (
-        <div className="space-y-6 page-enter max-w-4xl mx-auto">
+        <div className="space-y-6 page-enter">
             {/* Header */}
             <div className="flex items-center gap-4">
                 <Link href="/clientes" className="p-2 hover:bg-white/50 rounded-lg transition-colors">
@@ -222,6 +229,45 @@ export default function NovoClientePage() {
                                 placeholder="SP"
                                 maxLength={2}
                                 className="input-glass mt-1.5 uppercase"
+                            />
+                        </div>
+                    </div>
+                </GlassCard>
+
+                {/* Fiscal */}
+                <GlassCard title="Dados Fiscais" icon={User}>
+                    <div className="grid grid-cols-3 gap-4">
+                        <div>
+                            <label className="text-sm font-medium text-slate-700">Indicador IE</label>
+                            <select
+                                name="indicadorIe"
+                                value={form.indicadorIe}
+                                onChange={handleChange}
+                                className="input-glass mt-1.5 appearance-none"
+                            >
+                                <option value="1">1 - Contribuinte ICMS</option>
+                                <option value="2">2 - Contribuinte Isento</option>
+                                <option value="9">9 - Não Contribuinte</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium text-slate-700">Inscrição Estadual (IE)</label>
+                            <input
+                                name="inscricaoEstadual"
+                                value={form.inscricaoEstadual}
+                                onChange={handleChange}
+                                placeholder={form.indicadorIe === "9" ? "Não Contribuinte" : "Isento ou Nro IE"}
+                                className="input-glass mt-1.5"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium text-slate-700">Inscrição Municipal (IM)</label>
+                            <input
+                                name="inscricaoMunicipal"
+                                value={form.inscricaoMunicipal}
+                                onChange={handleChange}
+                                placeholder="Apenas para NFS-e"
+                                className="input-glass mt-1.5"
                             />
                         </div>
                     </div>
