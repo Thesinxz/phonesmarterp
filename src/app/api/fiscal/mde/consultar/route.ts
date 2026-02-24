@@ -34,12 +34,17 @@ export async function POST(req: NextRequest) {
         }
 
         // ── Mock SEFAZ — em produção substituir pela chamada ao WebService DF-e
+        const today = new Date();
+        const doisDiasAtras = new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const tresDiasAtras = new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const cincoDiasAtras = new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
         const notasMock = [
             {
                 chave_acesso: "35240212345678000190550010000012341123456701",
                 fornecedor_cnpj: "12345678000190",
                 fornecedor_nome: "DISTRIBUIDORA DE PEÇAS LTDA",
-                data_emissao: "2024-02-12",
+                data_emissao: doisDiasAtras,
                 valor_total_centavos: 154050,
                 status_processamento: "pendente",
                 itens_json: [
@@ -53,7 +58,7 @@ export async function POST(req: NextRequest) {
                 chave_acesso: "35240198765432000112550010000543211987654321",
                 fornecedor_cnpj: "98765432000112",
                 fornecedor_nome: "ATACADÃO DA INFORMÁTICA S/A",
-                data_emissao: "2024-02-10",
+                data_emissao: cincoDiasAtras,
                 valor_total_centavos: 420000,
                 status_processamento: "pendente",
                 itens_json: [
@@ -66,7 +71,7 @@ export async function POST(req: NextRequest) {
                 chave_acesso: "35241133445566000177550010000098761234509876",
                 fornecedor_cnpj: "33445566000177",
                 fornecedor_nome: "LOJA DE SUPRIMENTOS EXPRESS",
-                data_emissao: "2024-02-14",
+                data_emissao: tresDiasAtras,
                 valor_total_centavos: 35075,
                 status_processamento: "pendente",
                 itens_json: [

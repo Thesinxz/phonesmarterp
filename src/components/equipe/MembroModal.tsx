@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, User, Mail, Shield, CheckCircle2, Loader2, Save, KeyRound } from "lucide-react";
-import { type Usuario, criarMembroEquipe, atualizarMembroEquipe, ROLE_PERMISSIONS } from "@/services/equipe";
+import { X, User, Mail, Shield, CheckCircle2, Loader2, Save, KeyRound, Trash2 } from "lucide-react";
+import { type Usuario, criarMembroEquipe, atualizarMembroEquipe, excluirMembroEquipe, ROLE_PERMISSIONS } from "@/services/equipe";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { cn } from "@/utils/cn";
@@ -78,15 +78,36 @@ export default function MembroModal({ isOpen, onClose, onSuccess, membro }: Memb
                     empresa_id: profile.empresa_id,
                     auth_user_id: null
                 });
-                toast.success("Membro convidado com sucesso");
+                toast.success("Membro adicionado com sucesso");
             }
-
 
             onSuccess();
             onClose();
         } catch (error) {
             console.error(error);
             toast.error("Erro ao salvar membro");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!membro) return;
+        if (!confirm("Tem certeza que deseja excluir este funcionário? Isso removerá permanentemente o acesso dele à empresa. Funcionários com histórico de vendas/OS podem não ser excluídos (desative-os em vez disso).")) return;
+
+        try {
+            setSubmitting(true);
+            await excluirMembroEquipe(membro.id);
+            toast.success("Funcionário excluído com sucesso");
+            onSuccess();
+            onClose();
+        } catch (error: any) {
+            console.error(error);
+            if (error?.message?.includes('foreign key constraint')) {
+                toast.error("Não é possível excluir funcionário que possui histórico no sistema. Experimente inativá-lo mudando o Status.");
+            } else {
+                toast.error("Erro ao excluir funcionário");
+            }
         } finally {
             setSubmitting(false);
         }
@@ -237,6 +258,17 @@ export default function MembroModal({ isOpen, onClose, onSuccess, membro }: Memb
                     )}
 
                     <div className="flex gap-3 pt-6">
+                        {membro ? (
+                            <button
+                                type="button"
+                                onClick={handleDelete}
+                                disabled={submitting}
+                                className="px-4 py-3 rounded-2xl bg-red-50 text-red-600 hover:bg-red-100 transition-all border border-red-100 flex items-center justify-center disabled:opacity-50"
+                                title="Excluir funcionário"
+                            >
+                                <Trash2 size={18} />
+                            </button>
+                        ) : null}
 
                         <button
                             type="button"
@@ -255,7 +287,7 @@ export default function MembroModal({ isOpen, onClose, onSuccess, membro }: Memb
                             ) : (
                                 <>
                                     <Save size={16} />
-                                    {membro ? "Salvar" : "Convidar"}
+                                    {membro ? "Salvar" : "Adicionar Membro"}
                                 </>
                             )}
                         </button>
