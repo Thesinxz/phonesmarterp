@@ -18,7 +18,8 @@ import {
     Printer,
     Target,
     CheckSquare,
-    Square
+    Square,
+    History
 } from "lucide-react";
 import { getProdutos, type ProdutoFilters } from "@/services/estoque";
 import { createClient } from "@/lib/supabase/client";
@@ -27,6 +28,7 @@ import { type Produto } from "@/types/database";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
 import { useRealtimeSubscription } from "@/hooks/useRealtime";
+import { MovimentacaoModal } from "@/components/estoque/MovimentacaoModal";
 
 export default function EstoquePage() {
     const { profile } = useAuth();
@@ -41,6 +43,7 @@ export default function EstoquePage() {
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [historicoProdutoId, setHistoricoProdutoId] = useState<string | null>(null);
 
     const loadProdutos = async () => {
         setLoading(true);
@@ -303,12 +306,26 @@ export default function EstoquePage() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
-                                                    <span className={cn(
-                                                        "font-bold px-2 py-1 rounded-lg text-sm",
-                                                        isLowStock ? "text-amber-600 bg-amber-50" : "text-brand-600 bg-brand-50"
-                                                    )}>
-                                                        {p.estoque_qtd}
-                                                    </span>
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <span className={cn(
+                                                            "font-bold px-2 py-1 rounded-lg text-sm flex items-center gap-1.5",
+                                                            p.estoque_qtd === 0 ? "text-red-600 bg-red-50" :
+                                                                isLowStock ? "text-amber-600 bg-amber-50" : "text-brand-600 bg-brand-50"
+                                                        )}>
+                                                            {isLowStock && (
+                                                                <AlertTriangle size={14} className={p.estoque_qtd === 0 ? "text-red-500" : "text-amber-500"} />
+                                                            )}
+                                                            {p.estoque_qtd}
+                                                        </span>
+                                                        {isLowStock && (
+                                                            <span className={cn(
+                                                                "text-[10px] font-bold uppercase tracking-wider",
+                                                                p.estoque_qtd === 0 ? "text-red-500" : "text-amber-500"
+                                                            )}>
+                                                                {p.estoque_qtd === 0 ? "Esgotado" : "Estoque Baixo"}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <span className="font-bold text-slate-800">
@@ -323,6 +340,13 @@ export default function EstoquePage() {
                                                             className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600"
                                                         >
                                                             <Printer size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setHistoricoProdutoId(p.id)}
+                                                            title="Histórico de Movimentação"
+                                                            className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600"
+                                                        >
+                                                            <History size={16} />
                                                         </button>
                                                         <Link href={`/estoque/${p.id}`} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-brand-500">
                                                             <Edit size={16} />
@@ -392,6 +416,13 @@ export default function EstoquePage() {
                         </Link>
                     </div>
                 </div>
+            )}
+
+            {historicoProdutoId && (
+                <MovimentacaoModal
+                    produtoId={historicoProdutoId}
+                    onClose={() => setHistoricoProdutoId(null)}
+                />
             )}
         </div>
     );

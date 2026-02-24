@@ -32,6 +32,8 @@ import { cn } from "@/utils/cn";
 import { formatDate } from "@/utils/formatDate";
 import { notifyOSStatusChange } from "@/actions/notifications";
 import { useRealtimeSubscription } from "@/hooks/useRealtime";
+import { generateSOPDF } from "@/utils/pdfGenerator";
+import { getConfigs } from "@/services/configuracoes";
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
     aberta: { label: "Aberta", color: "text-slate-700", bg: "bg-slate-100" },
@@ -56,6 +58,7 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
     const [showEntrega, setShowEntrega] = useState(false);
     const [tokenTeste, setTokenTeste] = useState<string | null>(null);
     const [gerandoQR, setGerandoQR] = useState(false);
+    const [gerandoPDF, setGerandoPDF] = useState(false);
 
     // Billing States
     const [paymentMethod, setPaymentMethod] = useState("dinheiro");
@@ -149,6 +152,20 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
         }
     }
 
+    const handleExportPDF = async () => {
+        if (!os || !profile?.empresa_id) return;
+        setGerandoPDF(true);
+        try {
+            const configs = await getConfigs(profile.empresa_id);
+            const branding = configs.nfe_emitente || {};
+            generateSOPDF(os, branding);
+        } catch (error) {
+            console.error("Erro ao gerar PDF:", error);
+        } finally {
+            setGerandoPDF(false);
+        }
+    };
+
     if (loading) {
         return <div className="p-12 flex justify-center"><div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>;
     }
@@ -184,6 +201,14 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                 </div>
 
                 <div className="flex gap-2">
+                    <button
+                        onClick={handleExportPDF}
+                        disabled={gerandoPDF}
+                        className="h-10 px-4 rounded-xl border border-slate-200 text-slate-600 flex items-center gap-2 text-sm font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
+                    >
+                        <FileText size={16} /> {gerandoPDF ? "Gerando..." : "Exportar PDF"}
+                    </button>
+
                     <button
                         onClick={() => window.open(`/print/os/${os.id}`, "_blank")}
                         className="h-10 px-4 rounded-xl border border-slate-200 text-slate-600 flex items-center gap-2 text-sm font-bold hover:bg-slate-50 transition-all"

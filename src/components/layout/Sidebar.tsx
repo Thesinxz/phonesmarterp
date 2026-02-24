@@ -20,12 +20,15 @@ import {
     Calculator,
     ClipboardCheck,
     History as HistoryIcon,
-    Bell
+    Bell,
+    Shield
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
+import { CompanySwitcher } from "./CompanySwitcher";
 
 const navItems = [
     {
@@ -37,41 +40,49 @@ const navItems = [
         label: "Ordens de Serviço",
         href: "/os",
         icon: ClipboardList,
+        permission: "ordens_servico"
     },
     {
         label: "Solicitações",
         href: "/solicitacoes",
         icon: Bell,
+        permission: "ordens_servico"
     },
     {
         label: "PDV",
         href: "/pdv",
         icon: ShoppingCart,
+        permission: "vendas"
     },
     {
         label: "Pedidos",
         href: "/pedidos",
         icon: ClipboardCheck,
+        permission: "vendas"
     },
     {
         label: "Vendas",
         href: "/vendas",
         icon: Receipt,
+        permission: "vendas"
     },
     {
         label: "Clientes",
         href: "/clientes",
         icon: Users,
+        permission: "vendas"
     },
     {
         label: "Estoque",
         href: "/estoque",
         icon: Package,
+        permission: "estoque"
     },
     {
         label: "Financeiro",
         href: "/financeiro",
         icon: DollarSign,
+        permission: "financeiro",
         children: [
             { label: "Visão Geral", href: "/financeiro" },
             { label: "A Receber", href: "/financeiro/receber" },
@@ -84,16 +95,25 @@ const navItems = [
         label: "Técnicos",
         href: "/tecnicos",
         icon: Wrench,
+        permission: "ordens_servico"
+    },
+    {
+        label: "Equipe",
+        href: "/equipe",
+        icon: Shield,
+        permission: "equipe"
     },
     {
         label: "Relatórios",
         href: "/relatorios",
         icon: BarChart3,
+        permission: "financeiro"
     },
     {
         label: "Ferramentas",
         href: "/ferramentas",
         icon: Calculator,
+        permission: "estoque",
         children: [
             { label: "Calculadora Inteligente", href: "/ferramentas/calculadora" },
             { label: "Cálculo em Massa", href: "/ferramentas/calculo-em-massa" },
@@ -104,11 +124,13 @@ const navItems = [
         label: "Fiscal",
         href: "/fiscal",
         icon: FileText,
+        permission: "financeiro"
     },
     {
         label: "Configurações",
         href: "/configuracoes",
         icon: Settings,
+        permission: "configuracoes",
         children: [
             { label: "Geral & Dados", href: "/configuracoes" },
             { label: "Etiquetas", href: "/configuracoes/etiquetas/a4" },
@@ -120,6 +142,7 @@ const navItems = [
 export function Sidebar() {
     const pathname = usePathname();
     const { empresa, profile } = useAuth();
+    const { can } = usePermissions();
     const [solicitationsCount, setSolicitationsCount] = useState(0);
     const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(() => {
         // Inicializa menus que têm filhos ativos como abertos
@@ -167,7 +190,7 @@ export function Sidebar() {
     return (
         <aside className="fixed left-0 top-0 h-screen w-[260px] bg-sidebar-gradient flex flex-col z-40 shadow-xl">
             {/* Logo */}
-            <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10">
+            <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10 mb-2">
                 <div className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center shadow-brand-glow">
                     <Zap className="w-5 h-5 text-white" />
                 </div>
@@ -179,7 +202,8 @@ export function Sidebar() {
 
             {/* Navigation */}
             <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-0.5 scrollbar-none">
-                {navItems.map((item) => {
+                <CompanySwitcher />
+                {navItems.filter(item => !item.permission || can(item.permission as any)).map((item) => {
                     const Icon = item.icon;
                     const hasChildren = !!item.children;
                     const isParentActive = pathname.startsWith(item.href);

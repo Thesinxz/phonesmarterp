@@ -359,10 +359,14 @@ export default function ClienteDetalhesPage() {
                                 timeline.map((item) => (
                                     <div key={item.id} className="flex gap-4 relative group">
                                         <div className={cn(
-                                            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 z-10 transition-all",
-                                            item.tipo === 'os' ? "bg-blue-100 text-blue-600 group-hover:bg-blue-500 group-hover:text-white" : "bg-emerald-100 text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white"
+                                            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 z-10 transition-all shadow-sm",
+                                            item.tipo === 'os' ? "bg-blue-100 text-blue-600 group-hover:bg-blue-500 group-hover:text-white" :
+                                                item.tipo === 'venda' ? "bg-emerald-100 text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white" :
+                                                    "bg-purple-100 text-purple-600 group-hover:bg-purple-500 group-hover:text-white"
                                         )}>
-                                            {item.tipo === 'os' ? <Wrench size={18} /> : <ShoppingBag size={18} />}
+                                            {item.tipo === 'os' ? <Wrench size={18} /> :
+                                                item.tipo === 'venda' ? <ShoppingBag size={18} /> :
+                                                    <TrendingUp size={18} />}
                                         </div>
 
                                         <div className="flex-1 glass-card hover:bg-white/80 transition-all cursor-pointer">
@@ -371,9 +375,13 @@ export default function ClienteDetalhesPage() {
                                                     <div className="flex items-center gap-2">
                                                         <span className={cn(
                                                             "text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-widest",
-                                                            item.tipo === 'os' ? "bg-blue-50 text-blue-500" : "bg-emerald-50 text-emerald-500"
+                                                            item.tipo === 'os' ? "bg-blue-50 text-blue-500" :
+                                                                item.tipo === 'venda' ? "bg-emerald-50 text-emerald-500" :
+                                                                    "bg-purple-50 text-purple-500"
                                                         )}>
-                                                            {item.tipo === 'os' ? `Ordem #${String(item.numero).padStart(4, '0')}` : `Venda #${String(item.numero || '').padStart(4, '0')}`}
+                                                            {item.tipo === 'os' ? `Ordem #${String(item.numero || '').padStart(4, '0')}` :
+                                                                item.tipo === 'venda' ? `Venda #${String(item.numero || '').padStart(4, '0')}` :
+                                                                    `Financeiro #${String(item.numero || '').padStart(4, '0')}`}
                                                         </span>
                                                         <span className="text-[10px] text-slate-400 font-medium">{formatDate(item.data)}</span>
                                                     </div>
@@ -389,7 +397,9 @@ export default function ClienteDetalhesPage() {
                                             </div>
 
                                             <Link
-                                                href={item.tipo === 'os' ? `/os/${item.id}` : `/financeiro/vendas`}
+                                                href={item.tipo === 'os' ? `/os/${item.id}` :
+                                                    item.tipo === 'venda' ? `/vendas` :
+                                                        `/financeiro`}
                                                 className="text-[10px] font-bold text-brand-500 uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all mt-3"
                                             >
                                                 Ver Detalhes <ChevronRight size={10} />

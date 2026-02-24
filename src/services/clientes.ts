@@ -147,7 +147,33 @@ export async function getClienteTimeline(clienteId: string) {
 
     if (vendaError) throw vendaError;
 
-    // 3. Unificar e formatar
+    // 3. Buscar Títulos Financeiros
+    let titulos: any[] = [];
+    try {
+        const { data: fetchedTitulos, error: tituloError } = await (supabase.from("financeiro_titulos"))
+            .select(`
+                id,
+                numero,
+                created_at,
+                valor_total_centavos,
+                tipo,
+                status,
+                data_vencimento,
+                descricao
+            `)
+            .eq("cliente_id", clienteId)
+            .order("created_at", { ascending: false });
+
+        if (!tituloError) {
+            titulos = fetchedTitulos || [];
+        } else {
+            console.error("Erro ao buscar títulos para timeline (provavelmente sem permissão):", tituloError);
+        }
+    } catch (e) {
+        console.error("Exceção ao buscar títulos para timeline:", e);
+    }
+
+    // 4. Unificar e formatar
     const timeline = [
         ...(oss as any[]).map(os => ({
             id: os.id,
@@ -161,11 +187,20 @@ export async function getClienteTimeline(clienteId: string) {
         ...(vendas as any[]).map(v => ({
             id: v.id,
             tipo: "venda" as const,
-            data: v.data || v.created_at, // Suporte a campos de data diferentes se houver
+            data: v.data || v.created_at,
             numero: v.numero,
             status: "concluída",
             valor: v.total_centavos,
             descricao: `Venda no PDV (${v.forma_pagamento || 'N/A'})`
+        })),
+        ...titulos.map(t => ({
+            id: t.id,
+            tipo: "financeiro" as const,
+            data: t.created_at,
+            numero: t.numero,
+            status: t.status,
+            valor: t.valor_total_centavos,
+            descricao: `${t.tipo === 'receita' ? 'Receita' : 'Despesa'}: ${t.descricao || 'Título Financeiro'}`
         }))
     ];
 

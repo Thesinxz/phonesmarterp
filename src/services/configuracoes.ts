@@ -39,3 +39,16 @@ export async function deleteConfig(empresaId: string, chave: string) {
 
     if (error) throw error;
 }
+
+/**
+ * Propaga uma configuração para todas as empresas do usuário
+ */
+export async function syncConfigToAll(authUserId: string, chave: string, valor: any) {
+    const { error } = await (supabase as any).rpc('sync_config_to_all_companies', {
+        p_auth_user_id: authUserId,
+        p_key: chave,
+        p_value: valor
+    });
+
+    if (error) throw error;
+}

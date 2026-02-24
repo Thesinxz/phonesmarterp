@@ -251,7 +251,8 @@ export async function updateOSStatus(
     });
 
     // 7. Trigger WhatsApp notification automatically for important statuses
-    if (status === "finalizada" || status === "entregue") {
+    const importantStatuses = ["em_analise", "em_execucao", "finalizada", "entregue", "aguardando_peca"];
+    if (importantStatuses.includes(status)) {
         try {
             const { notifyOSStatusChange } = await import("@/actions/notifications");
             // Call without await to not block the main flow
@@ -283,6 +284,14 @@ export async function createOS(os: Database["public"]["Tables"]["ordens_servico"
         dados_json: { status: data.status }
     });
 
+    // Trigger WhatsApp notification for new OS
+    try {
+        const { notifyOSStatusChange } = await import("@/actions/notifications");
+        notifyOSStatusChange(data.id, data.status).catch(e => console.error("[WhatsApp Auto] Error:", e));
+    } catch (e) {
+        console.error("[WhatsApp Auto] Failed to import notifyOSStatusChange:", e);
+    }
+
     return data as OrdemServico;
 }
 
@@ -304,6 +313,14 @@ export async function createDetailedOS(osData: any, usuarioId: string) {
         evento: "Ordem de Serviço criada (Wizard)",
         dados_json: { status: data.status, prioridade: data.prioridade }
     });
+
+    // Trigger WhatsApp notification for new OS
+    try {
+        const { notifyOSStatusChange } = await import("@/actions/notifications");
+        notifyOSStatusChange(data.id, data.status).catch(e => console.error("[WhatsApp Auto] Error:", e));
+    } catch (e) {
+        console.error("[WhatsApp Auto] Failed to import notifyOSStatusChange:", e);
+    }
 
     return data;
 }

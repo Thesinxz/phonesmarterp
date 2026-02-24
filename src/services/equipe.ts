@@ -19,16 +19,28 @@ export async function getMembrosEquipe() {
 }
 
 export async function criarMembroEquipe(data: Omit<Usuario, "id" | "created_at">) {
-    const { data: res, error } = await supabase
-        .from("usuarios")
-        .insert(data)
-        .select()
-        .single();
+    // Usamos o RPC para vincular ou criar o perfil garantindo o suporte multi-empresa
+    const { data: usuarioId, error } = await supabase.rpc('vincular_usuario_equipe', {
+        p_id_empresa: data.empresa_id,
+        p_email: data.email,
+        p_nome: data.nome,
+        p_papel: data.papel,
+        p_permissoes: data.permissoes_json || {}
+    });
 
     if (error) {
-        console.error("Erro ao criar membro da equipe:", error);
+        console.error("Erro ao vincular membro da equipe:", error);
         throw error;
     }
+
+    // Busca o registro criado para retornar
+    const { data: res, error: fetchError } = await supabase
+        .from("usuarios")
+        .select("*")
+        .eq("id", usuarioId)
+        .single();
+
+    if (fetchError) throw fetchError;
     return res as Usuario;
 }
 

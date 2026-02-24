@@ -48,18 +48,31 @@ export async function getProdutoHistorico(produto_id: string) {
 
     if (error) throw error;
 
-    // Tentar resolver nomes de usuarios se houver necessidade pegando de 'usuarios' baseado em auth_user_id
+    // Tentar resolver nomes de usuarios se houver necessidade
     if (data && data.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: users } = await (supabase as any).from('usuarios').select('nome, auth_user_id');
-        if (users) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return data.map((item: any) => {
+        const userIds = Array.from(new Set(data.map((item: any) => item.usuario_id).filter(Boolean)));
+
+        if (userIds.length > 0) {
+            try {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const user = users.find((u: any) => u.auth_user_id === item.usuario_id);
-                return { ...item, usuario_nome: user?.nome || 'Sistema' };
-            });
+                const { data: users, error: userError } = await (supabase as any)
+                    .from('usuarios')
+                    .select('nome, auth_user_id')
+                    .in('auth_user_id', userIds);
+
+                if (!userError && users) {
+                    return data.map((item: any) => {
+                        const user = users.find((u: any) => u.auth_user_id === item.usuario_id);
+                        return { ...item, usuario_nome: user?.nome || 'Sistema' };
+                    });
+                }
+            } catch (e) {
+                console.error("Erro ao buscar nomes de usuários para histórico:", e);
+            }
         }
+
+        // Se falhar ou não houver IDs, retorna com fallback
+        return data.map((item: any) => ({ ...item, usuario_nome: 'Sistema' }));
     }
 
     return data || [];
