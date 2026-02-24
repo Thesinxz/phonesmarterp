@@ -335,3 +335,20 @@ export async function gerarTokenTeste(osId: string): Promise<string> {
     if (error) throw error;
     return token;
 }
+
+// Buscar OS prontas (para a Prateleira de Abandono)
+export const getOrdensServicoFinalizadas = async (empresaId: string) => {
+    try {
+        const { data, error } = await supabase
+            .from("ordens_servico")
+            .select("*, clientes(nome, telefone), equipamentos(marca, modelo)")
+            .eq("empresa_id", empresaId)
+            .in("status", ["finalizada", "sem_conserto"]);
+
+        if (error) throw error;
+        return data || [];
+    } catch (error) {
+        console.error("Erro na busca de OS finalizada:", error);
+        throw error;
+    }
+};

@@ -202,8 +202,9 @@ export default function PrintOSPage({ params }: { params: { id: string } }) {
 
             {/* Terms and Signatures */}
             <div className={`mt-12 text-center`}>
-                <div className={`text-slate-400 text-justify mb-12 italic ${isA4 ? 'text-xs leading-relaxed px-12' : 'text-[8px] leading-[1.3]'}`}>
-                    O cliente declara estar ciente que a manutenção em dispositivos eletrônicos pode acarretar na perda de garantia do fabricante. A loja não se responsabiliza por falhas pré-existentes não relatadas. O prazo para retirada é de 90 dias, após o qual o aparelho poderá ser alienado para custeio. A garantia de 90 dias cobre exclusivamente as peças trocadas e o serviço realizado.
+                <div className={`text-slate-500 text-justify mb-8 flex flex-col gap-2 bg-slate-50 p-4 border border-slate-200 rounded-xl ${isA4 ? 'text-xs leading-relaxed px-6 mx-12' : 'text-[8px] leading-[1.3] p-2'}`}>
+                    <p><b>1. Garantia:</b> A garantia de 90 dias cobre exclusivamente as peças trocadas e o serviço realizado, conforme CDC. Falhas em outros componentes não relatadas previamente ou causadas por mau uso (quedas, líquidos) anulam a garantia.</p>
+                    <p><b>2. Taxa de Guarda e Abandono (IMPORTANTE):</b> O cliente tem o prazo de 30 dias contados do aviso de conclusão do serviço para retirar o equipamento. <b>Após 30 dias, será cobrada uma Taxa de Guarda diária</b> pelo armazenamento. Decorridos <b>90 dias</b> sem retirada, o equipamento poderá ser descartado, doado ou alienado para custeamento das despesas e serviços executados, sem direito a indenização, conforme praxe comercial e Código de Defesa do Consumidor.</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-12 mt-12 w-full max-w-2xl mx-auto">

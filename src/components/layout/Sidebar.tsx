@@ -40,7 +40,12 @@ const navItems = [
         label: "Ordens de Serviço",
         href: "/os",
         icon: ClipboardList,
-        permission: "ordens_servico"
+        permission: "ordens_servico",
+        children: [
+            { label: "Todas as OS", href: "/os" },
+            { label: "Nova OS", href: "/os/nova" },
+            { label: "Prateleira / Abandonos", href: "/os/prateleira" },
+        ]
     },
     {
         label: "Solicitações",
