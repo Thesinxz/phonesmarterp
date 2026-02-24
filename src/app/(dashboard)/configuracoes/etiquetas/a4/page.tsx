@@ -112,7 +112,7 @@ export default function ConfigEtiquetasA4Page() {
                 .from('configuracoes')
                 .select('*')
                 .eq('chave', 'etiqueta_a4')
-                .single();
+                .maybeSingle();
 
             if (data && (data as any).valor) {
                 setConfig((data as any).valor as LabelConfigA4);
