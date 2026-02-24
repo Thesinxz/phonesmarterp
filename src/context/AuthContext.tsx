@@ -6,6 +6,7 @@ import { User, Session } from "@supabase/supabase-js";
 import { type Usuario, type Empresa } from "@/types/database";
 import { toast } from "sonner";
 import { getUsuarioEmpresas, setUltimaEmpresaAcessada, type CompanyLink } from "@/services/empresa_vinculos";
+import { subscribeToPush } from "@/lib/pushNotifications";
 
 interface AuthContextProps {
     user: User | null;
@@ -168,6 +169,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             subscription.unsubscribe();
         };
     }, [supabase, fetchProfile]);
+
+    // Registrar Push Notifications quando o perfil carregar
+    useEffect(() => {
+        if (profile && empresa && user) {
+            // Pequeno delay para garantir que o SW esteja pronto
+            const timeout = setTimeout(() => {
+                subscribeToPush(profile.id, empresa.id);
+            }, 3000);
+            return () => clearTimeout(timeout);
+        }
+    }, [profile, empresa, user]);
 
     const signOut = async () => {
         await supabase.auth.signOut();

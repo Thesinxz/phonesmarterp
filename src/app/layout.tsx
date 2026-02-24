@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { AuthProvider } from "@/context/AuthContext";
 import { RealtimeProvider } from "@/context/RealtimeContext";
 import { NotificationCenter } from "@/components/layout/NotificationCenter";
+import { SWRegistration } from "@/components/layout/SWRegistration";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -37,6 +38,12 @@ export const metadata: Metadata = {
     robots: {
         index: true,
         follow: true,
+    },
+    manifest: "/manifest.json",
+    appleWebApp: {
+        capable: true,
+        statusBarStyle: "black-translucent",
+        title: "SmartOS",
     }
 };
 
@@ -50,6 +57,7 @@ export default function RootLayout({
             <body>
                 <AuthProvider>
                     <RealtimeProvider>
+                        <SWRegistration />
                         {children}
                         <NotificationCenter />
                         <Toaster position="top-right" richColors />

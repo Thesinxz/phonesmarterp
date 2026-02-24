@@ -34,10 +34,10 @@ export function createClient() {
                     persistSession: true,
                     autoRefreshToken: true,
                     detectSessionInUrl: true,
-                    // Desativamos o Navigator LockManager (lock: null) porque ele causa 
-                    // NavigatorLockAcquireTimeoutError em muitos ambientes (inclusive Mac/Chrome).
-                    // Isso força o uso de um lock em memória, que é mais resiliente para dev local.
-                    lock: null,
+                    // Desativamos o Navigator LockManager porque ele causa 
+                    // NavigatorLockAcquireTimeoutError em muitos ambientes.
+                    // Isso força o desuso de travas, evitando o travamento de 10s no recarregamento da página.
+                    lock: false,
                 },
                 cookieOptions: {
                     secure: process.env.NODE_ENV === "production",
