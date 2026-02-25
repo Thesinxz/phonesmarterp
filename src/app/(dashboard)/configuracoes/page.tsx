@@ -165,6 +165,13 @@ export default function ConfiguracoesPage() {
         produtos_destaque: [] as string[],
     });
 
+    // Subdomínio da empresa (slug da vitrine)
+    const [empresaSubdominio, setEmpresaSubdominio] = useState("");
+    const [editingSlug, setEditingSlug] = useState("");
+    const [slugDisponivel, setSlugDisponivel] = useState<boolean | null>(null);
+    const [checkingSlug, setCheckingSlug] = useState(false);
+    const [savingSlug, setSavingSlug] = useState(false);
+
     const [contadorConfig, setContadorConfig] = useState<ContadorConfig>({
         email: "",
         dia_envio: 1,
@@ -289,6 +296,21 @@ export default function ConfiguracoesPage() {
             } catch (err) {
                 console.error("[Config] ❌ Erro inesperado:", err);
                 setConfigsLoaded(true);
+            }
+
+            // Carregar subdomínio da empresa
+            try {
+                const sb = createClient();
+                const { data: emp } = await (sb.from("empresas") as any)
+                    .select("subdominio")
+                    .eq("id", profile.empresa_id)
+                    .single();
+                if (emp?.subdominio && !ignore) {
+                    setEmpresaSubdominio(emp.subdominio);
+                    setEditingSlug(emp.subdominio);
+                }
+            } catch (e) {
+                console.warn("Erro ao carregar subdomínio", e);
             }
         }
 
@@ -1344,59 +1366,94 @@ export default function ConfiguracoesPage() {
                                     </div>
                                 </GlassCard>
 
-                                {/* Links da Vitrine */}
+                                {/* Slug / Endereço da Vitrine */}
                                 <GlassCard>
                                     <div className="p-5 space-y-4">
-                                        <p className="font-bold text-slate-800 flex items-center gap-2"><Link2 size={16} className="text-indigo-500" /> Links da Vitrine</p>
+                                        <p className="font-bold text-slate-800 flex items-center gap-2"><Link2 size={16} className="text-indigo-500" /> Endereço da Vitrine</p>
+                                        <p className="text-xs text-slate-500">Cada loja tem um endereço único. Somente letras, números e hífens.</p>
 
-                                        {/* URL da Vitrine */}
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-mono text-sm text-slate-600">
-                                                {typeof window !== 'undefined' ? window.location.origin : ''}/v/minhaloja
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-400 font-mono shrink-0">
+                                                {typeof window !== 'undefined' ? window.location.origin : ''}/v/
                                             </div>
-                                            <button
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(`${window.location.origin}/v/minhaloja`);
-                                                    toast.success("Link copiado!");
+                                            <input
+                                                className={cn(
+                                                    "flex-1 font-mono text-sm font-bold rounded-xl px-4 py-2.5 border focus:outline-none focus:ring-2 transition-all",
+                                                    slugDisponivel === true ? "border-emerald-300 bg-emerald-50 focus:ring-emerald-500/30 text-emerald-700" :
+                                                        slugDisponivel === false ? "border-red-300 bg-red-50 focus:ring-red-500/30 text-red-700" :
+                                                            "border-slate-200 focus:ring-brand-500/30"
+                                                )}
+                                                value={editingSlug}
+                                                onChange={async (e) => {
+                                                    const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-");
+                                                    setEditingSlug(val);
+                                                    if (val === empresaSubdominio) { setSlugDisponivel(null); return; }
+                                                    if (val.length < 3) { setSlugDisponivel(null); return; }
+                                                    setCheckingSlug(true);
+                                                    const sb = createClient();
+                                                    const { data: existing } = await (sb.from("empresas") as any)
+                                                        .select("id")
+                                                        .eq("subdominio", val)
+                                                        .neq("id", profile?.empresa_id)
+                                                        .limit(1);
+                                                    setSlugDisponivel(!existing || existing.length === 0);
+                                                    setCheckingSlug(false);
                                                 }}
-                                                className="p-3 bg-indigo-50 rounded-xl text-indigo-600 hover:bg-indigo-100 transition-colors"
+                                                placeholder="minha-loja"
+                                            />
+                                            <button
+                                                disabled={!editingSlug || editingSlug === empresaSubdominio || slugDisponivel === false || editingSlug.length < 3 || savingSlug}
+                                                onClick={async () => {
+                                                    setSavingSlug(true);
+                                                    try {
+                                                        const sb = createClient();
+                                                        const { error } = await (sb.from("empresas") as any)
+                                                            .update({ subdominio: editingSlug })
+                                                            .eq("id", profile?.empresa_id);
+                                                        if (error) throw error;
+                                                        setEmpresaSubdominio(editingSlug);
+                                                        setSlugDisponivel(null);
+                                                        toast.success("Endereço da vitrine atualizado!");
+                                                    } catch (e: any) {
+                                                        toast.error(e.message || "Erro ao salvar");
+                                                    } finally {
+                                                        setSavingSlug(false);
+                                                    }
+                                                }}
+                                                className="px-4 py-2.5 bg-brand-500 text-white rounded-xl font-bold text-sm hover:bg-brand-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 shrink-0"
                                             >
-                                                <Copy size={18} />
+                                                {savingSlug ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                                                Salvar
                                             </button>
-                                            <a
-                                                href="/v/minhaloja"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="p-3 bg-indigo-50 rounded-xl text-indigo-600 hover:bg-indigo-100 transition-colors"
-                                            >
-                                                <ExternalLink size={18} />
-                                            </a>
                                         </div>
+                                        {checkingSlug && <p className="text-xs text-slate-400 animate-pulse">Verificando disponibilidade...</p>}
+                                        {slugDisponivel === true && <p className="text-xs text-emerald-600 font-bold">✅ Disponível!</p>}
+                                        {slugDisponivel === false && <p className="text-xs text-red-600 font-bold">❌ Já existe outra loja com esse endereço</p>}
 
-                                        {/* URL do Modo TV */}
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 font-mono text-sm text-slate-300">
-                                                <Monitor size={14} className="inline mr-2 text-indigo-400" />
-                                                {typeof window !== 'undefined' ? window.location.origin : ''}/v/minhaloja/tv
+                                        {/* Links copiáveis */}
+                                        {empresaSubdominio && (
+                                            <div className="space-y-2 pt-2">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-mono text-sm text-slate-600 truncate">
+                                                        {typeof window !== 'undefined' ? window.location.origin : ''}/v/{empresaSubdominio}
+                                                    </div>
+                                                    <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/v/${empresaSubdominio}`); toast.success("Link copiado!"); }}
+                                                        className="p-3 bg-indigo-50 rounded-xl text-indigo-600 hover:bg-indigo-100 transition-colors"><Copy size={18} /></button>
+                                                    <a href={`/v/${empresaSubdominio}`} target="_blank" rel="noopener noreferrer"
+                                                        className="p-3 bg-indigo-50 rounded-xl text-indigo-600 hover:bg-indigo-100 transition-colors"><ExternalLink size={18} /></a>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 font-mono text-sm text-slate-300 truncate">
+                                                        <Monitor size={14} className="inline mr-2 text-indigo-400" />
+                                                        {typeof window !== 'undefined' ? window.location.origin : ''}/v/{empresaSubdominio}/tv
+                                                    </div>
+                                                    <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/v/${empresaSubdominio}/tv`); toast.success("Link do Modo TV copiado!"); }}
+                                                        className="p-3 bg-slate-100 rounded-xl text-slate-600 hover:bg-slate-200 transition-colors"><Copy size={18} /></button>
+                                                    <a href={`/v/${empresaSubdominio}/tv`} target="_blank" rel="noopener noreferrer"
+                                                        className="p-3 bg-slate-100 rounded-xl text-slate-600 hover:bg-slate-200 transition-colors"><ExternalLink size={18} /></a>
+                                                </div>
                                             </div>
-                                            <button
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(`${window.location.origin}/v/minhaloja/tv`);
-                                                    toast.success("Link do Modo TV copiado!");
-                                                }}
-                                                className="p-3 bg-slate-100 rounded-xl text-slate-600 hover:bg-slate-200 transition-colors"
-                                            >
-                                                <Copy size={18} />
-                                            </button>
-                                            <a
-                                                href="/v/minhaloja/tv"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="p-3 bg-slate-100 rounded-xl text-slate-600 hover:bg-slate-200 transition-colors"
-                                            >
-                                                <ExternalLink size={18} />
-                                            </a>
-                                        </div>
+                                        )}
                                     </div>
                                 </GlassCard>
 

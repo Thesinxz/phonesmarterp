@@ -88,11 +88,20 @@ export default function CadastroPage() {
 
             // SEGUNDO: Criar empresa nova se o usuário não marcou "Fui convidado"
             if (!isInvited && form.nomeEmpresa.trim() !== "") {
-                const subdominio = form.nomeEmpresa
+                let subdominio = form.nomeEmpresa
                     .toLowerCase()
                     .replace(/[^a-z0-9]/g, "-")
                     .replace(/-+/g, "-")
                     .replace(/^-|-$/g, "");
+
+                // Verificar unicidade do subdomínio
+                const { data: existente } = await (supabase.from("empresas") as any)
+                    .select("id")
+                    .eq("subdominio", subdominio)
+                    .limit(1);
+                if (existente && existente.length > 0) {
+                    subdominio = `${subdominio}-${Math.random().toString(36).slice(2, 6)}`;
+                }
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const { data: empresaData, error: empresaError } = await (supabase.from("empresas") as any).insert({
