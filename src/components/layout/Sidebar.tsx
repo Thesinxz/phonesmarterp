@@ -86,6 +86,7 @@ const navItems = [
         children: [
             { label: "Produtos", href: "/estoque" },
             { label: "Películas & Acessórios", href: "/estoque/peliculas" },
+            { label: "Peças (Assistência)", href: "/estoque/pecas" },
             { label: "Compras / Entradas", href: "/compras" },
         ]
     },

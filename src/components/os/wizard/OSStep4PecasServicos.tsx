@@ -76,7 +76,7 @@ export function OSStep4PecasServicos({ data, onChange }: OSStep4PecasServicosPro
                         <Package size={16} /> Peças do Estoque
                     </label>
 
-                    <BuscaPecaEstoque onSelect={addPeca} />
+                    <BuscaPecaEstoque onSelect={addPeca} modeloEquipamento={data.modelo_equipamento} />
 
                     <div className="space-y-3">
                         {(data.pecas || []).map((p: any) => (
