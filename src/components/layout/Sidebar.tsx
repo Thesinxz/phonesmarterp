@@ -45,6 +45,7 @@ const navItems = [
             { label: "Todas as OS", href: "/os" },
             { label: "Nova OS", href: "/os/nova" },
             { label: "Prateleira / Abandonos", href: "/os/prateleira" },
+            { label: "Garantia Estendida", href: "/os/garantias" },
         ]
     },
     {
@@ -84,6 +85,7 @@ const navItems = [
         permission: "estoque",
         children: [
             { label: "Produtos", href: "/estoque" },
+            { label: "Películas & Acessórios", href: "/estoque/peliculas" },
             { label: "Compras / Entradas", href: "/compras" },
         ]
     },

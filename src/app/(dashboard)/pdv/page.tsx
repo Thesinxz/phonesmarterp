@@ -1,34 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-    Search,
-    ShoppingCart,
-    Trash2,
-    Plus,
-    Minus,
-    CreditCard,
-    Banknote,
-    QrCode,
-    User,
-    Package,
-    CheckCircle2,
-    Printer,
-    History,
-    Percent,
-    Clock
-} from "lucide-react";
+import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, User, Package, CheckCircle2, Printer, History, Percent, Clock, Lock, DollarSign, LogOut, FileCode2 } from "lucide-react";
 import { getProdutos } from "@/services/estoque";
 import { finalizarVenda } from "@/services/vendas";
 import { getClientes } from "@/services/clientes";
 import { notifyVenda } from "@/actions/notifications";
-import { type Produto, type Cliente } from "@/types/database";
+import { getCaixaAberto, abrirCaixa, fecharCaixa, registrarMovimentacaoCaixa, getMovimentacoesCaixa } from "@/services/caixa";
+import { type Produto, type Cliente, type Caixa } from "@/types/database";
 import { useAuth } from "@/context/AuthContext";
 import { useFinanceConfig } from "@/hooks/useFinanceConfig";
 import { useRealtimeSubscription } from "@/hooks/useRealtime";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
-import { FileCode2 } from "lucide-react";
+import { formatCurrency } from "@/utils/formatCurrency";
+import { toast } from "sonner";
 
 interface CartItem extends Produto {
     quantity: number;
@@ -55,6 +41,13 @@ export default function PDVPage() {
     const [descontoPercentual, setDescontoPercentual] = useState<number>(0);
     const [valorRecebido, setValorRecebido] = useState<number>(0);
     const [currentTime, setCurrentTime] = useState(new Date());
+
+    // Caixa integration
+    const [caixaAberto, setCaixaAberto] = useState<Caixa | null>(null);
+    const [caixaLoading, setCaixaLoading] = useState(true);
+    const [saldoInicialInput, setSaldoInicialInput] = useState("");
+    const [showFecharCaixa, setShowFecharCaixa] = useState(false);
+    const [saldoFinalInput, setSaldoFinalInput] = useState("");
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -103,9 +96,52 @@ export default function PDVPage() {
 
     useEffect(() => {
         if (!profile?.empresa_id) return;
-        // Carga inicial rápida
         loadProducts();
+        checkCaixa();
     }, [profile?.empresa_id]);
+
+    async function checkCaixa() {
+        if (!profile?.empresa_id) return;
+        setCaixaLoading(true);
+        try {
+            const caixa = await getCaixaAberto(profile.empresa_id);
+            setCaixaAberto(caixa);
+        } catch (e) {
+            console.error("Erro ao verificar caixa:", e);
+        } finally {
+            setCaixaLoading(false);
+        }
+    }
+
+    async function handleAbrirCaixaPDV() {
+        if (!profile) return;
+        const valor = parseFloat(saldoInicialInput.replace(',', '.'));
+        try {
+            const caixa = await abrirCaixa(profile.empresa_id, profile.id, Math.round((valor || 0) * 100));
+            setCaixaAberto(caixa);
+            toast.success("Caixa aberto com sucesso!");
+        } catch (e: any) {
+            toast.error(e.message || "Erro ao abrir caixa");
+        }
+    }
+
+    async function handleFecharCaixaPDV() {
+        if (!profile || !caixaAberto) return;
+        const saldoFinal = Math.round(parseFloat(saldoFinalInput.replace(',', '.') || '0') * 100);
+        const movs = await getMovimentacoesCaixa(caixaAberto.id);
+        const totalEntradas = movs.filter((m: any) => m.tipo === 'entrada' || m.tipo === 'venda').reduce((s: number, m: any) => s + m.valor_centavos, 0);
+        const totalSaidas = movs.filter((m: any) => m.tipo === 'saida' || m.tipo === 'sangria').reduce((s: number, m: any) => s + m.valor_centavos, 0);
+        const esperado = (caixaAberto as any).saldo_inicial + totalEntradas - totalSaidas;
+        const diferenca = saldoFinal - esperado;
+        try {
+            await fecharCaixa(caixaAberto.id, profile.id, saldoFinal, diferenca);
+            setCaixaAberto(null);
+            setShowFecharCaixa(false);
+            toast.success("Caixa fechado com sucesso!");
+        } catch (e: any) {
+            toast.error(e.message || "Erro ao fechar caixa");
+        }
+    }
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -216,6 +252,26 @@ export default function PDVPage() {
             });
 
             setCreatedVenda({ id: venda.id, numero: venda.numero });
+
+            // Registrar movimentação no caixa
+            if (caixaAberto) {
+                try {
+                    await registrarMovimentacaoCaixa({
+                        caixa_id: caixaAberto.id,
+                        empresa_id: profile.empresa_id,
+                        usuario_id: profile.id,
+                        tipo: 'venda',
+                        valor_centavos: total,
+                        observacao: `Venda #${venda.numero || venda.id.substring(0, 6)} - ${paymentMethod}`,
+                        forma_pagamento: paymentMethod,
+                        vendedor_id: null,
+                        origem_id: venda.id,
+                    });
+                } catch (e) {
+                    console.error("Erro ao registrar movimentação:", e);
+                }
+            }
+
             // Notificar via WhatsApp (background)
             if (selectedClient?.telefone) {
                 notifyVenda(venda.id).catch(e => console.error("WhatsApp error:", e));
@@ -253,6 +309,50 @@ export default function PDVPage() {
         }
     }
 
+    // === Tela de bloqueio se caixa não está aberto ===
+    if (caixaLoading) {
+        return (
+            <div className="flex items-center justify-center h-[calc(100vh-100px)]">
+                <div className="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+        );
+    }
+
+    if (!caixaAberto) {
+        return (
+            <div className="flex items-center justify-center h-[calc(100vh-100px)] page-enter">
+                <div className="text-center max-w-md">
+                    <div className="w-20 h-20 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                        <Lock className="w-10 h-10 text-red-500" />
+                    </div>
+                    <h2 className="text-2xl font-black text-slate-800 mb-2">Caixa Fechado</h2>
+                    <p className="text-slate-500 text-sm mb-8">Para iniciar as vendas, abra o caixa informando o saldo inicial.</p>
+                    <GlassCard className="p-6 text-left">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
+                            Saldo Inicial (R$)
+                        </label>
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            value={saldoInicialInput}
+                            onChange={e => setSaldoInicialInput(e.target.value)}
+                            placeholder="0,00"
+                            className="w-full text-center text-3xl font-black text-slate-800 bg-slate-50 border border-slate-200 rounded-xl py-4 focus:outline-none focus:ring-2 focus:ring-brand-500/30 mb-4"
+                            onKeyDown={e => e.key === 'Enter' && handleAbrirCaixaPDV()}
+                        />
+                        <button
+                            onClick={handleAbrirCaixaPDV}
+                            className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
+                        >
+                            <DollarSign size={18} />
+                            Abrir Caixa e Iniciar Vendas
+                        </button>
+                    </GlassCard>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex gap-6 h-[calc(100vh-100px)] page-enter">
             {/* Products Side */}
@@ -265,9 +365,16 @@ export default function PDVPage() {
                         </div>
                         <div className="bg-emerald-500 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm animate-pulse">
                             <div className="w-1.5 h-1.5 bg-white rounded-full" />
-                            MODO CAIXA ATIVO
+                            CAIXA ABERTO
                         </div>
                     </div>
+                    <button
+                        onClick={() => setShowFecharCaixa(true)}
+                        className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition-all border border-red-100"
+                    >
+                        <LogOut size={14} />
+                        Fechar Caixa
+                    </button>
 
                     <div className="flex items-center gap-4 bg-white/50 px-4 py-2 rounded-2xl border border-white/60">
                         <div className="flex flex-col items-end">
@@ -656,6 +763,42 @@ export default function PDVPage() {
                             </button>
                         </div>
                     </GlassCard>
+                </div>
+            )}
+
+            {/* Modal Fechar Caixa */}
+            {showFecharCaixa && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 animate-in zoom-in-95">
+                        <h3 className="text-xl font-bold text-slate-800 mb-2">Fechar Caixa</h3>
+                        <p className="text-sm text-slate-500 mb-6">Informe o saldo final contado no caixa para conferência.</p>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
+                            Saldo Final Contado (R$)
+                        </label>
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            value={saldoFinalInput}
+                            onChange={e => setSaldoFinalInput(e.target.value)}
+                            placeholder="0,00"
+                            className="w-full text-center text-3xl font-black text-slate-800 bg-slate-50 border border-slate-200 rounded-xl py-4 focus:outline-none focus:ring-2 focus:ring-red-500/30 mb-6"
+                            onKeyDown={e => e.key === 'Enter' && handleFecharCaixaPDV()}
+                        />
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowFecharCaixa(false)}
+                                className="flex-1 h-12 rounded-xl text-slate-500 font-bold hover:bg-slate-50 border border-slate-200 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleFecharCaixaPDV}
+                                className="flex-1 h-12 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-500/20"
+                            >
+                                Fechar Caixa
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
