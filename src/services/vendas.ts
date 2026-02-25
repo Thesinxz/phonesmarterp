@@ -268,8 +268,7 @@ export async function getVendas(page = 1, limit = 50, filters?: { tipo?: "pdv" |
     let query = (supabase.from("vendas") as any)
         .select(`
             *,
-            cliente:clientes(nome),
-            vendedor:usuarios(nome)
+            cliente:clientes(nome)
         `, { count: "exact" })
         .order("created_at", { ascending: false })
         .range(from, to);
@@ -295,7 +294,6 @@ export async function getVendaById(id: string) {
         .select(`
             *,
             cliente:clientes(*),
-            vendedor:usuarios(nome),
             itens:venda_itens(
                 *,
                 produto:produtos(*)

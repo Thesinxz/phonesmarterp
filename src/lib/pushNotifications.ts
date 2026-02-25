@@ -80,12 +80,11 @@ export async function subscribeToPush(usuarioId: string, empresaId: string) {
                     auth: arrayBufferToBase64(authBuffer),
                 },
             },
-            { onConflict: "usuario_id,endpoint", ignoreDuplicates: false }
+            { onConflict: "usuario_id,endpoint", ignoreDuplicates: true }
         );
 
         if (error) {
-            console.error("[Push] Erro ao salvar subscrição no banco:", error);
-            return null;
+            console.warn("[Push] Não foi possível salvar subscrição (não crítico):", error.code);
         }
 
         console.log("[Push] Subscrição realizada com sucesso.");
