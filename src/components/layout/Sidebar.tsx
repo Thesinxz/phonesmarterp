@@ -21,7 +21,8 @@ import {
     ClipboardCheck,
     History as HistoryIcon,
     Bell,
-    Shield
+    Shield,
+    MessageCircle
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useState, useEffect } from "react";
@@ -58,6 +59,12 @@ const navItems = [
         label: "PDV",
         href: "/pdv",
         icon: ShoppingCart,
+        permission: "vendas"
+    },
+    {
+        label: "Orçamento Rápido",
+        href: "/orcamento",
+        icon: MessageCircle,
         permission: "vendas"
     },
     {

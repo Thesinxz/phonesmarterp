@@ -18,9 +18,7 @@ export interface PecaCatalogo {
 }
 
 export const TIPOS_PECA = [
-    { value: "frontal", label: "Frontal / Tela", emoji: "📱" },
-    { value: "display", label: "Display LCD", emoji: "🖥️" },
-    { value: "touch", label: "Touch Screen", emoji: "👆" },
+    { value: "tela_modulo", label: "Tela / Frontal / Módulo", emoji: "📱" },
     { value: "bateria", label: "Bateria", emoji: "🔋" },
     { value: "conector", label: "Conector de Carga", emoji: "🔌" },
     { value: "tampa_traseira", label: "Tampa Traseira", emoji: "🔙" },
@@ -30,6 +28,8 @@ export const TIPOS_PECA = [
     { value: "botao", label: "Botão (Power/Volume)", emoji: "⏏️" },
     { value: "aro", label: "Aro / Frame", emoji: "⬜" },
     { value: "placa", label: "Placa Mãe", emoji: "🔧" },
+    { value: "sensor", label: "Sensor (Proximidade/Luz)", emoji: "💡" },
+    { value: "auricular", label: "Auricular / Fone", emoji: "🎧" },
     { value: "outro", label: "Outros", emoji: "📦" },
 ];
 
