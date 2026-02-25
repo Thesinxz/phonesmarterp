@@ -80,7 +80,7 @@ export async function subscribeToPush(usuarioId: string, empresaId: string) {
                     auth: arrayBufferToBase64(authBuffer),
                 },
             },
-            { onConflict: "usuario_id,endpoint" }
+            { onConflict: "usuario_id,endpoint", ignoreDuplicates: false }
         );
 
         if (error) {

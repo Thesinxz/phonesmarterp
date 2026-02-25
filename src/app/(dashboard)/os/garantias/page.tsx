@@ -45,7 +45,7 @@ export default function GarantiasPage() {
 
             const { data, error } = await supabase
                 .from("ordens_servico")
-                .select("id, numero, equipamento, marca, modelo, status, servico_descricao, updated_at, clientes(nome)")
+                .select("id, numero, tipo_equipamento, marca_equipamento, modelo_equipamento, status, observacoes_internas, updated_at, clientes(nome)")
                 .eq("empresa_id", profile!.empresa_id)
                 .eq("status", "finalizada")
                 .gte("updated_at", dataLimite.toISOString())
@@ -57,12 +57,12 @@ export default function GarantiasPage() {
                 id: os.id,
                 numero: os.numero,
                 cliente_nome: os.clientes?.nome || "—",
-                equipamento: os.equipamento || "—",
-                marca: os.marca || "—",
-                modelo: os.modelo || "—",
+                equipamento: os.tipo_equipamento || "—",
+                marca: os.marca_equipamento || "—",
+                modelo: os.modelo_equipamento || "—",
                 data_conclusao: os.updated_at,
                 status: os.status,
-                servico_descricao: os.servico_descricao || "—",
+                servico_descricao: os.observacoes_internas || "—",
             })));
         } catch (e: any) {
             toast.error(e.message);
