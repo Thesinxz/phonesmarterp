@@ -15,6 +15,7 @@ import { formatCurrency } from "@/utils/formatCurrency";
 import { formatDate } from "@/utils/formatDate";
 import { cn } from "@/utils/cn";
 import { toast } from "sonner";
+import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
 // Importar ModalFuturo de Pagamento (Mockado para este passo)
 
 export default function ContasReceberPage() {
@@ -26,12 +27,14 @@ export default function ContasReceberPage() {
 
     // Filtros
     const [statusFilter, setStatusFilter] = useState("todos");
+    const [filterStart, setFilterStart] = useState<string | undefined>(undefined);
+    const [filterEnd, setFilterEnd] = useState<string | undefined>(undefined);
 
     useEffect(() => {
         if (profile?.empresa_id) {
             loadData();
         }
-    }, [profile?.empresa_id, statusFilter]);
+    }, [profile?.empresa_id, statusFilter, filterStart, filterEnd]);
 
     // Simple debounce para busca
     useEffect(() => {
@@ -56,7 +59,7 @@ export default function ContasReceberPage() {
         setLoading(true);
         try {
             // 1. Carrega Resumo
-            const resumoData = await getResumoTitulos(profile!.empresa_id, 'receber');
+            const resumoData = await getResumoTitulos(profile!.empresa_id, 'receber', { startDate: filterStart, endDate: filterEnd });
             setResumo(resumoData);
 
             // 2. Carrega Lista
@@ -131,6 +134,15 @@ export default function ContasReceberPage() {
                     </button>
                 </div>
             </div>
+
+            {/* Filtro de Período */}
+            <DateRangeFilter
+                defaultPreset="tudo"
+                onChange={(start, end) => {
+                    setFilterStart(start);
+                    setFilterEnd(end);
+                }}
+            />
 
             {/* Metricas Rapidas */}
             {resumo && (

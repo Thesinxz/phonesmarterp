@@ -260,7 +260,7 @@ export async function atualizarStatusPedido(vendaId: string, status: Venda["stat
     });
 }
 
-export async function getVendas(page = 1, limit = 50, filters?: { tipo?: "pdv" | "pedido", status?: string }) {
+export async function getVendas(page = 1, limit = 50, filters?: { tipo?: "pdv" | "pedido", status?: string, startDate?: string, endDate?: string, search?: string }) {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
@@ -274,8 +274,10 @@ export async function getVendas(page = 1, limit = 50, filters?: { tipo?: "pdv" |
         .order("created_at", { ascending: false })
         .range(from, to);
 
-    // if (filters?.tipo) query = query.eq("tipo", filters.tipo);
-    // if (filters?.status) query = query.eq("status_pedido", filters.status);
+    if (filters?.tipo) query = query.eq("tipo", filters.tipo);
+    if (filters?.status) query = query.eq("status_pedido", filters.status);
+    if (filters?.startDate) query = query.gte("created_at", `${filters.startDate}T00:00:00`);
+    if (filters?.endDate) query = query.lte("created_at", `${filters.endDate}T23:59:59`);
 
     const { data, count, error } = await query;
     if (error) throw error;

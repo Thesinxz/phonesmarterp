@@ -20,12 +20,15 @@ import { cn } from "@/utils/cn";
 import { useAuth } from "@/context/AuthContext";
 import { useRealtimeSubscription } from "@/hooks/useRealtime";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
 
 export default function FinanceiroPage() {
     const { profile } = useAuth();
     const [resumoReceber, setResumoReceber] = useState<any>(null);
     const [resumoPagar, setResumoPagar] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [filterStart, setFilterStart] = useState<string | undefined>(undefined);
+    const [filterEnd, setFilterEnd] = useState<string | undefined>(undefined);
 
     // Realtime Sync
     useRealtimeSubscription({
@@ -44,14 +47,15 @@ export default function FinanceiroPage() {
         if (profile?.empresa_id) {
             loadData();
         }
-    }, [profile?.empresa_id]);
+    }, [profile?.empresa_id, filterStart, filterEnd]);
 
     async function loadData() {
         setLoading(true);
         try {
+            const dateFilters = { startDate: filterStart, endDate: filterEnd };
             const [receber, pagar] = await Promise.all([
-                getResumoTitulos(profile!.empresa_id, 'receber'),
-                getResumoTitulos(profile!.empresa_id, 'pagar')
+                getResumoTitulos(profile!.empresa_id, 'receber', dateFilters),
+                getResumoTitulos(profile!.empresa_id, 'pagar', dateFilters)
             ]);
 
             setResumoReceber(receber);
@@ -84,17 +88,20 @@ export default function FinanceiroPage() {
                         <h1 className="text-2xl font-bold text-slate-800">Visão Geral Financeira</h1>
                         <p className="text-slate-500 text-sm mt-0.5">Acompanhamento do seu fluxo a pagar e a receber.</p>
                     </div>
-                    <div className="flex gap-3">
-                        <button className="bg-white/60 h-10 px-4 rounded-xl border border-white/60 text-slate-600 flex items-center gap-2 text-sm font-medium hover:bg-white/80 transition-all">
-                            <Calendar size={16} />
-                            Este Mês
-                        </button>
+                    <div className="flex gap-3 items-center">
                         <Link href="/financeiro/caixa" className="h-10 px-4 rounded-xl bg-indigo-600 text-white font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20">
                             <DollarSign size={16} />
                             Ir para Caixa (PDV)
                         </Link>
                     </div>
                 </div>
+                <DateRangeFilter
+                    defaultPreset="tudo"
+                    onChange={(start, end) => {
+                        setFilterStart(start);
+                        setFilterEnd(end);
+                    }}
+                />
 
                 {/* Projetado Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -264,6 +271,6 @@ export default function FinanceiroPage() {
                     </div>
                 </div>
             </div>
-        </PermissionGuard>
+        </PermissionGuard >
     );
 }

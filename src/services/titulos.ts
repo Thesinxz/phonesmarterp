@@ -140,33 +140,32 @@ export async function darBaixaTitulo(
 }
 
 // 6. Resumo Rápido para Dashboards
-export async function getResumoTitulos(empresa_id: string, tipo: 'pagar' | 'receber') {
+export async function getResumoTitulos(empresa_id: string, tipo: 'pagar' | 'receber', filters?: { startDate?: string, endDate?: string }) {
     const hoje = new Date().toISOString().split('T')[0];
 
-    // Busca todos pendentes/parciais/atrasados ou pagos no mês atual
-    // Para simplificar a POC, pegamos os dados e filtramos no JS se não houver RL pesada
-    const { data, error } = await (supabase.from("financeiro_titulos") as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query = (supabase.from("financeiro_titulos") as any)
         .select("valor_total_centavos, valor_pago_centavos, status, data_vencimento")
         .eq("empresa_id", empresa_id)
         .eq("tipo", tipo);
+
+    if (filters?.startDate) query = query.gte("data_vencimento", filters.startDate);
+    if (filters?.endDate) query = query.lte("data_vencimento", filters.endDate);
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
     let atrasado = 0;
     let vencendoHoje = 0;
     let aVencer = 0;
-    let recebidoPagoMensal = 0; // Exemplo: simplificado
-
-    const mesAtual = new Date().getMonth();
+    let recebidoPagoMensal = 0;
 
     data?.forEach((t: any) => {
         const saldoPendente = t.valor_total_centavos - (t.valor_pago_centavos || 0);
 
         if (t.status === 'pago') {
-            // Verificar se foi pago este mês (simplismo comparando apenas mês)
-            if (new Date(t.data_vencimento).getMonth() === mesAtual) {
-                recebidoPagoMensal += t.valor_total_centavos;
-            }
+            recebidoPagoMensal += t.valor_total_centavos;
         } else if (t.status === 'pendente' || t.status === 'parcial' || t.status === 'atrasado') {
 
             if (t.data_vencimento < hoje) {

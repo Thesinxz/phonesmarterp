@@ -9,6 +9,7 @@ import { getCompras } from "@/services/compras";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { formatDate } from "@/utils/formatDate";
 import { cn } from "@/utils/cn";
+import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
 
 export default function ComprasPage() {
     const { profile } = useAuth();
@@ -16,12 +17,14 @@ export default function ComprasPage() {
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
+    const [filterStart, setFilterStart] = useState<string | undefined>(undefined);
+    const [filterEnd, setFilterEnd] = useState<string | undefined>(undefined);
 
     const loadCompras = useCallback(async () => {
         if (!profile?.empresa_id) return;
         setLoading(true);
         try {
-            const { data, count } = await getCompras(profile.empresa_id);
+            const { data, count } = await getCompras(profile.empresa_id, 1, 50, { startDate: filterStart, endDate: filterEnd });
             setCompras(data);
             setTotal(count || 0);
         } catch (e) {
@@ -29,7 +32,7 @@ export default function ComprasPage() {
         } finally {
             setLoading(false);
         }
-    }, [profile?.empresa_id]);
+    }, [profile?.empresa_id, filterStart, filterEnd]);
 
     useEffect(() => { loadCompras(); }, [loadCompras]);
 
@@ -62,6 +65,15 @@ export default function ComprasPage() {
                     <Package size={18} /> Importar NF-e
                 </Link>
             </div>
+
+            {/* Filtro de Período */}
+            <DateRangeFilter
+                defaultPreset="tudo"
+                onChange={(start, end) => {
+                    setFilterStart(start);
+                    setFilterEnd(end);
+                }}
+            />
 
             {/* KPIs */}
             <div className="grid grid-cols-3 gap-4">

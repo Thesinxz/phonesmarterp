@@ -16,6 +16,7 @@ import { formatDate } from "@/utils/formatDate";
 import { cn } from "@/utils/cn";
 import { toast } from "sonner";
 import { parseNfeXml } from "@/services/xml_parser";
+import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
 
 export default function ContasPagarPage() {
     const { profile } = useAuth();
@@ -30,12 +31,14 @@ export default function ContasPagarPage() {
 
     // Filtros
     const [statusFilter, setStatusFilter] = useState("todos");
+    const [filterStart, setFilterStart] = useState<string | undefined>(undefined);
+    const [filterEnd, setFilterEnd] = useState<string | undefined>(undefined);
 
     useEffect(() => {
         if (profile?.empresa_id) {
             loadData();
         }
-    }, [profile?.empresa_id, statusFilter]);
+    }, [profile?.empresa_id, statusFilter, filterStart, filterEnd]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -58,7 +61,7 @@ export default function ContasPagarPage() {
     async function loadData() {
         setLoading(true);
         try {
-            const resumoData = await getResumoTitulos(profile!.empresa_id, 'pagar');
+            const resumoData = await getResumoTitulos(profile!.empresa_id, 'pagar', { startDate: filterStart, endDate: filterEnd });
             setResumo(resumoData);
 
             const filters: any = {};
@@ -154,6 +157,15 @@ export default function ContasPagarPage() {
                     </button>
                 </div>
             </div>
+
+            {/* Filtro de Período */}
+            <DateRangeFilter
+                defaultPreset="tudo"
+                onChange={(start, end) => {
+                    setFilterStart(start);
+                    setFilterEnd(end);
+                }}
+            />
 
             {/* Metricas Rapidas */}
             {resumo && (

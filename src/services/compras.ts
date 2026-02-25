@@ -106,15 +106,20 @@ export interface CompraPayload {
     itens: CompraItemPayload[];
 }
 
-export async function getCompras(empresaId: string, page = 1, perPage = 50) {
+export async function getCompras(empresaId: string, page = 1, perPage = 50, filters?: { startDate?: string, endDate?: string }) {
     const from = (page - 1) * perPage;
     const to = from + perPage - 1;
-    const { data, error, count } = await supabase
+    let query = supabase
         .from("compras")
         .select("*, fornecedores(id, nome, cnpj)", { count: "exact" })
         .eq("empresa_id", empresaId)
         .order("created_at", { ascending: false })
         .range(from, to);
+
+    if (filters?.startDate) query = query.gte("data_compra", filters.startDate) as any;
+    if (filters?.endDate) query = query.lte("data_compra", filters.endDate) as any;
+
+    const { data, error, count } = await query;
     if (error) throw error;
     return { data, count };
 }

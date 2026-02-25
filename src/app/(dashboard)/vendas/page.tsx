@@ -23,6 +23,7 @@ import { useRealtimeSubscription } from "@/hooks/useRealtime";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
 import { generateVendaPDF } from "@/utils/pdfGenerator";
 import { getConfigs } from "@/services/configuracoes";
+import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
 
 export default function VendasPage() {
     const { profile } = useAuth();
@@ -31,6 +32,9 @@ export default function VendasPage() {
     const [loading, setLoading] = useState(true);
     const [emittingId, setEmittingId] = useState<string | null>(null);
     const [exportingId, setExportingId] = useState<string | null>(null);
+    const [filterStartDate, setFilterStartDate] = useState<string | undefined>(undefined);
+    const [filterEndDate, setFilterEndDate] = useState<string | undefined>(undefined);
+    const [search, setSearch] = useState("");
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
@@ -59,12 +63,23 @@ export default function VendasPage() {
     useEffect(() => {
         if (!profile?.empresa_id) return;
         loadData();
-    }, [profile?.empresa_id, currentPage]);
+    }, [profile?.empresa_id, currentPage, filterStartDate, filterEndDate]);
+
+    // Busca com debounce simples
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (profile?.empresa_id) loadData();
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [search]);
 
     async function loadData() {
         setLoading(true);
         try {
-            const response = await getVendas(currentPage, 50); // Fetching 50 per page
+            const response = await getVendas(currentPage, 50, {
+                startDate: filterStartDate,
+                endDate: filterEndDate,
+            });
             setVendas(response.data || []);
             setTotalPages(response.totalPages);
             setTotalItems(response.count);
@@ -134,18 +149,25 @@ export default function VendasPage() {
                 </div>
 
                 {/* Filtros e Busca */}
-                <GlassCard className="p-4">
-                    <div className="flex gap-4">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                            <input
-                                className="input-glass pl-9"
-                                placeholder="Buscar por cliente, ID da venda ou valor..."
-                            />
-                        </div>
-                        {/* Filtros de data poderiam vir aqui */}
+                <div className="flex flex-wrap items-center gap-4 bg-white/40 p-3 rounded-2xl border border-white/60 shadow-sm">
+                    <div className="relative flex-1 min-w-[240px]">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                        <input
+                            className="w-full bg-white/60 border border-slate-200/60 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+                            placeholder="Buscar por cliente, ID da venda ou valor..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
                     </div>
-                </GlassCard>
+                    <DateRangeFilter
+                        defaultPreset="mes"
+                        onChange={(start, end) => {
+                            setFilterStartDate(start);
+                            setFilterEndDate(end);
+                            setCurrentPage(1);
+                        }}
+                    />
+                </div>
 
                 {/* Lista de Vendas */}
                 <GlassCard title="Últimas Vendas" icon={ShoppingCart}>

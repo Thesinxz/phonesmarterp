@@ -22,6 +22,7 @@ import { OSKanbanCard } from "@/components/os/OSKanbanCard";
 import { notifyOSStatusChange } from "@/actions/notifications";
 import { useAuth } from "@/context/AuthContext";
 import { useRealtimeSubscription } from "@/hooks/useRealtime";
+import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
 
 const STAGES: { label: string; status: OsStatus; color: string }[] = [
     { label: "Abertas", status: "aberta", color: "bg-slate-500" },
@@ -216,22 +217,13 @@ export default function OSPage() {
                         </select>
                     </div>
 
-                    <div className="flex items-center gap-1 bg-white/60 border border-slate-200/60 rounded-xl px-2 py-0.5">
-                        <Calendar size={14} className="text-slate-400 ml-1" />
-                        <input
-                            type="date"
-                            value={filterStart}
-                            onChange={(e) => setFilterStart(e.target.value)}
-                            className="bg-transparent border-none text-[11px] font-bold text-slate-600 focus:outline-none py-1.5"
-                        />
-                        <span className="text-slate-300">|</span>
-                        <input
-                            type="date"
-                            value={filterEnd}
-                            onChange={(e) => setFilterEnd(e.target.value)}
-                            className="bg-transparent border-none text-[11px] font-bold text-slate-600 focus:outline-none py-1.5"
-                        />
-                    </div>
+                    <DateRangeFilter
+                        defaultPreset="tudo"
+                        onChange={(start, end) => {
+                            setFilterStart(start || "");
+                            setFilterEnd(end || "");
+                        }}
+                    />
                 </div>
 
                 <button
