@@ -24,44 +24,40 @@ export async function getMembrosEquipe(empresaId: string) {
 export async function criarMembroEquipe(data: Omit<Usuario, "id" | "created_at">) {
     console.log("[equipe.ts] Iniciando criarMembroEquipe para:", data.email);
 
-    // 1. Verificar se o email já existe na empresa (ou globalmente se email for UNIQUE na tabela toda)
-    const { data: existente, error: checkError } = await supabase
-        .from('usuarios')
-        .select('id')
-        .eq('email', data.email)
-        .maybeSingle();
+    try {
+        // 1. Inserção direta sem .select() para evitar disparar políticas de SELECT recursivas
+        console.log("[equipe.ts] Executando INSERT na tabela usuarios...");
+        const { error } = await supabase
+            .from("usuarios")
+            .insert([{
+                empresa_id: data.empresa_id,
+                email: data.email,
+                nome: data.nome,
+                papel: data.papel,
+                permissoes_json: data.permissoes_json || {},
+                ativo: true,
+                auth_user_id: null // Explicitamente null para novos convites
+            }]);
 
-    if (checkError) {
-        console.error("[equipe.ts] Erro ao verificar email existente:", checkError);
-        throw new Error(`Erro ao verificar email: ${checkError.message}`);
+        if (error) {
+            console.error("[equipe.ts] Erro retornado pelo Supabase (INSERT):", error);
+
+            // Código 23505: Unique violation (e-mail já existe)
+            if (error.code === '23505') {
+                throw new Error('Este email já está cadastrado em outra conta ou equipe.');
+            }
+
+            throw new Error(`Erro no banco (Código ${error.code}): ${error.message}`);
+        }
+
+        console.log("[equipe.ts] Sucesso! Registro criado (sem retorno para evitar hang).");
+        // Retornamos um objeto parcial para compatibilidade, já que não usamos .select()
+        return { success: true } as any;
+
+    } catch (err: any) {
+        console.error("[equipe.ts] Exceção capturada em criarMembroEquipe:", err);
+        throw err;
     }
-
-    if (existente) {
-        console.warn("[equipe.ts] Email já cadastrado:", data.email);
-        throw new Error('Este email já está cadastrado em outra conta ou equipe.');
-    }
-
-    // 2. Criar o registro diretamente
-    const { data: res, error } = await supabase
-        .from("usuarios")
-        .insert([{
-            empresa_id: data.empresa_id,
-            email: data.email,
-            nome: data.nome,
-            papel: data.papel,
-            permissoes_json: data.permissoes_json || {},
-            ativo: true
-        }])
-        .select()
-        .single();
-
-    if (error) {
-        console.error("[equipe.ts] Erro ao criar registro no banco:", error);
-        throw new Error(`Erro no banco de dados: ${error.message}`);
-    }
-
-    console.log("[equipe.ts] Membro criado com sucesso:", res.id);
-    return res as Usuario;
 }
 
 export async function atualizarMembroEquipe(id: string, updates: Partial<Usuario>) {
