@@ -5,10 +5,13 @@ const supabase = createClient() as any;
 
 export type Usuario = Database["public"]["Tables"]["usuarios"]["Row"];
 
-export async function getMembrosEquipe() {
+export async function getMembrosEquipe(empresaId: string) {
+    if (!empresaId) throw new Error("empresaId is required");
+
     const { data, error } = await supabase
         .from("usuarios")
         .select("*")
+        .eq("empresa_id", empresaId)
         .order("nome", { ascending: true });
 
     if (error) {
@@ -19,28 +22,45 @@ export async function getMembrosEquipe() {
 }
 
 export async function criarMembroEquipe(data: Omit<Usuario, "id" | "created_at">) {
-    // Usamos o RPC para vincular ou criar o perfil garantindo o suporte multi-empresa
-    const { data: usuarioId, error } = await supabase.rpc('vincular_usuario_equipe', {
-        p_id_empresa: data.empresa_id,
-        p_email: data.email,
-        p_nome: data.nome,
-        p_papel: data.papel,
-        p_permissoes: data.permissoes_json || {}
-    });
+    console.log("[equipe.ts] Iniciando criarMembroEquipe para:", data.email);
 
-    if (error) {
-        console.error("Erro ao vincular membro da equipe:", error);
-        throw error;
+    // 1. Verificar se o email já existe na empresa (ou globalmente se email for UNIQUE na tabela toda)
+    const { data: existente, error: checkError } = await supabase
+        .from('usuarios')
+        .select('id')
+        .eq('email', data.email)
+        .maybeSingle();
+
+    if (checkError) {
+        console.error("[equipe.ts] Erro ao verificar email existente:", checkError);
+        throw new Error(`Erro ao verificar email: ${checkError.message}`);
     }
 
-    // Busca o registro criado para retornar
-    const { data: res, error: fetchError } = await supabase
+    if (existente) {
+        console.warn("[equipe.ts] Email já cadastrado:", data.email);
+        throw new Error('Este email já está cadastrado em outra conta ou equipe.');
+    }
+
+    // 2. Criar o registro diretamente
+    const { data: res, error } = await supabase
         .from("usuarios")
-        .select("*")
-        .eq("id", usuarioId)
+        .insert([{
+            empresa_id: data.empresa_id,
+            email: data.email,
+            nome: data.nome,
+            papel: data.papel,
+            permissoes_json: data.permissoes_json || {},
+            ativo: true
+        }])
+        .select()
         .single();
 
-    if (fetchError) throw fetchError;
+    if (error) {
+        console.error("[equipe.ts] Erro ao criar registro no banco:", error);
+        throw new Error(`Erro no banco de dados: ${error.message}`);
+    }
+
+    console.log("[equipe.ts] Membro criado com sucesso:", res.id);
     return res as Usuario;
 }
 

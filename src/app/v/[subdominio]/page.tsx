@@ -191,6 +191,17 @@ export default function VitrinePage() {
     const [filtroGrade, setFiltroGrade] = useState<string>("todos");
     const [filtroCategoria, setFiltroCategoria] = useState<string>("todos");
 
+    // Capturar vendedor de referência (?ref=UUID)
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const urlParams = new URLSearchParams(window.location.search);
+        const refVendedor = urlParams.get("ref");
+        if (refVendedor) {
+            localStorage.setItem("vitrine_vendedor_ref", refVendedor);
+            localStorage.setItem("vitrine_vendedor_ref_at", new Date().toISOString());
+        }
+    }, []);
+
     async function fetchVitrine() {
         try {
             setLoading(true);

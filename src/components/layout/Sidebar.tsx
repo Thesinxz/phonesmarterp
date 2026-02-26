@@ -120,7 +120,11 @@ const navItems = [
         label: "Equipe",
         href: "/equipe",
         icon: Shield,
-        permission: "equipe"
+        permission: "equipe",
+        children: [
+            { label: "Membros", href: "/equipe" },
+            { label: "Metas de Vendas", href: "/equipe/metas" },
+        ]
     },
     {
         label: "Relatórios",

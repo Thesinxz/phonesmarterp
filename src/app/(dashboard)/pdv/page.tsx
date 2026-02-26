@@ -5,6 +5,7 @@ import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode
 import { getProdutos } from "@/services/estoque";
 import { finalizarVenda } from "@/services/vendas";
 import { getClientes } from "@/services/clientes";
+import { getMembrosEquipe, type Usuario } from "@/services/equipe";
 import { notifyVenda } from "@/actions/notifications";
 import { getCaixaAberto, abrirCaixa, fecharCaixa, registrarMovimentacaoCaixa, getMovimentacoesCaixa } from "@/services/caixa";
 import { type Produto, type Cliente, type Caixa } from "@/types/database";
@@ -41,6 +42,10 @@ export default function PDVPage() {
     const [descontoPercentual, setDescontoPercentual] = useState<number>(0);
     const [valorRecebido, setValorRecebido] = useState<number>(0);
     const [currentTime, setCurrentTime] = useState(new Date());
+
+    // Vendedor (Metas)
+    const [membros, setMembros] = useState<Usuario[]>([]);
+    const [selectedVendedor, setSelectedVendedor] = useState<string>("");
 
     // Caixa integration
     const [caixaAberto, setCaixaAberto] = useState<Caixa | null>(null);
@@ -98,7 +103,19 @@ export default function PDVPage() {
         if (!profile?.empresa_id) return;
         loadProducts();
         checkCaixa();
+        loadMembros();
     }, [profile?.empresa_id]);
+
+    async function loadMembros() {
+        if (!profile?.empresa_id) return;
+        try {
+            const data = await getMembrosEquipe(profile.empresa_id);
+            setMembros(data);
+            if (profile?.id) setSelectedVendedor(profile.id);
+        } catch (error) {
+            console.error("Erro ao carregar equipe:", error);
+        }
+    }
 
     async function checkCaixa() {
         if (!profile?.empresa_id) return;
@@ -240,6 +257,8 @@ export default function PDVPage() {
                     forma_pagamento: ['credito', 'boleto', 'crediario'].includes(paymentMethod) ? `${paymentMethod}_${parcelas}x` : paymentMethod,
                     nfce_chave: null,
                     observacoes: taxaGatewayCentavos > 0 ? `Taxa Gateway: R$ ${(taxaGatewayCentavos / 100).toFixed(2)}` : "",
+                    vendedor_id: selectedVendedor || profile.id,
+                    canal_origem: "pdv",
                 },
                 itens: cart.map(item => ({
                     empresa_id: profile.empresa_id,
@@ -264,7 +283,7 @@ export default function PDVPage() {
                         valor_centavos: total,
                         observacao: `Venda #${venda.numero || venda.id.substring(0, 6)} - ${paymentMethod}`,
                         forma_pagamento: paymentMethod,
-                        vendedor_id: null,
+                        vendedor_id: selectedVendedor || profile.id,
                         origem_id: venda.id,
                     });
                 } catch (e) {
@@ -539,6 +558,22 @@ export default function PDVPage() {
 
                     {/* Cart Footer / Checkout */}
                     <div className="p-4 bg-slate-50/80 border-t border-slate-100 space-y-4">
+                        {/* Vendor Select */}
+                        {membros.length > 0 && (
+                            <div className="relative">
+                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-500" size={14} />
+                                <select
+                                    value={selectedVendedor}
+                                    onChange={(e) => setSelectedVendedor(e.target.value)}
+                                    className="w-full input-glass pl-9 min-h-[36px] text-xs h-9 bg-white cursor-pointer font-bold text-slate-700"
+                                >
+                                    {membros.map(m => (
+                                        <option key={m.id} value={m.id}>{m.nome}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
                         {/* Client Select */}
                         <div className="relative">
                             <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />

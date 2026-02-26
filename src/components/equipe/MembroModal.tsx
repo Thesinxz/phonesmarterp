@@ -68,24 +68,25 @@ export default function MembroModal({ isOpen, onClose, onSuccess, membro }: Memb
 
         try {
             setSubmitting(true);
+            const loadingToast = toast.loading(membro ? "Atualizando..." : "Adicionando membro...");
 
             if (membro) {
                 await atualizarMembroEquipe(membro.id, form);
-                toast.success("Membro atualizado com sucesso");
+                toast.success("Membro atualizado com sucesso", { id: loadingToast });
             } else {
                 await criarMembroEquipe({
                     ...form,
                     empresa_id: profile.empresa_id,
                     auth_user_id: null
                 });
-                toast.success("Membro adicionado com sucesso");
+                toast.success("Membro adicionado com sucesso", { id: loadingToast });
             }
 
             onSuccess();
             onClose();
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            toast.error("Erro ao salvar membro");
+            toast.error(error?.message || "Erro ao salvar membro");
         } finally {
             setSubmitting(false);
         }

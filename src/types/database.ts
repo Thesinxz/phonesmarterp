@@ -198,6 +198,7 @@ export interface Database {
                     numero: number;
                     empresa_id: string;
                     cliente_id: string | null;
+                    vendedor_id: string | null;
                     total_centavos: number;
                     desconto_centavos: number;
                     forma_pagamento: string;
@@ -206,9 +207,10 @@ export interface Database {
                     tipo?: "pdv" | "pedido";
                     status_pedido?: "rascunho" | "aguardando_aprovacao" | "aprovado" | "separando" | "enviado" | "entregue" | "cancelado" | null;
                     canal_venda?: "balcao" | "whatsapp" | "telefone" | "site" | "instagram" | null;
+                    canal_origem?: string | null;
                     created_at: string;
                 };
-                Insert: Omit<Database["public"]["Tables"]["vendas"]["Row"], "id" | "created_at" | "numero"> & { numero?: number };
+                Insert: Omit<Database["public"]["Tables"]["vendas"]["Row"], "id" | "created_at" | "numero" | "vendedor_id" | "canal_origem"> & { numero?: number; vendedor_id?: string | null; canal_origem?: string | null };
                 Update: Partial<Database["public"]["Tables"]["vendas"]["Insert"]>;
             };
             venda_itens: {
@@ -532,6 +534,39 @@ export interface Database {
                 Insert: Omit<Database["public"]["Tables"]["solicitacoes"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["solicitacoes"]["Insert"]>;
             };
+            equipe_metas: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    usuario_id: string;
+                    tipo_periodo: "mensal" | "semanal" | "trimestral";
+                    ano: number;
+                    mes: number | null;
+                    semana: number | null;
+                    meta_faturamento_centavos: number;
+                    meta_qtd_vendas: number;
+                    ativo: boolean;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["equipe_metas"]["Row"], "id" | "created_at" | "updated_at">;
+                Update: Partial<Database["public"]["Tables"]["equipe_metas"]["Insert"]>;
+            };
+            equipe_metas_categorias: {
+                Row: {
+                    id: string;
+                    meta_id: string;
+                    empresa_id: string;
+                    tipo: "categoria" | "subcategoria" | "produto";
+                    categoria_nome: string | null;
+                    produto_id: string | null;
+                    meta_qtd: number;
+                    meta_valor_centavos: number;
+                    created_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["equipe_metas_categorias"]["Row"], "id" | "created_at">;
+                Update: Partial<Database["public"]["Tables"]["equipe_metas_categorias"]["Insert"]>;
+            };
         };
         Views: Record<string, never>;
         Functions: Record<string, never>;
@@ -556,6 +591,8 @@ export type CaixaMovimentacao = Database["public"]["Tables"]["caixa_movimentacoe
 export type FinanceiroTitulo = Database["public"]["Tables"]["financeiro_titulos"]["Row"];
 export type XmlImportacao = Database["public"]["Tables"]["xml_importacoes"]["Row"];
 export type Solicitacao = Database["public"]["Tables"]["solicitacoes"]["Row"];
+export type EquipeMeta = Database["public"]["Tables"]["equipe_metas"]["Row"];
+export type EquipeMetaCategoria = Database["public"]["Tables"]["equipe_metas_categorias"]["Row"];
 
 export type OsStatus = OrdemServico["status"];
 export type UserPapel = Usuario["papel"];

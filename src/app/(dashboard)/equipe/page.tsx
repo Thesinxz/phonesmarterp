@@ -34,16 +34,17 @@ export default function EquipePage() {
     const [selectedMembro, setSelectedMembro] = useState<Usuario | null>(null);
 
     const loadData = useCallback(async () => {
+        if (!profile?.empresa_id) return;
         try {
             setLoading(true);
-            const data = await getMembrosEquipe();
+            const data = await getMembrosEquipe(profile.empresa_id);
             setMembros(data);
         } catch (error) {
             toast.error("Erro ao carregar equipe");
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [profile?.empresa_id]);
 
     useEffect(() => {
         if (!profile?.empresa_id) return;

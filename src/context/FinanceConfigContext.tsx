@@ -65,9 +65,6 @@ export function clearFinanceConfigCache() {
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 export function FinanceConfigProvider({ children }: { children: ReactNode }) {
-    // Inicializa direto do sessionStorage para evitar flash de loading
-    const cached = typeof window !== "undefined" ? readFromStorage() : null;
-
     const [config, setConfig] = useState<FinanceiroConfig | null>(null);
     const [defaultGateway, setDefaultGateway] = useState<PaymentGateway | null>(null);
     const [loading, setLoading] = useState(true);
