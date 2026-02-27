@@ -24,40 +24,32 @@ export async function getMembrosEquipe(empresaId: string) {
 export async function criarMembroEquipe(data: Omit<Usuario, "id" | "created_at">) {
     console.log("[equipe.ts] Iniciando criarMembroEquipe para:", data.email);
 
-    try {
-        // 1. Inserção direta sem .select() para evitar disparar políticas de SELECT recursivas
-        console.log("[equipe.ts] Executando INSERT na tabela usuarios...");
-        const { error } = await supabase
-            .from("usuarios")
-            .insert([{
-                empresa_id: data.empresa_id,
-                email: data.email,
-                nome: data.nome,
-                papel: data.papel,
-                permissoes_json: data.permissoes_json || {},
-                ativo: true,
-                auth_user_id: null // Explicitamente null para novos convites
-            }]);
+    // ============================================================
+    // ABORDAGEM 100% CLIENT-SIDE — Sem chamadas ao banco de dados!
+    // Codificamos os dados do convite diretamente na URL.
+    // Quando o convidado abrir o link e se cadastrar, o sistema
+    // lê esses dados da URL e associa o usuário à empresa.
+    // ============================================================
 
-        if (error) {
-            console.error("[equipe.ts] Erro retornado pelo Supabase (INSERT):", error);
+    const invitePayload = {
+        e: data.empresa_id,      // empresa_id
+        email: data.email,       // email convidado
+        p: data.papel,           // papel (cargo)
+        perm: data.permissoes_json || {},
+        ts: Date.now()           // timestamp para expiração
+    };
 
-            // Código 23505: Unique violation (e-mail já existe)
-            if (error.code === '23505') {
-                throw new Error('Este email já está cadastrado em outra conta ou equipe.');
-            }
+    // Codificar em base64 URL-safe
+    const encoded = btoa(JSON.stringify(invitePayload))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
 
-            throw new Error(`Erro no banco (Código ${error.code}): ${error.message}`);
-        }
+    const inviteLink = `${window.location.origin}/cadastro?invite=${encoded}`;
 
-        console.log("[equipe.ts] Sucesso! Registro criado (sem retorno para evitar hang).");
-        // Retornamos um objeto parcial para compatibilidade, já que não usamos .select()
-        return { success: true } as any;
+    console.log("[equipe.ts] Convite gerado localmente (sem DB)! Link:", inviteLink);
 
-    } catch (err: any) {
-        console.error("[equipe.ts] Exceção capturada em criarMembroEquipe:", err);
-        throw err;
-    }
+    return { success: true, token: encoded, inviteLink };
 }
 
 export async function atualizarMembroEquipe(id: string, updates: Partial<Usuario>) {

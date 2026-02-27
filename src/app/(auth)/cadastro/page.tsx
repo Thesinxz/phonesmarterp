@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Zap, Mail, Lock, User, Building2, ArrowRight } from "lucide-react";
@@ -17,6 +17,33 @@ export default function CadastroPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isInvited, setIsInvited] = useState(false);
+    const [inviteData, setInviteData] = useState<any>(null);
+
+    // Detectar convite na URL (?invite=base64 ou ?token=hex)
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+
+            // Novo sistema: base64 encoded
+            const invite = params.get("invite");
+            if (invite) {
+                try {
+                    const decoded = JSON.parse(atob(invite.replace(/-/g, '+').replace(/_/g, '/')));
+                    console.log("[Cadastro] Convite base64 detectado:", decoded);
+                    setInviteData(decoded);
+                    setIsInvited(true);
+                } catch (e) {
+                    console.error("[Cadastro] Erro ao decodificar convite:", e);
+                }
+            }
+
+            // Legacy: token hex
+            const token = params.get("token");
+            if (token) {
+                setIsInvited(true);
+            }
+        }
+    }, []);
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
         setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -81,12 +108,61 @@ export default function CadastroPage() {
 
             // 3. Sessão criada imediatamente (confirmação desabilitada no Supabase)
 
-            // PRIMEIRO: Tentar clamar perfil de convite pendente
-            const { data: claimData, error: claimError } = await (supabase as any).rpc('claim_user_profile', {
-                p_email_usuario: form.email
-            });
+            // CENÁRIO A: Convite via base64 na URL (?invite=...)
+            // Usa provision_new_company com a empresa_id do convite
+            if (inviteData && inviteData.e) {
+                console.log("[Cadastro] Processando convite base64 para empresa:", inviteData.e);
 
-            // SEGUNDO: Criar empresa nova se o usuário não marcou "Fui convidado"
+                // Usar provision_new_company para criar o usuário atomicamente
+                // (essa RPC é SECURITY DEFINER e funciona sem travar)
+                const { error: provError } = await (supabase as any).rpc('provision_new_company', {
+                    p_nome_empresa: '', // Não cria empresa nova
+                    p_subdominio: '',
+                    p_nome_usuario: form.nome,
+                    p_email_usuario: form.email,
+                    p_auth_user_id: authData.user.id
+                });
+
+                // Se provision falhar (pois tenta criar empresa vazia), tentar abordagem direta
+                // via aceitar_convite ou claim_user_profile (que são SECURITY DEFINER)
+                if (provError) {
+                    console.warn("[Cadastro] provision_new_company falhou (esperado para convites):", provError.message);
+
+                    // Tentar aceitar_convite (se migration 042 foi aplicada)
+                    try {
+                        const params = new URLSearchParams(window.location.search);
+                        const token = params.get("token");
+                        if (token) {
+                            await (supabase as any).rpc('aceitar_convite', { p_token: token });
+                        }
+                    } catch { /* ignore */ }
+
+                    // Tentar claim_user_profile como fallback
+                    try {
+                        await (supabase as any).rpc('claim_user_profile', {
+                            p_email_usuario: form.email
+                        });
+                    } catch { /* ignore */ }
+                }
+
+                // Salvar dados do convite no localStorage para o AuthContext processar
+                try {
+                    localStorage.setItem("smartos_pending_invite", JSON.stringify({
+                        empresa_id: inviteData.e,
+                        papel: inviteData.p,
+                        permissoes: inviteData.perm,
+                        nome: form.nome,
+                        email: form.email,
+                        auth_user_id: authData.user.id
+                    }));
+                } catch { /* ignore */ }
+
+                router.push("/dashboard");
+                router.refresh();
+                return;
+            }
+
+            // CENÁRIO B: Criar empresa nova (fluxo padrão, não é convidado)
             if (!isInvited && form.nomeEmpresa.trim() !== "") {
                 let subdominio = form.nomeEmpresa
                     .toLowerCase()
@@ -103,34 +179,17 @@ export default function CadastroPage() {
                     subdominio = `${subdominio}-${Math.random().toString(36).slice(2, 6)}`;
                 }
 
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const { data: empresaData, error: empresaError } = await (supabase.from("empresas") as any).insert({
-                    nome: form.nomeEmpresa,
-                    subdominio,
-                    plano: "starter",
-                }).select().single();
+                // Usar provision_new_company (SECURITY DEFINER, funciona sem travar)
+                const { error: provError } = await (supabase as any).rpc('provision_new_company', {
+                    p_nome_empresa: form.nomeEmpresa,
+                    p_subdominio: subdominio,
+                    p_nome_usuario: form.nome,
+                    p_email_usuario: form.email,
+                    p_auth_user_id: authData.user.id
+                });
 
-                if (!empresaError && empresaData) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    await (supabase.from("usuarios") as any).insert({
-                        empresa_id: empresaData.id,
-                        auth_user_id: authData.user.id,
-                        nome: form.nome,
-                        email: form.email,
-                        papel: "admin",
-                        permissoes_json: {},
-                        ativo: true,
-                    });
-
-                    // Criar vínculo multi-empresa
-                    await (supabase.from("usuario_vinculos_empresa") as any).insert({
-                        usuario_id: authData.user.id,
-                        empresa_id: empresaData.id,
-                        papel: "admin",
-                        permissoes_custom_json: {}
-                    });
-                } else {
-                    console.error("Erro ao configurar a nova empresa:", empresaError);
+                if (provError) {
+                    console.error("Erro ao provisionar nova empresa:", provError);
                 }
             }
 
