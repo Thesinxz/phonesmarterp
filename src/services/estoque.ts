@@ -72,21 +72,34 @@ export async function createProduto(produto: Database["public"]["Tables"]["produ
 }
 
 export async function createProdutos(produtos: Database["public"]["Tables"]["produtos"]["Insert"][]) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase.from("produtos") as any)
-        .insert(produtos)
-        .select();
+    console.log(`[Service:Estoque] Iniciando importação via RPC para ${produtos.length} produtos...`);
 
-    if (error) throw error;
+    try {
+        // Chamamos o RPC especializado que retorna apenas o NÚMERO de itens inseridos
+        // Isso é crucial para evitar que o PostgREST tente aplicar RLS no conjunto de resultados, o que causa o travamento.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error } = await (supabase.rpc("importar_produtos_massa" as any, {
+            p_produtos: produtos
+        }) as any);
 
-    // Registrar histórico em lote
-    if (data && data.length > 0) {
-        Promise.all(data.map((p: any) =>
-            addProdutoHistorico(p.id, p.empresa_id, "criacao", "Produto importado em lote.")
-        )).catch(e => console.error("Erro histórico em lote:", e));
+        if (error) {
+            console.error("[Service:Estoque] Erro no RPC de Importação:", error);
+            throw error;
+        }
+
+        const count = typeof data === 'number' ? data : 0;
+        console.log(`[Service:Estoque] Importação via RPC concluída. Total: ${count} itens.`);
+
+        // Como o RPC agora retorna apenas a contagem (por performance/RLS),
+        // não registramos histórico individual aqui para não onerar o banco.
+
+        // Retornamos um array vazio ou mockado se a tipagem exigir, 
+        // mas idealmente o chamador deve lidar com o sucesso/contagem.
+        return new Array(count).fill({}) as Produto[];
+    } catch (err: any) {
+        console.error("[Service:Estoque] Erro crítico no RPC createProdutos:", err);
+        throw err;
     }
-
-    return data as Produto[];
 }
 
 export async function updateProduto(id: string, produto: Partial<Database["public"]["Tables"]["produtos"]["Update"]>) {
@@ -116,6 +129,15 @@ export async function deleteProduto(id: string) {
     const { error } = await (supabase.from("produtos") as any)
         .delete()
         .eq("id", id);
+
+    if (error) throw error;
+}
+
+export async function deleteProdutos(ids: string[]) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from("produtos") as any)
+        .delete()
+        .in("id", ids);
 
     if (error) throw error;
 }

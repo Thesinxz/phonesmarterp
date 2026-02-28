@@ -19,30 +19,42 @@ export default function CadastroPage() {
     const [isInvited, setIsInvited] = useState(false);
     const [inviteData, setInviteData] = useState<any>(null);
 
-    // Detectar convite na URL (?invite=base64 ou ?token=hex)
     useEffect(() => {
-        if (typeof window !== "undefined") {
-            const params = new URLSearchParams(window.location.search);
+        // Validação MODO NATIVO (Database-Trigger)
+        async function loadInvite() {
+            if (typeof window !== "undefined") {
+                const params = new URLSearchParams(window.location.search);
+                const token = params.get("token");
 
-            // Novo sistema: base64 encoded
-            const invite = params.get("invite");
-            if (invite) {
-                try {
-                    const decoded = JSON.parse(atob(invite.replace(/-/g, '+').replace(/_/g, '/')));
-                    console.log("[Cadastro] Convite base64 detectado:", decoded);
-                    setInviteData(decoded);
-                    setIsInvited(true);
-                } catch (e) {
-                    console.error("[Cadastro] Erro ao decodificar convite:", e);
+                if (token) {
+                    try {
+                        // Faz a requisição de importação inline para evitar ciclo de dependência,
+                        // mas se equipe.ts estiver exportado certinho, podemos usar ele diretamente.
+                        const { validarConviteToken } = await import('@/services/equipe');
+                        const data = await validarConviteToken(token);
+
+                        if (data) {
+                            console.log("[Cadastro] Convite nativo válido detectado:", data);
+                            setInviteData(data);
+                            setIsInvited(true);
+
+                            // Pre-fill the form with invite data
+                            setForm(prev => ({
+                                ...prev,
+                                email: data.email || prev.email,
+                                nome: data.nome || prev.nome
+                            }));
+                        } else {
+                            console.warn("[Cadastro] Token inválido ou expirado.");
+                        }
+                    } catch (e) {
+                        console.error("[Cadastro] Erro ao carregar convite:", e);
+                    }
                 }
             }
-
-            // Legacy: token hex
-            const token = params.get("token");
-            if (token) {
-                setIsInvited(true);
-            }
         }
+
+        loadInvite();
     }, []);
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -57,18 +69,29 @@ export default function CadastroPage() {
         const supabase = createClient();
 
         try {
-            // 1. Create auth user
+            // 1. Criar usuário no Auth
+            // Se houver inviteData, inserimos o Token dentro dos metadados.
+            // O Trigger do PostgreSQL lerá isso e criará o vínculo com a empresa na mesma transação!
+            const userMetaData: any = {
+                nome: form.nome,
+                nome_empresa: form.nomeEmpresa
+            };
+
+            if (inviteData && inviteData.id) {
+                userMetaData.invite_token = inviteData.id;
+                console.log("[Cadastro] Enviando token de convite no signUp:", inviteData.id);
+            }
+
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: form.email,
                 password: form.senha,
                 options: {
-                    data: { nome: form.nome, nome_empresa: form.nomeEmpresa },
+                    data: userMetaData,
                     emailRedirectTo: `${window.location.origin}/auth/callback`,
                 },
             });
 
             if (authError) {
-                // Tratar erros comuns em português
                 if (authError.message.includes("already registered")) {
                     setError("Este email já está cadastrado. Faça login ou recupere sua senha.");
                 } else if (authError.message.includes("password")) {
@@ -87,20 +110,21 @@ export default function CadastroPage() {
             }
 
             // 2. Verificar se o Supabase exige confirmação de email
-            // Se authData.session é null, confirmação é obrigatória
             const needsEmailConfirmation = !authData.session;
 
             if (needsEmailConfirmation) {
-                // Não tenta criar empresa/usuário agora — será feito após confirmar
-                // Salvar dados no localStorage para provisionar após confirmação
-                try {
-                    localStorage.setItem("smartos_pending_signup", JSON.stringify({
-                        nome: form.nome,
-                        nomeEmpresa: form.nomeEmpresa,
-                        email: form.email,
-                        authUserId: authData.user.id,
-                    }));
-                } catch { /* ignore */ }
+                // Se é uma criação de NOVA empresa (não-convidado), salva o intent.
+                // Se é convidado, o gatilho JÁ vinculou o usuário no banco, não precisa fazer mais nada.
+                if (!isInvited) {
+                    try {
+                        localStorage.setItem("smartos_pending_signup", JSON.stringify({
+                            nome: form.nome,
+                            nomeEmpresa: form.nomeEmpresa,
+                            email: form.email,
+                            authUserId: authData.user.id,
+                        }));
+                    } catch { /* ignore */ }
+                }
 
                 router.push("/verificar-email");
                 return;
@@ -108,61 +132,15 @@ export default function CadastroPage() {
 
             // 3. Sessão criada imediatamente (confirmação desabilitada no Supabase)
 
-            // CENÁRIO A: Convite via base64 na URL (?invite=...)
-            // Usa provision_new_company com a empresa_id do convite
-            if (inviteData && inviteData.e) {
-                console.log("[Cadastro] Processando convite base64 para empresa:", inviteData.e);
-
-                // Usar provision_new_company para criar o usuário atomicamente
-                // (essa RPC é SECURITY DEFINER e funciona sem travar)
-                const { error: provError } = await (supabase as any).rpc('provision_new_company', {
-                    p_nome_empresa: '', // Não cria empresa nova
-                    p_subdominio: '',
-                    p_nome_usuario: form.nome,
-                    p_email_usuario: form.email,
-                    p_auth_user_id: authData.user.id
-                });
-
-                // Se provision falhar (pois tenta criar empresa vazia), tentar abordagem direta
-                // via aceitar_convite ou claim_user_profile (que são SECURITY DEFINER)
-                if (provError) {
-                    console.warn("[Cadastro] provision_new_company falhou (esperado para convites):", provError.message);
-
-                    // Tentar aceitar_convite (se migration 042 foi aplicada)
-                    try {
-                        const params = new URLSearchParams(window.location.search);
-                        const token = params.get("token");
-                        if (token) {
-                            await (supabase as any).rpc('aceitar_convite', { p_token: token });
-                        }
-                    } catch { /* ignore */ }
-
-                    // Tentar claim_user_profile como fallback
-                    try {
-                        await (supabase as any).rpc('claim_user_profile', {
-                            p_email_usuario: form.email
-                        });
-                    } catch { /* ignore */ }
-                }
-
-                // Salvar dados do convite no localStorage para o AuthContext processar
-                try {
-                    localStorage.setItem("smartos_pending_invite", JSON.stringify({
-                        empresa_id: inviteData.e,
-                        papel: inviteData.p,
-                        permissoes: inviteData.perm,
-                        nome: form.nome,
-                        email: form.email,
-                        auth_user_id: authData.user.id
-                    }));
-                } catch { /* ignore */ }
-
+            // CENÁRIO A: É um convidado. O Gatilho do BD (Trigger) já fez todo o trabalho de forma atômica!
+            // Redireciona imediatamente, AuthContext carregará o Perfil completo e o vínculo.
+            if (isInvited) {
+                console.log("[Cadastro] Convite nativo processado via Trigger. Redirecionando para dashboard.");
                 router.push("/dashboard");
                 router.refresh();
                 return;
             }
 
-            // CENÁRIO B: Criar empresa nova (fluxo padrão, não é convidado)
             if (!isInvited && form.nomeEmpresa.trim() !== "") {
                 let subdominio = form.nomeEmpresa
                     .toLowerCase()
@@ -263,13 +241,14 @@ export default function CadastroPage() {
                                     onChange={handleChange}
                                     placeholder="João Silva"
                                     required
-                                    className="w-full bg-white/10 border border-white/20 rounded-xl pl-10 pr-4 py-3 text-white placeholder:text-white/30 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400/50 transition-all"
+                                    readOnly={isInvited && !!inviteData?.nome}
+                                    className={`w-full bg-white/10 border border-white/20 rounded-xl pl-10 pr-4 py-3 text-white placeholder:text-white/30 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400/50 transition-all ${isInvited && !!inviteData?.nome ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 />
                             </div>
                         </div>
 
                         {/* Email */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-400 delay-75">
                             <label className="text-white/70 text-sm font-medium">Email</label>
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
@@ -280,7 +259,8 @@ export default function CadastroPage() {
                                     onChange={handleChange}
                                     placeholder="seu@email.com"
                                     required
-                                    className="w-full bg-white/10 border border-white/20 rounded-xl pl-10 pr-4 py-3 text-white placeholder:text-white/30 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400/50 transition-all"
+                                    readOnly={isInvited && !!inviteData?.email}
+                                    className={`w-full bg-white/10 border border-white/20 rounded-xl pl-10 pr-4 py-3 text-white placeholder:text-white/30 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400/50 transition-all ${isInvited && !!inviteData?.email ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 />
                             </div>
                         </div>

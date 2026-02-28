@@ -626,15 +626,21 @@ export default function CalculoEmMassa() {
             try {
                 // Preparar dados para inserção em massa
                 const produtosParaInserir = ocrResult.map(item => {
-                    const costBrl = parseFloat(item.cost) * (currencyType === 'USD' ? dollarRate : 1);
+                    const baseCost = parseFloat(item.cost) || 0;
+                    const dollar = (currencyType === 'USD' ? dollarRate : 1) || 1;
+                    const costBrl = baseCost * dollar;
+
                     const custoCentavos = Math.round(costBrl * 100);
-                    const vendaCentavos = Math.round(parseFloat(item.price) * 100);
+                    const vendaFloat = parseFloat(item.price) || (costBrl * 1.3); // Fallback margin 30% if price is NaN
+                    const vendaCentavos = Math.round(vendaFloat * 100);
+
+                    console.log(`[Mass Import] Preparando item: ${item.item} | Custo: ${custoCentavos} | Venda: ${vendaCentavos}`);
 
                     return {
                         empresa_id: profile.empresa_id,
-                        nome: item.item,
-                        preco_custo_centavos: custoCentavos,
-                        preco_venda_centavos: vendaCentavos,
+                        nome: item.item || "Produto sem nome",
+                        preco_custo_centavos: isNaN(custoCentavos) ? 0 : custoCentavos,
+                        preco_venda_centavos: isNaN(vendaCentavos) ? 0 : vendaCentavos,
                         estoque_qtd: 1,
                         estoque_minimo: 1,
                         ncm: "85171231",
@@ -655,14 +661,18 @@ export default function CalculoEmMassa() {
                         cest: null,
                         saude_bateria: null,
                         memoria_ram: null,
-                        imagem_url: null,
+                        imagem_url: null
                     };
                 });
 
-                console.log("[Mass Import] Inserindo no Supabase...", produtosParaInserir.length, "itens");
+                if (produtosParaInserir.some(p => !p.empresa_id)) {
+                    throw new Error("Erro interno: empresa_id não encontrado no perfil.");
+                }
+
+                console.log("[Mass Import] Chamando createProdutos com", produtosParaInserir.length, "itens");
                 const data = await createProdutos(produtosParaInserir);
 
-                console.log("[Mass Import] Inserção concluída:", data?.length);
+                console.log("[Mass Import] Inserção via service concluída:", data?.length);
                 return data;
             } catch (err: any) {
                 console.error("[Mass Import] Try/Catch Error:", err);

@@ -21,18 +21,27 @@ export async function getUsuarioEmpresas(authUserId: string) {
     // para manter compatibilidade e facilitar a transição.
 
     try {
-        const { data: vinculos, error } = await (supabase.from("usuario_vinculos_empresa" as any))
-            .select(`
-                *,
-                empresa:empresas(*)
-            `)
-            .eq("usuario_id", authUserId);
+        // Primeiro, encontrar o ID interno do usuário baseado no authUserId
+        const { data: internalUser } = await supabase
+            .from("usuarios")
+            .select("id")
+            .eq("auth_user_id", authUserId)
+            .maybeSingle();
 
-        if (!error && vinculos && vinculos.length > 0) {
-            return vinculos as CompanyLink[];
+        if (internalUser && (internalUser as any).id) {
+            const { data: vinculos, error: vinculosError } = await (supabase.from("usuario_vinculos_empresa" as any))
+                .select(`
+                    *,
+                    empresa:empresas(*)
+                `)
+                .eq("usuario_id", (internalUser as any).id);
+
+            if (!vinculosError && vinculos && vinculos.length > 0) {
+                return vinculos as CompanyLink[];
+            }
         }
     } catch (e) {
-        console.warn("[Auth] Tabela 'usuario_vinculos_empresa' não encontrada. Usando fallback...");
+        console.warn("[Auth] Erro ao buscar vínculos na tabela 'usuario_vinculos_empresa'. Usando fallback...", e);
     }
 
     // Fallback: Buscar na tabela 'usuarios' atual (1-to-1)

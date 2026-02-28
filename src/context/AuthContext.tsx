@@ -77,32 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
 
             if (!data && userEmail) {
-                // 1. Tentar aceitar convite via Token se existir na URL
-                if (typeof window !== "undefined") {
-                    const params = new URLSearchParams(window.location.search);
-                    const token = params.get("token");
-                    if (token) {
-                        try {
-                            console.log("[AuthContext] Token de convite detectado na URL, aceitando...");
-                            const { data: inviteData, error: inviteError } = await (supabase as any).rpc('aceitar_convite', {
-                                p_token: token
-                            });
-                            if (!inviteError && inviteData?.success) {
-                                console.log("[AuthContext] Convite via token aceito com sucesso!");
-                                // Limpar token da URL para não processar de novo
-                                const url = new URL(window.location.href);
-                                url.searchParams.delete("token");
-                                window.history.replaceState({}, "", url.toString());
-
-                                return fetchProfile(userId, userEmail);
-                            }
-                        } catch (e) {
-                            console.error("[AuthContext] Erro ao aceitar convite via token:", e);
-                        }
-                    }
-                }
-
-                // 2. Tentar reivindicar um convite pendente legado por e-mail
+                // 1. Tentar reivindicar um convite pendente legado por e-mail (fallback para quem não usou link)
                 try {
                     const { data: claimData, error: claimError } = await (supabase as any).rpc('claim_user_profile', {
                         p_email_usuario: userEmail
@@ -110,67 +85,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                     if (!claimError && claimData && claimData.success) {
                         console.log("[AuthContext] Perfil pendente reivindicado com sucesso!", claimData);
-                        // Reiniciar o fetchProfile agora que o vinculo e o auth_user_id existem
                         return fetchProfile(userId, userEmail);
                     }
                 } catch (e) {
                     console.error("[AuthContext] Erro ao tentar reivindicar perfil:", e);
                 }
 
-                // Se chegar aqui sem profile, o fluxo de auto-provisão deve rodar.
-                // Mas para multi-empresa, se já temos vínculos (companies.length > 0), não deveríamos auto-provisionar.
+                // 2. Auto-provisão (Se o usuário não foi vinculado pelo Trigger nem reivindicou perfil)
                 if (companies.length === 0) {
-                    // PRIMEIRO: Verificar se há um convite pendente (sistema base64)
-                    let pendingInvite: any = null;
-                    try {
-                        const raw = localStorage.getItem("smartos_pending_invite");
-                        if (raw) {
-                            pendingInvite = JSON.parse(raw);
-                            localStorage.removeItem("smartos_pending_invite");
-                        }
-                    } catch { }
+                    console.log("[AuthContext] Nenhum vínculo encontrado, iniciando auto-provisão de uma NOVA empresa...");
 
-                    if (pendingInvite && pendingInvite.empresa_id) {
-                        console.log("[AuthContext] Processando convite pendente de localStorage:", pendingInvite);
-
-                        // Tentar aceitar_convite como primeira opção
-                        try {
-                            const { data: acceptData, error: acceptErr } = await (supabase as any).rpc('aceitar_convite', {
-                                p_token: pendingInvite.token || ''
-                            });
-                            if (!acceptErr && acceptData?.success) {
-                                console.log("[AuthContext] Convite aceito via RPC!");
-                                return fetchProfile(userId, userEmail);
-                            }
-                        } catch { /* ignore */ }
-
-                        // Fallback: Tentar vincular_usuario_equipe 
-                        try {
-                            const { error: vincErr } = await (supabase as any).rpc('vincular_usuario_equipe', {
-                                p_id_empresa: pendingInvite.empresa_id,
-                                p_email: userEmail,
-                                p_nome: pendingInvite.nome || "Convidado",
-                                p_papel: pendingInvite.papel || "atendente",
-                                p_permissoes: pendingInvite.permissoes || {}
-                            });
-                            if (!vincErr) {
-                                console.log("[AuthContext] Vinculado via RPC vincular_usuario_equipe!");
-                                return fetchProfile(userId, userEmail);
-                            }
-                        } catch { /* ignore */ }
-
-                        // Último recurso: claim_user_profile
-                        try {
-                            const { data: claimData } = await (supabase as any).rpc('claim_user_profile', {
-                                p_email_usuario: userEmail
-                            });
-                            if (claimData?.success) {
-                                return fetchProfile(userId, userEmail);
-                            }
-                        } catch { /* ignore */ }
-                    }
-
-                    // SEGUNDO: Fluxo padrão de auto-provisão (nova empresa)
                     let pendingData: any = null;
                     try {
                         const raw = localStorage.getItem("smartos_pending_signup");
@@ -212,8 +136,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                 }
             }
-        } catch (err) {
-            console.error("Unexpected error fetching profile:", err);
+        } catch (error) {
+            console.error("Error fetching profile:", error);
+        } finally {
+            setIsLoading(false);
         }
     }, [supabase]);
 

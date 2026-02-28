@@ -21,9 +21,10 @@ import {
     Square,
     History
 } from "lucide-react";
-import { getProdutos, type ProdutoFilters } from "@/services/estoque";
+import { getProdutos, deleteProduto, deleteProdutos, type ProdutoFilters } from "@/services/estoque";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { toast } from "sonner";
 import { type Produto } from "@/types/database";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
@@ -98,6 +99,31 @@ export default function EstoquePage() {
             setSelectedIds([]);
         } else {
             setSelectedIds(produtos.map(p => p.id));
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm("Tem certeza que deseja excluir este produto?")) return;
+        try {
+            await deleteProduto(id);
+            toast.success("Produto excluído com sucesso!");
+            loadProdutos();
+        } catch (error) {
+            console.error("Erro ao excluir produto:", error);
+            toast.error("Erro ao excluir produto.");
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (!confirm(`Tem certeza que deseja excluir ${selectedIds.length} produtos?`)) return;
+        try {
+            await deleteProdutos(selectedIds);
+            toast.success(`${selectedIds.length} produtos excluídos com sucesso!`);
+            setSelectedIds([]);
+            loadProdutos();
+        } catch (error) {
+            console.error("Erro ao excluir produtos em massa:", error);
+            toast.error("Erro ao excluir produtos em massa.");
         }
     };
 
@@ -351,7 +377,10 @@ export default function EstoquePage() {
                                                         <Link href={`/estoque/${p.id}`} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-brand-500">
                                                             <Edit size={16} />
                                                         </Link>
-                                                        <button className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500">
+                                                        <button
+                                                            onClick={() => handleDelete(p.id)}
+                                                            className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500"
+                                                        >
                                                             <Trash2 size={16} />
                                                         </button>
                                                     </div>
@@ -414,6 +443,13 @@ export default function EstoquePage() {
                             <Printer size={16} />
                             Imprimir Etiquetas
                         </Link>
+                        <button
+                            onClick={handleBulkDelete}
+                            className="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-red-500/20"
+                        >
+                            <Trash2 size={16} />
+                            Excluir Selecionados
+                        </button>
                     </div>
                 </div>
             )}

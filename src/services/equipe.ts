@@ -25,31 +25,67 @@ export async function criarMembroEquipe(data: Omit<Usuario, "id" | "created_at">
     console.log("[equipe.ts] Iniciando criarMembroEquipe para:", data.email);
 
     // ============================================================
-    // ABORDAGEM 100% CLIENT-SIDE — Sem chamadas ao banco de dados!
-    // Codificamos os dados do convite diretamente na URL.
-    // Quando o convidado abrir o link e se cadastrar, o sistema
-    // lê esses dados da URL e associa o usuário à empresa.
+    // NOVO SISTEMA NATIVO DE CONVITE (TRIGGER-BASED)
+    // Inserimos o convite na tabela `equipe_convites`.
+    // Retornamos o UUID (token) para ser usado no link.
+    // O Trigger fará a vinculação automática no momento do Cadastro.
     // ============================================================
 
-    const invitePayload = {
-        e: data.empresa_id,      // empresa_id
-        email: data.email,       // email convidado
-        p: data.papel,           // papel (cargo)
-        perm: data.permissoes_json || {},
-        ts: Date.now()           // timestamp para expiração
+    // Buscar o ID do usuário logado (quem está criando o convite)
+    const { data: authUser } = await supabase.auth.getUser();
+
+    const convite = {
+        empresa_id: data.empresa_id,
+        email: data.email,
+        nome: data.nome || 'Convidado',
+        papel: data.papel,
+        permissoes_json: data.permissoes_json || {},
+        criado_por: undefined // opcional, apenas se usássemos RPC segura, mas o RLS fará o check do auth.uid()
     };
 
-    // Codificar em base64 URL-safe
-    const encoded = btoa(JSON.stringify(invitePayload))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
+    const { data: inserted, error } = await supabase
+        .from("equipe_convites")
+        .insert(convite)
+        .select()
+        .single();
 
-    const inviteLink = `${window.location.origin}/cadastro?invite=${encoded}`;
+    if (error) {
+        console.error("[equipe.ts] Erro ao criar convite nativo:", error);
+        throw error;
+    }
 
-    console.log("[equipe.ts] Convite gerado localmente (sem DB)! Link:", inviteLink);
+    const token = inserted.id; // UUID gerado pelo banco
+    const inviteLink = `${window.location.origin}/cadastro?token=${token}`;
 
-    return { success: true, token: encoded, inviteLink };
+    console.log("[equipe.ts] Convite nativo gerado no DB! Link:", inviteLink);
+
+    return { success: true, token, inviteLink };
+}
+
+/**
+ * Valida um token de convite e retorna os dados dele para pré-preenchimento
+ */
+export async function validarConviteToken(token: string) {
+    if (!token) return null;
+
+    try {
+        const { data, error } = await supabase
+            .from("equipe_convites")
+            .select("id, empresa_id, nome, email, papel")
+            .eq("id", token)
+            .is("usado_em", null)
+            .gt("expira_em", new Date().toISOString())
+            .single();
+
+        if (error || !data) {
+            console.warn("[equipe.ts] Convite inválido ou expirado.", error);
+            return null;
+        }
+
+        return data;
+    } catch (e) {
+        return null;
+    }
 }
 
 export async function atualizarMembroEquipe(id: string, updates: Partial<Usuario>) {

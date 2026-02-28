@@ -28,7 +28,7 @@ import {
     Clock,
     Printer
 } from "lucide-react";
-import { getProdutoById, updateProduto } from "@/services/estoque";
+import { getProdutoById, updateProduto, deleteProduto } from "@/services/estoque";
 import { getProdutoHistorico } from "@/services/historico_produto";
 import { uploadProdutoImage } from "@/services/estoque";
 import { useAuth } from "@/context/AuthContext";
@@ -238,6 +238,23 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
         }
     }
 
+    async function handleDelete() {
+        if (!confirm("Tem certeza que deseja excluir este produto permanentemente?")) return;
+
+        setLoading(true);
+        try {
+            await deleteProduto(params.id);
+            toast.success("Produto excluído com sucesso!");
+            router.push("/estoque");
+            router.refresh();
+        } catch (error) {
+            console.error("Erro ao excluir produto:", error);
+            toast.error("Erro ao excluir produto.");
+        } finally {
+            setLoading(false);
+        }
+    }
+
     return (
         <div className="space-y-6 page-enter pb-12">
             {/* Header */}
@@ -260,7 +277,9 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                     </button>
                     <button
                         type="button"
-                        className="h-10 px-4 rounded-xl border border-red-200 text-red-500 flex items-center gap-2 text-sm font-bold hover:bg-red-50 transition-all"
+                        onClick={handleDelete}
+                        disabled={loading}
+                        className="h-10 px-4 rounded-xl border border-red-200 text-red-500 flex items-center gap-2 text-sm font-bold hover:bg-red-50 transition-all disabled:opacity-50"
                     >
                         <Trash2 size={16} />
                         Excluir

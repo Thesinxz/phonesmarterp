@@ -39,6 +39,18 @@ export interface Database {
                 Insert: Omit<Database["public"]["Tables"]["usuarios"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["usuarios"]["Insert"]>;
             };
+            usuario_vinculos_empresa: {
+                Row: {
+                    id: string;
+                    usuario_id: string;
+                    empresa_id: string;
+                    papel: string;
+                    permissoes_custom_json: Json;
+                    created_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["usuario_vinculos_empresa"]["Row"], "id" | "created_at">;
+                Update: Partial<Database["public"]["Tables"]["usuario_vinculos_empresa"]["Insert"]>;
+            };
             clientes: {
                 Row: {
                     id: string;

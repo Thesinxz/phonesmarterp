@@ -47,8 +47,15 @@ export function useOnboardingStatus() {
                     console.log("[Onboarding] Status carregado:", data.valor);
                     setStatus(data.valor as OnboardingStatus);
                 } else {
-                    console.log("[Onboarding] Nenhum status encontrado, iniciando padrão.");
-                    setStatus({ completed: false, step: 1, skipped: false });
+                    console.log("[Onboarding] Nenhum status encontrado, verificando papel do usuario...");
+                    // Se o usuário não é admin, pulamos o onboarding automaticamente
+                    if (profile?.papel && profile.papel !== 'admin') {
+                        console.log("[Onboarding] Usuário não é admin, pulando onboarding silenciosamente.");
+                        setStatus({ completed: true, step: 8, skipped: true });
+                    } else {
+                        console.log("[Onboarding] Usuário é admin, iniciando processo padrão.");
+                        setStatus({ completed: false, step: 1, skipped: false });
+                    }
                 }
             } catch (err) {
                 console.error("[Onboarding] Exceção ao carregar:", err);
