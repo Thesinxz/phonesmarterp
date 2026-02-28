@@ -78,9 +78,9 @@ export async function createProdutos(produtos: Database["public"]["Tables"]["pro
         // Chamamos o RPC especializado que retorna apenas o NÚMERO de itens inseridos
         // Isso é crucial para evitar que o PostgREST tente aplicar RLS no conjunto de resultados, o que causa o travamento.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data, error } = await (supabase.rpc("importar_produtos_massa" as any, {
+        const { data, error } = await (supabase as any).rpc("importar_produtos_massa", {
             p_produtos: produtos
-        }) as any);
+        });
 
         if (error) {
             console.error("[Service:Estoque] Erro no RPC de Importação:", error);
