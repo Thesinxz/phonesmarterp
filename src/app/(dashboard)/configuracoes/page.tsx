@@ -423,7 +423,8 @@ export default function ConfiguracoesPage() {
 
             if (chave === "financeiro") {
                 invalidateFinanceCache();
-                await refreshFinanceConfig();
+                // Não dar await aqui para não travar a UI caso o DB demore
+                refreshFinanceConfig().catch(e => console.error("Erro no refresh pós-save:", e));
             }
         } catch (err: any) {
             console.error("[Config] Erro capturado no catch:", err);
@@ -1026,9 +1027,30 @@ export default function ConfiguracoesPage() {
                                                 </div>
                                             </div>
                                             <div className="relative">
-                                                <input type="number" step="0.01" className="input-glass mt-1 font-bold text-brand-600 pl-8"
-                                                    value={financeiroConfig.cotacao_dolar_paraguai}
-                                                    onChange={e => setFinanceiroConfig(p => ({ ...p, cotacao_dolar_paraguai: Number(e.target.value) }))} />
+                                                <input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    className="input-glass mt-1 font-bold text-brand-600 pl-8"
+                                                    value={(financeiroConfig as any)._temp_dolar ?? (financeiroConfig.cotacao_dolar_paraguai === 0 ? "" : financeiroConfig.cotacao_dolar_paraguai.toString().replace('.', ','))}
+                                                    placeholder="0,00"
+                                                    onChange={e => {
+                                                        const raw = e.target.value.replace('.', ',');
+                                                        const clean = raw.replace(',', '.');
+                                                        if (raw === "" || /^\d*[,]?\d*$/.test(raw)) {
+                                                            setFinanceiroConfig(p => ({
+                                                                ...p,
+                                                                cotacao_dolar_paraguai: raw === "" || isNaN(Number(clean)) ? 0 : Number(clean),
+                                                                _temp_dolar: raw
+                                                            }));
+                                                        }
+                                                    }}
+                                                    onBlur={() => {
+                                                        setFinanceiroConfig(p => {
+                                                            const { _temp_dolar, ...rest } = p as any;
+                                                            return rest;
+                                                        });
+                                                    }}
+                                                />
                                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">$</div>
                                             </div>
                                             <p className="text-[9px] text-slate-400 mt-1.5 font-medium leading-tight">
@@ -1043,7 +1065,7 @@ export default function ConfiguracoesPage() {
                                     <div className="space-y-4">
                                         {(financeiroConfig.categorias || []).map((cat, idx) => (
                                             <div key={idx} className="grid grid-cols-12 gap-3 items-end bg-white/50 p-4 rounded-2xl border border-slate-100 hover:border-brand-100 transition-all">
-                                                <div className="col-span-3">
+                                                <div className="col-span-2">
                                                     <label className="text-[10px] font-bold text-slate-400 uppercase">Nome</label>
                                                     <input className="input-glass h-9 text-xs" value={cat.nome}
                                                         onChange={e => {
@@ -1052,7 +1074,21 @@ export default function ConfiguracoesPage() {
                                                             setFinanceiroConfig(p => ({ ...p, categorias: newCats }));
                                                         }} />
                                                 </div>
-                                                <div className="col-span-2">
+                                                <div className="col-span-3">
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Gateway Padrão</label>
+                                                    <select className="input-glass h-9 text-[10px] font-bold" value={cat.default_gateway_id || ""}
+                                                        onChange={e => {
+                                                            const newCats = [...financeiroConfig.categorias];
+                                                            newCats[idx].default_gateway_id = e.target.value || undefined;
+                                                            setFinanceiroConfig(p => ({ ...p, categorias: newCats }));
+                                                        }}>
+                                                        <option value="">Padrão Sistema</option>
+                                                        {(financeiroConfig.gateways || []).map(gw => (
+                                                            <option key={gw.id} value={gw.id}>{gw.nome}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div className="col-span-1">
                                                     <label className="text-[10px] font-bold text-slate-400 uppercase">Tipo</label>
                                                     <select className="input-glass h-9 text-[10px] font-bold" value={cat.tipo_margem}
                                                         onChange={e => {
@@ -1066,24 +1102,51 @@ export default function ConfiguracoesPage() {
                                                 </div>
                                                 <div className="col-span-2">
                                                     <label className="text-[10px] font-bold text-slate-400 uppercase">Margem</label>
-                                                    <input type="number" className="input-glass h-9 text-xs" value={cat.margem_padrao}
+                                                    <input
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        className="input-glass h-9 text-xs"
+                                                        value={(cat as any)._temp_margem ?? (cat.margem_padrao === 0 ? (cat as any)._temp_empty ? "" : "0" : cat.margem_padrao.toString().replace('.', ','))}
+                                                        placeholder="0"
                                                         onChange={e => {
+                                                            const raw = e.target.value.replace('.', ',');
+                                                            const clean = raw.replace(',', '.');
+                                                            if (raw === "" || /^\d*[,]?\d*$/.test(raw)) {
+                                                                const newCats = [...financeiroConfig.categorias];
+                                                                newCats[idx].margem_padrao = raw === "" || isNaN(Number(clean)) ? 0 : Number(clean);
+                                                                (newCats[idx] as any)._temp_margem = raw;
+                                                                (newCats[idx] as any)._temp_empty = raw === "";
+                                                                setFinanceiroConfig(p => ({ ...p, categorias: newCats }));
+                                                            }
+                                                        }}
+                                                        onBlur={() => {
                                                             const newCats = [...financeiroConfig.categorias];
-                                                            newCats[idx].margem_padrao = Number(e.target.value);
+                                                            delete (newCats[idx] as any)._temp_margem;
+                                                            delete (newCats[idx] as any)._temp_empty;
                                                             setFinanceiroConfig(p => ({ ...p, categorias: newCats }));
-                                                        }} />
+                                                        }}
+                                                    />
                                                 </div>
                                                 <div className="col-span-2">
                                                     <label className="text-[10px] font-bold text-slate-400 uppercase">Garantia</label>
-                                                    <input type="number" className="input-glass h-9 text-xs" value={cat.garantia_padrao_dias}
+                                                    <input
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        className="input-glass h-9 text-xs"
+                                                        value={cat.garantia_padrao_dias === 0 ? "" : cat.garantia_padrao_dias.toString()}
+                                                        placeholder="0"
                                                         onChange={e => {
-                                                            const newCats = [...financeiroConfig.categorias];
-                                                            newCats[idx].garantia_padrao_dias = Number(e.target.value);
-                                                            setFinanceiroConfig(p => ({ ...p, categorias: newCats }));
-                                                        }} />
+                                                            const val = e.target.value;
+                                                            if (val === "" || !isNaN(Number(val))) {
+                                                                const newCats = [...financeiroConfig.categorias];
+                                                                newCats[idx].garantia_padrao_dias = val === "" ? 0 : Number(val);
+                                                                setFinanceiroConfig(p => ({ ...p, categorias: newCats }));
+                                                            }
+                                                        }}
+                                                    />
                                                 </div>
-                                                <div className="col-span-2">
-                                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">Exigir NF?</label>
+                                                <div className="col-span-1">
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">NF?</label>
                                                     <button
                                                         onClick={() => {
                                                             const newCats = [...financeiroConfig.categorias];
@@ -1095,7 +1158,7 @@ export default function ConfiguracoesPage() {
                                                             cat.nf_obrigatoria ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-slate-50 border-slate-200 text-slate-400"
                                                         )}
                                                     >
-                                                        {cat.nf_obrigatoria ? "SIM" : "NÃO"}
+                                                        {cat.nf_obrigatoria ? "S" : "N"}
                                                     </button>
                                                 </div>
                                                 <div className="col-span-1">
@@ -1118,7 +1181,8 @@ export default function ConfiguracoesPage() {
                                                     margem_padrao: 0,
                                                     tipo_margem: "porcentagem",
                                                     garantia_padrao_dias: 90,
-                                                    nf_obrigatoria: false
+                                                    nf_obrigatoria: false,
+                                                    default_gateway_id: undefined
                                                 }]
                                             }))}
                                             className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-xs font-bold text-slate-400 hover:border-brand-300 hover:text-brand-500 transition-all">
@@ -1184,21 +1248,53 @@ export default function ConfiguracoesPage() {
                                                         <div className="grid grid-cols-2 gap-4">
                                                             <div>
                                                                 <label className="label-sm">Taxa Pix (%) — {gw.nome}</label>
-                                                                <input type="number" className="input-glass mt-1" value={gw.taxa_pix_pct}
+                                                                <input
+                                                                    type="text"
+                                                                    inputMode="decimal"
+                                                                    className="input-glass mt-1"
+                                                                    value={(gw as any)._temp_pix ?? (gw.taxa_pix_pct === 0 ? "" : gw.taxa_pix_pct.toString().replace('.', ','))}
+                                                                    placeholder="0,00"
                                                                     onChange={e => {
+                                                                        const raw = e.target.value.replace('.', ',');
+                                                                        const clean = raw.replace(',', '.');
+                                                                        if (raw === "" || /^\d*[,]?\d*$/.test(raw)) {
+                                                                            const newGws = [...financeiroConfig.gateways];
+                                                                            newGws[idx].taxa_pix_pct = raw === "" || isNaN(Number(clean)) ? 0 : Number(clean);
+                                                                            (newGws[idx] as any)._temp_pix = raw;
+                                                                            setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
+                                                                        }
+                                                                    }}
+                                                                    onBlur={() => {
                                                                         const newGws = [...financeiroConfig.gateways];
-                                                                        newGws[idx].taxa_pix_pct = Number(e.target.value);
+                                                                        delete (newGws[idx] as any)._temp_pix;
                                                                         setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
-                                                                    }} />
+                                                                    }}
+                                                                />
                                                             </div>
                                                             <div>
                                                                 <label className="label-sm">Taxa Débito (%) — {gw.nome}</label>
-                                                                <input type="number" className="input-glass mt-1" value={gw.taxa_debito_pct}
+                                                                <input
+                                                                    type="text"
+                                                                    inputMode="decimal"
+                                                                    className="input-glass mt-1"
+                                                                    value={(gw as any)._temp_debito ?? (gw.taxa_debito_pct === 0 ? "" : gw.taxa_debito_pct.toString().replace('.', ','))}
+                                                                    placeholder="0,00"
                                                                     onChange={e => {
+                                                                        const raw = e.target.value.replace('.', ',');
+                                                                        const clean = raw.replace(',', '.');
+                                                                        if (raw === "" || /^\d*[,]?\d*$/.test(raw)) {
+                                                                            const newGws = [...financeiroConfig.gateways];
+                                                                            newGws[idx].taxa_debito_pct = raw === "" || isNaN(Number(clean)) ? 0 : Number(clean);
+                                                                            (newGws[idx] as any)._temp_debito = raw;
+                                                                            setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
+                                                                        }
+                                                                    }}
+                                                                    onBlur={() => {
                                                                         const newGws = [...financeiroConfig.gateways];
-                                                                        newGws[idx].taxa_debito_pct = Number(e.target.value);
+                                                                        delete (newGws[idx] as any)._temp_debito;
                                                                         setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
-                                                                    }} />
+                                                                    }}
+                                                                />
                                                             </div>
                                                         </div>
 
@@ -1209,13 +1305,27 @@ export default function ConfiguracoesPage() {
                                                                     <div key={tIdx} className="space-y-1">
                                                                         <label className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{taxa.parcela}x (%)</label>
                                                                         <input
-                                                                            type="number"
+                                                                            type="text"
+                                                                            inputMode="decimal"
                                                                             className="input-glass h-8 text-[11px] font-bold text-center"
-                                                                            value={taxa.taxa}
+                                                                            value={(taxa as any)._temp ?? (taxa.taxa === 0 ? "" : taxa.taxa.toString().replace('.', ','))}
+                                                                            placeholder="0,00"
                                                                             onChange={e => {
+                                                                                const raw = e.target.value.replace('.', ',');
+                                                                                const clean = raw.replace(',', '.');
+                                                                                if (raw === "" || /^\d*[,]?\d*$/.test(raw)) {
+                                                                                    const newGws = [...financeiroConfig.gateways];
+                                                                                    const newTaxas = [...newGws[idx].taxas_credito];
+                                                                                    newTaxas[tIdx].taxa = raw === "" || isNaN(Number(clean)) ? 0 : Number(clean);
+                                                                                    (newTaxas[tIdx] as any)._temp = raw;
+                                                                                    newGws[idx].taxas_credito = newTaxas;
+                                                                                    setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
+                                                                                }
+                                                                            }}
+                                                                            onBlur={() => {
                                                                                 const newGws = [...financeiroConfig.gateways];
                                                                                 const newTaxas = [...newGws[idx].taxas_credito];
-                                                                                newTaxas[tIdx].taxa = Number(e.target.value);
+                                                                                delete (newTaxas[tIdx] as any)._temp;
                                                                                 newGws[idx].taxas_credito = newTaxas;
                                                                                 setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
                                                                             }}
@@ -1229,20 +1339,23 @@ export default function ConfiguracoesPage() {
                                             </div>
                                         ))}
                                         <button
-                                            onClick={() => setFinanceiroConfig(p => ({
-                                                ...p,
-                                                gateways: [...(p.gateways || []), {
-                                                    id: Math.random().toString(36).substr(2, 9),
-                                                    nome: "Novo Gateway",
-                                                    taxa_fixa: 0,
-                                                    taxa_porcentagem: 0,
-                                                    taxa_pix_pct: 0,
-                                                    taxa_debito_pct: 0,
-                                                    taxas_credito: Array.from({ length: 21 }, (_, i) => ({ parcela: i + 1, taxa: 0 })),
-                                                    is_default: false,
-                                                    enabled: true
-                                                }]
-                                            }))}
+                                            onClick={() => {
+                                                const nextId = `gw_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+                                                setFinanceiroConfig(p => ({
+                                                    ...p,
+                                                    gateways: [...(p.gateways || []), {
+                                                        id: nextId,
+                                                        nome: `Novo Gateway ${p.gateways?.length + 1}`,
+                                                        taxa_pix_pct: 0,
+                                                        taxa_debito_pct: 0,
+                                                        taxas_credito: Array.from({ length: 21 }, (_, i) => ({ parcela: i + 1, taxa: 0 })),
+                                                        is_default: false,
+                                                        enabled: true
+                                                    }]
+                                                }));
+                                                // Expandir automaticamente o novo gateway para edição
+                                                setExpandedGatewayId(nextId);
+                                            }}
                                             className="w-full py-3 border-2 border-dashed border-slate-200 rounded-2xl text-[10px] font-black text-slate-400 hover:border-brand-300 hover:text-brand-500 transition-all uppercase tracking-widest"
                                         >
                                             + Novo Gateway de Pagamento

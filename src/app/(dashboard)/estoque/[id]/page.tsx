@@ -547,7 +547,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                             </div>
 
                             {/* Preview de preços por forma de pagamento */}
-                            {defaultGateway && parseFloat(form.precoVenda.replace(',', '.')) > 0 && (
+                            {config && parseFloat(form.precoVenda.replace(',', '.')) > 0 && (
                                 <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
                                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                                         <Info size={10} /> Preços por Forma de Pagamento
@@ -555,14 +555,23 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                     {(() => {
                                         const vendaCentavos = Math.round(parseFloat(form.precoVenda.replace(',', '.')) * 100);
                                         const fmt = (c: number) => (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+                                        const cat = config.categorias.find(c => c.nome === form.categoria);
+                                        const effectiveGateway = (cat?.default_gateway_id && config.gateways)
+                                            ? (config.gateways.find(g => g.id === cat.default_gateway_id) || defaultGateway)
+                                            : defaultGateway;
+
+                                        if (!effectiveGateway) return null;
+
                                         const pix = vendaCentavos; // base
-                                        const debito = defaultGateway.taxa_debito_pct > 0
-                                            ? Math.round(vendaCentavos / (1 - defaultGateway.taxa_debito_pct / 100))
+                                        const debito = effectiveGateway.taxa_debito_pct > 0
+                                            ? Math.round(vendaCentavos / (1 - effectiveGateway.taxa_debito_pct / 100))
                                             : vendaCentavos;
-                                        const t12 = defaultGateway.taxas_credito?.[11];
+                                        const t12 = effectiveGateway.taxas_credito?.[11];
                                         const credito12 = t12 && t12.taxa > 0
                                             ? Math.round(vendaCentavos / (1 - t12.taxa / 100))
                                             : vendaCentavos;
+
                                         return (
                                             <div className="flex items-center gap-3 text-xs">
                                                 <span className="flex items-center gap-1 text-emerald-600 font-bold">
@@ -653,14 +662,13 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                                 <label className="label-sm flex items-center gap-1.5"><Battery size={12} className="text-slate-400" /> Saúde Bateria (%)</label>
                                                 <div className="relative mt-1">
                                                     <input
-                                                        type="number"
+                                                        type="text"
+                                                        inputMode="numeric"
                                                         name="saudeBateria"
                                                         value={form.saudeBateria}
                                                         onChange={handleChange}
-                                                        className="input-glass pr-8"
-                                                        placeholder="80 a 100"
-                                                        min="0"
-                                                        max="100"
+                                                        className="input-glass mt-1.5 font-bold text-center"
+                                                        placeholder="100"
                                                     />
                                                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">%</span>
                                                 </div>
@@ -735,23 +743,25 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                 <div>
                                     <label className="text-sm font-semibold text-slate-700">Qtd em Estoque</label>
                                     <input
-                                        required
-                                        type="number"
+                                        type="text"
+                                        inputMode="numeric"
                                         name="estoqueQtd"
                                         value={form.estoqueQtd}
                                         onChange={handleChange}
                                         className="input-glass mt-1.5 font-bold"
+                                        placeholder="Ex: 5"
                                     />
                                 </div>
                                 <div>
                                     <label className="text-sm font-semibold text-amber-600">Alerta de Estoque Baixo</label>
                                     <input
-                                        required
-                                        type="number"
+                                        type="text"
+                                        inputMode="numeric"
                                         name="estoqueMinimo"
                                         value={form.estoqueMinimo}
                                         onChange={handleChange}
-                                        className="input-glass mt-1.5 border-amber-100"
+                                        className="input-glass mt-1.5"
+                                        placeholder="Ex: 1"
                                     />
                                 </div>
                             </div>

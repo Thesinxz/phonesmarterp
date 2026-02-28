@@ -52,6 +52,11 @@ export function calculateProductPrices(
         ? config.categorias.find(c => c.nome === categoriaNome) ?? null
         : null;
 
+    // Se a categoria tiver um gateway padrão específico, usamos ele preferencialmente
+    const effectiveGateway = (categoria?.default_gateway_id && config.gateways)
+        ? (config.gateways.find(g => g.id === categoria.default_gateway_id) || gateway)
+        : gateway;
+
     const margem = categoria?.margem_padrao ?? 0;
     const tipoMargem = categoria?.tipo_margem ?? "porcentagem";
     const nfObrigatoria = categoria?.nf_obrigatoria ?? config.nf_obrigatoria ?? true;
@@ -85,13 +90,13 @@ export function calculateProductPrices(
     const precoPix = precoBase;
 
     // Preço Débito = com acréscimo da taxa de débito
-    const taxaDebito = gateway.taxa_debito_pct ?? 0;
+    const taxaDebito = effectiveGateway.taxa_debito_pct ?? 0;
     const precoDebito = taxaDebito > 0
         ? Math.round(precoBase / (1 - taxaDebito / 100))
         : precoBase;
 
     // Parcelas: acréscimo da taxa de crédito para cada parcela
-    const taxasCredito = gateway.taxas_credito ?? [];
+    const taxasCredito = effectiveGateway.taxas_credito ?? [];
     const numParcelas = Math.min(maxParcelas, taxasCredito.length);
     const parcelas: ParcelaCalc[] = [];
 

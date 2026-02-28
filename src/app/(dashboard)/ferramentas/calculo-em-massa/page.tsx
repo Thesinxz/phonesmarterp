@@ -193,13 +193,18 @@ export default function CalculoEmMassa() {
 
         const impostoPct = exigeNFPar ? (config?.taxa_nota_fiscal_pct || 0) : 0;
 
+        // Se a categoria tiver um gateway padrão específico, usamos ele preferencialmente
+        const effectiveGateway = (categoria?.default_gateway_id && config?.gateways)
+            ? (config.gateways.find(g => g.id === categoria.default_gateway_id) || gateway)
+            : gateway;
+
         const getPrice = (gwPct: number) => calculateReverseMarkup(costBrl, margemValor, tipoMargem, impostoPct, gwPct);
 
         return {
             base: getPrice(0).toFixed(2),
-            pix: getPrice(gateway?.taxa_pix_pct || 0).toFixed(2),
-            debito: getPrice(gateway?.taxa_debito_pct || 0).toFixed(2),
-            credit1x: getPrice(gateway?.taxas_credito?.[0]?.taxa || 0).toFixed(2)
+            pix: getPrice(effectiveGateway?.taxa_pix_pct || 0).toFixed(2),
+            debito: getPrice(effectiveGateway?.taxa_debito_pct || 0).toFixed(2),
+            credit1x: getPrice(effectiveGateway?.taxas_credito?.[0]?.taxa || 0).toFixed(2)
         };
     };
 
