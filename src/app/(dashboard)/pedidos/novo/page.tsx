@@ -62,6 +62,17 @@ export default function NovoPedidoPage() {
         }
     }, [searchTerm, step]);
 
+    useEffect(() => {
+        if (step === 1 && searchClient.length >= 2) {
+            const timer = setTimeout(() => {
+                buscarClientes(searchClient);
+            }, 300);
+            return () => clearTimeout(timer);
+        } else if (searchClient.length < 2) {
+            setClients([]);
+        }
+    }, [searchClient, step]);
+
     async function loadProducts(search?: string) {
         setLoading(true);
         try {
@@ -216,7 +227,6 @@ export default function NovoPedidoPage() {
                                 value={selectedClient ? selectedClient.nome : searchClient}
                                 onChange={e => {
                                     setSearchClient(e.target.value);
-                                    buscarClientes(e.target.value);
                                     if (selectedClient) setSelectedClient(null);
                                 }}
                             />

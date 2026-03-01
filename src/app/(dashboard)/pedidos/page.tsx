@@ -130,7 +130,7 @@ export default function PedidosPage() {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {pedidos.map((pedido) => (
-                            <div key={pedido.id} className="glass-card p-0 flex flex-col group hover:shadow-glass-lg transition-all overflow-hidden border-brand-100/20">
+                            <div key={pedido.id} className="glass-card p-0 flex flex-col group hover:shadow-glass-lg transition-all overflow-visible border-brand-100/20">
                                 <div className="p-5 border-b border-slate-100 flex justify-between items-start">
                                     <div>
                                         <div className="flex items-center gap-2 mb-1">

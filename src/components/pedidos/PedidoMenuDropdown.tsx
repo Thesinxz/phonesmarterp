@@ -51,7 +51,7 @@ export function PedidoMenuDropdown({ pedidoId, telefoneCliente, onCancel }: Pedi
             </button>
 
             {open && (
-                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-100 shadow-xl rounded-xl py-1 z-50 animate-in fade-in zoom-in-95 origin-top-right">
+                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-100 shadow-xl rounded-xl py-1 z-[999] animate-in fade-in zoom-in-95 origin-top-right">
                     <button onClick={() => handleAction("imprimir-a4")} className="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs font-bold text-slate-600 flex items-center gap-2">
                         <FileText size={14} className="text-slate-400" /> Imprimir A4
                     </button>
