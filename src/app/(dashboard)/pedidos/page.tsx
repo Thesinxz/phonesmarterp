@@ -37,18 +37,23 @@ export default function PedidosPage() {
     const [pedidos, setPedidos] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<string>("todos");
+    const [searchTerm, setSearchTerm] = useState("");
 
     useEffect(() => {
         if (!profile?.empresa_id) return;
-        loadData();
-    }, [activeTab, profile?.empresa_id]);
+        const timer = setTimeout(() => {
+            loadData();
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [activeTab, searchTerm, profile?.empresa_id]);
 
     async function loadData() {
         setLoading(true);
         try {
             const response = await getVendas(1, 50, {
                 tipo: "pedido",
-                status: activeTab === "todos" ? undefined : activeTab
+                status: activeTab === "todos" ? undefined : activeTab,
+                search: searchTerm
             });
             setPedidos(response.data || []);
         } catch (error) {
@@ -88,7 +93,7 @@ export default function PedidosPage() {
 
             {/* Quick Stats / Tabs */}
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-                {["todos", "rascunho", "aguardando_aprovacao", "aprovado", "separando", "entregue"].map((tab) => (
+                {["todos", "rascunho", "aguardando_aprovacao", "aprovado", "separando", "entregue", "cancelado"].map((tab) => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -109,7 +114,12 @@ export default function PedidosPage() {
                 <GlassCard className="p-4 flex gap-4 items-center">
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                        <input className="input-glass pl-10" placeholder="Buscar pedido por cliente, id ou canal..." />
+                        <input
+                            className="input-glass pl-10"
+                            placeholder="Buscar pedido por cliente, id ou canal..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
                     </div>
                     <button className="btn-secondary px-4 py-2 flex items-center gap-2">
                         <Filter size={16} /> Filtros

@@ -5,7 +5,7 @@ import {
     Search, ShoppingCart, Trash2, Plus, Minus, User, Package,
     CheckCircle2, CreditCard, Banknote, History,
     MessageCircle, Phone, Globe, Instagram, Loader2,
-    Printer, Receipt, QrCode
+    Printer, Receipt, QrCode, ClipboardList
 } from "lucide-react";
 import { getProdutos } from "@/services/estoque";
 import { criarPedido } from "@/services/vendas";
@@ -516,14 +516,14 @@ export default function NovoPedidoPage() {
                     </p>
 
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-4xl">
-                        <button onClick={() => alert("Imprimindo 80mm...")} className="glass-card bg-white flex flex-col items-center justify-center p-8 gap-4 hover:border-brand-500 hover:text-brand-600 transition-all group scale-100 hover:scale-105 hover:shadow-2xl">
+                        <button onClick={() => window.open(`/print/venda/${createdVenda?.id}`, "_blank")} className="glass-card bg-white flex flex-col items-center justify-center p-8 gap-4 hover:border-brand-500 hover:text-brand-600 transition-all group scale-100 hover:scale-105 hover:shadow-2xl">
                             <div className="w-16 h-16 rounded-2xl bg-brand-50 flex items-center justify-center group-hover:bg-brand-100 transition-colors shadow-inner text-brand-500">
                                 <Receipt size={32} />
                             </div>
                             <span className="font-black uppercase tracking-widest text-xs">Recibo 80mm</span>
                         </button>
 
-                        <button onClick={() => alert("Imprimindo A4...")} className="glass-card bg-white flex flex-col items-center justify-center p-8 gap-4 hover:border-brand-500 hover:text-brand-600 transition-all group scale-100 hover:scale-105 hover:shadow-2xl">
+                        <button onClick={() => window.open(`/print/venda/${createdVenda?.id}`, "_blank")} className="glass-card bg-white flex flex-col items-center justify-center p-8 gap-4 hover:border-brand-500 hover:text-brand-600 transition-all group scale-100 hover:scale-105 hover:shadow-2xl">
                             <div className="w-16 h-16 rounded-2xl bg-brand-50 flex items-center justify-center group-hover:bg-brand-100 transition-colors shadow-inner text-brand-500">
                                 <Printer size={32} />
                             </div>

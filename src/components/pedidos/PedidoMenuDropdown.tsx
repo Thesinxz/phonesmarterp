@@ -25,8 +25,9 @@ export function PedidoMenuDropdown({ pedidoId, telefoneCliente, onCancel }: Pedi
 
     const handleAction = (acao: string) => {
         setOpen(false);
-        if (acao === "imprimir-a4") alert(`Imprimindo A4 do Pedido ${pedidoId}...`);
-        if (acao === "imprimir-80mm") alert(`Imprimindo Cupom do Pedido ${pedidoId}...`);
+        if (acao === "imprimir-a4" || acao === "imprimir-80mm") {
+            window.open(`/print/venda/${pedidoId}`, "_blank");
+        }
         if (acao === "whatsapp") {
             if (!telefoneCliente) {
                 alert("Cliente não possui telefone cadastrado!");

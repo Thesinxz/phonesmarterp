@@ -20,7 +20,8 @@ export async function getClientes(page = 1, limit = 10, filters?: ClienteFilters
         .range(from, to);
 
     if (filters?.search) {
-        query = query.or(`nome.ilike.%${filters.search}%,email.ilike.%${filters.search}%,cpf_cnpj.ilike.%${filters.search}%`);
+        const cleanSearch = filters.search.trim().replace(/\s+/g, "%");
+        query = query.or(`nome.ilike.%${cleanSearch}%,email.ilike.%${cleanSearch}%,cpf_cnpj.ilike.%${cleanSearch}%`);
     }
 
     if (filters?.segmento) {

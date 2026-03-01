@@ -25,7 +25,7 @@ BEGIN
   WHERE auth_user_id = auth.uid() 
   LIMIT 1;
 
-  IF v_empresa_id IS NULL THEN
+  IF v_empresa_id IS NULL THEN  
     RAISE EXCEPTION 'Erro de Segurança: Empresa não encontrada para sua conta.';
   END IF;
 

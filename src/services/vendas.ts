@@ -268,13 +268,19 @@ export async function getVendas(page = 1, limit = 50, filters?: { tipo?: "pdv" |
     let query = (supabase.from("vendas") as any)
         .select(`
             *,
-            cliente:clientes(nome)
+            cliente:clientes(nome, telefone, cpf_cnpj)
         `, { count: "exact" })
         .order("created_at", { ascending: false })
         .range(from, to);
 
     if (filters?.tipo) query = query.eq("tipo", filters.tipo);
     if (filters?.status) query = query.eq("status_pedido", filters.status);
+    if (filters?.search) {
+        const cleanSearch = filters.search.trim().replace(/\s+/g, "%");
+        // Nota: para filtrar por campos de tabelas relacionadas no Supabase tipo 'or',
+        // precisamos que o select inclua a relação.
+        query = query.or(`canal_venda.ilike.%${cleanSearch}%,id.ilike.%${cleanSearch}%,cliente_nome_manual.ilike.%${cleanSearch}%`);
+    }
     if (filters?.startDate) query = query.gte("created_at", `${filters.startDate}T00:00:00`);
     if (filters?.endDate) query = query.lte("created_at", `${filters.endDate}T23:59:59`);
 
