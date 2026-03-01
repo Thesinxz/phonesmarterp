@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { getCrediarioDetalhes, baixarParcela, formatarValor, excluirCrediario, editarParcela } from "@/services/crediario";
 import {
     X, CheckCircle2, Clock, AlertTriangle, Loader2,
@@ -17,6 +18,7 @@ interface CrediarioDetalhesProps {
 }
 
 export function CrediarioDetalhes({ crediarioId, onClose, onUpdate }: CrediarioDetalhesProps) {
+    const { empresa } = useAuth();
     const [crediario, setCrediario] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [baixando, setBaixando] = useState<string | null>(null);
@@ -50,13 +52,19 @@ export function CrediarioDetalhes({ crediarioId, onClose, onUpdate }: CrediarioD
             const valNum = parseFloat(valorBaixaInput.replace(",", "."));
             const valorPagoCentavos = isNaN(valNum) ? undefined : Math.round(valNum * 100);
 
-            await baixarParcela(parcelaId, formaBaixa, valorPagoCentavos);
+            const res = await baixarParcela(parcelaId, formaBaixa, valorPagoCentavos);
 
             toast.success("Parcela atualizada com sucesso!");
             const data = await getCrediarioDetalhes(crediarioId);
             setCrediario(data);
             setShowBaixaModal(null);
             onUpdate();
+
+            // Localizar a parcela atualizada e imprimir o recibo do pagamento específico
+            const parcelaAtualizada = data.parcelas.find((p: any) => p.id === parcelaId);
+            if (parcelaAtualizada && res.pagamento) {
+                imprimirRecibo(parcelaAtualizada, res.pagamento);
+            }
         } catch (err: any) {
             toast.error(err.message || "Erro na baixa");
         } finally {
@@ -95,11 +103,21 @@ export function CrediarioDetalhes({ crediarioId, onClose, onUpdate }: CrediarioD
         }
     }
 
-    function imprimirRecibo(parcela: any) {
+    function imprimirRecibo(parcela: any, pagamento?: any) {
         const w = window.open("", "_blank", "width=400,height=600");
         if (!w) return;
 
         const c = crediario;
+        const valorNesteAto = pagamento ? pagamento.valor : parcela.valor_centavos;
+        const valorPagoDisplay = (valorNesteAto / 100).toFixed(2).replace(".", ",");
+
+        const valorTotalParcela = parcela.valor_centavos;
+        const valorRecebidoAteJa = parcela.valor_pago_centavos || 0;
+        const restanteCentavos = Math.max(0, valorTotalParcela - valorRecebidoAteJa);
+        const restanteDisplay = (restanteCentavos / 100).toFixed(2).replace(".", ",");
+
+        const dataPagamento = pagamento ? new Date(pagamento.data) : new Date();
+
         w.document.write(`
             <!DOCTYPE html>
             <html>
@@ -116,7 +134,7 @@ export function CrediarioDetalhes({ crediarioId, onClose, onUpdate }: CrediarioD
                     .row { display: flex; justify-content: space-between; margin-bottom: 3px; }
                     .row .label { color: #666; }
                     .row .value { font-weight: bold; }
-                    .total { font-size: 18px; text-align: center; padding: 15px; border: 2px solid #000; margin: 15px 0; font-weight: bold; }
+                    .total { font-size: 18px; text-align: center; padding: 15px; border: 2px solid #000; margin: 15px 0; font-weight: bold; background-color: #f9f9f9; }
                     .footer { text-align: center; border-top: 2px dashed #000; padding-top: 10px; font-size: 10px; color: #888; }
                     .assinatura { margin-top: 40px; text-align: center; }
                     .assinatura .linha { border-top: 1px solid #000; width: 250px; margin: 0 auto 5px; }
@@ -130,10 +148,16 @@ export function CrediarioDetalhes({ crediarioId, onClose, onUpdate }: CrediarioD
                 </div>
 
                 <div class="section">
+                    <h3>Empresa Emissora</h3>
+                    <div class="row"><span class="label">Empresa:</span><span class="value">${empresa?.nome || "Loja"}</span></div>
+                    <div class="row"><span class="label">CNPJ:</span><span class="value">${empresa?.cnpj || "—"}</span></div>
+                </div>
+
+                <div class="section">
                     <h3>Dados do Crediário</h3>
                     <div class="row"><span class="label">Nº Crediário:</span><span class="value">#${c.numero}</span></div>
                     <div class="row"><span class="label">Parcela:</span><span class="value">${parcela.numero_parcela} de ${c.num_parcelas}</span></div>
-                    <div class="row"><span class="label">Emissão:</span><span class="value">${new Date().toLocaleDateString("pt-BR")}</span></div>
+                    <div class="row"><span class="label">Emissão (Neste Pagto):</span><span class="value">${dataPagamento.toLocaleDateString("pt-BR")} as ${dataPagamento.toLocaleTimeString("pt-BR")}</span></div>
                 </div>
 
                 <div class="section">
@@ -144,12 +168,14 @@ export function CrediarioDetalhes({ crediarioId, onClose, onUpdate }: CrediarioD
                 </div>
 
                 <div class="total">
-                    VALOR PAGO: R$ ${(parcela.valor_centavos / 100).toFixed(2).replace(".", ",")}
+                    VALOR DESTE ATO: R$ ${valorPagoDisplay}
                 </div>
 
                 <div class="section">
-                    <div class="row"><span class="label">Vencimento:</span><span class="value">${new Date(parcela.vencimento + "T12:00:00").toLocaleDateString("pt-BR")}</span></div>
-                    <div class="row"><span class="label">Forma Pgto:</span><span class="value">${parcela.forma_pagamento || "—"}</span></div>
+                    <div class="row"><span class="label">Valor Total da Parcela:</span><span class="value">R$ ${(valorTotalParcela / 100).toFixed(2).replace(".", ",")}</span></div>
+                    <div class="row"><span class="label">Valor Restante da Parcela:</span><span class="value">R$ ${restanteDisplay}</span></div>
+                    <div class="row"><span class="label">Vencimento Original:</span><span class="value">${new Date(parcela.vencimento + "T12:00:00").toLocaleDateString("pt-BR")}</span></div>
+                    <div class="row"><span class="label">Forma Pgto (Neste Ato):</span><span class="value">${pagamento ? pagamento.forma_pagamento : (parcela.forma_pagamento || "—")}</span></div>
                     <div class="row"><span class="label">Valor Total Crediário:</span><span class="value">R$ ${(c.valor_total_centavos / 100).toFixed(2).replace(".", ",")}</span></div>
                 </div>
 
@@ -175,9 +201,126 @@ export function CrediarioDetalhes({ crediarioId, onClose, onUpdate }: CrediarioD
         w.document.close();
     }
 
+    function imprimirCarneCompleto() {
+        if (!crediario || !crediario.parcelas) return;
+        const w = window.open("", "_blank");
+        if (!w) return;
+
+        const c = crediario;
+        const parcelas = [...c.parcelas].sort((a: any, b: any) => a.numero_parcela - b.numero_parcela);
+
+        let html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Carnê de Pagamento - #${c.numero}</title>
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { font-family: 'Courier New', monospace; font-size: 12px; padding: 20px; }
+                    .page-break { page-break-after: always; }
+                    .lamina { display: flex; border: 1px dashed #000; margin-bottom: 20px; width: 100%; max-width: 800px; page-break-inside: avoid; }
+                    .recibo-cliente { width: 30%; border-right: 1px dashed #000; padding: 15px; }
+                    .recibo-loja { width: 70%; padding: 15px; }
+                    .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px; margin-bottom: 15px; }
+                    .header h1 { font-size: 16px; margin-bottom: 4px; }
+                    .header p { font-size: 10px; color: #555; }
+                    .section { margin-bottom: 12px; }
+                    .section h3 { font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 3px; margin-bottom: 6px; }
+                    .row { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 11px; }
+                    .row .label { color: #666; }
+                    .row .value { font-weight: bold; }
+                    .total { font-size: 16px; text-align: center; padding: 10px; border: 2px solid #000; margin: 10px 0; font-weight: bold; }
+                    .assinatura { margin-top: 25px; text-align: center; }
+                    .assinatura .linha { border-top: 1px solid #000; width: 80%; margin: 0 auto 5px; }
+                    @media print { body { margin: 0; } .lamina { margin-bottom: 30px; } }
+                </style>
+            </head>
+            <body>
+        `;
+
+        parcelas.forEach((p, index) => {
+            const dataVenc = new Date(p.vencimento + "T12:00:00").toLocaleDateString("pt-BR");
+            const valParcela = (p.valor_centavos / 100).toFixed(2).replace(".", ",");
+
+            const laminaHTML = `
+                <div class="lamina ${index > 0 && index % 3 === 0 ? 'page-break' : ''}">
+                    <!-- CANHOTO CLIENTE -->
+                    <div class="recibo-cliente">
+                        <div class="header">
+                            <h1>RECIBO CLIENTE</h1>
+                            <p>Crediário #${c.numero}</p>
+                        </div>
+                        <div class="section">
+                            <div class="row"><span class="label">Parcela:</span><span class="value">${p.numero_parcela}/${c.num_parcelas}</span></div>
+                            <div class="row"><span class="label">Vencimento:</span><span class="value">${dataVenc}</span></div>
+                            <div class="row"><span class="label">Valor:</span><span class="value">R$ ${valParcela}</span></div>
+                        </div>
+                        <div class="section">
+                            <div class="row"><span class="label">Emissor:</span><span class="value">SmartOS</span></div>
+                        </div>
+                        <br/><br/>
+                        <div class="assinatura">
+                            <div class="linha"></div>
+                            <p>Ass. Loja</p>
+                        </div>
+                    </div>
+
+                    <!-- VIA LOJA -->
+                    <div class="recibo-loja">
+                        <div class="header">
+                            <h1>CARNÊ DE PAGAMENTO</h1>
+                            <p>VIA DO ESTABELECIMENTO</p>
+                        </div>
+                        <div style="display: flex; gap: 20px;">
+                            <div style="flex: 1;">
+                                <div class="section">
+                                    <h3>Dados do Cliente</h3>
+                                    <div class="row"><span class="label">Nome:</span><span class="value">${c.cliente?.nome || ""}</span></div>
+                                    <div class="row"><span class="label">CPF/CNPJ:</span><span class="value">${c.cliente?.cpf_cnpj || "—"}</span></div>
+                                    <div class="row"><span class="label">Tel:</span><span class="value">${c.cliente?.telefone || "—"}</span></div>
+                                </div>
+                                <div class="section">
+                                    <h3>Dados do Crediário</h3>
+                                    <div class="row"><span class="label">Contrato:</span><span class="value">#${c.numero}</span></div>
+                                    <div class="row"><span class="label">Emissão Original:</span><span class="value">${new Date(c.created_at).toLocaleDateString("pt-BR")}</span></div>
+                                    <div class="row"><span class="label">Total Crediário:</span><span class="value">R$ ${(c.valor_total_centavos / 100).toFixed(2).replace(".", ",")}</span></div>
+                                </div>
+                            </div>
+                            <div style="flex: 1;">
+                                <div class="total">
+                                    PARCELA ${p.numero_parcela}/${c.num_parcelas}<br/>
+                                    VENCIMENTO: ${dataVenc}<br/>
+                                    VALOR: R$ ${valParcela}
+                                </div>
+                                <div class="section">
+                                    <p style="font-size: 10px; color: #666;">Após vencimento cobrar multa de ${c.multa_percentual}% e juros.</p>
+                                </div>
+                                <div class="assinatura">
+                                    <div class="linha"></div>
+                                    <p>Assinatura do Cliente</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            html += laminaHTML;
+        });
+
+        html += `
+                <script>window.onload = function() { window.print(); }</script>
+            </body>
+            </html>
+        `;
+
+        w.document.write(html);
+        w.document.close();
+    }
+
     const statusIcon = (s: string) => {
         switch (s) {
             case "pago": return <CheckCircle2 size={16} className="text-emerald-500" />;
+            case "parcial": return <CheckCircle2 size={16} className="text-lime-500" />;
             case "atrasado": return <AlertTriangle size={16} className="text-red-500" />;
             default: return <Clock size={16} className="text-amber-500" />;
         }
@@ -186,6 +329,7 @@ export function CrediarioDetalhes({ crediarioId, onClose, onUpdate }: CrediarioD
     const statusLabel = (s: string) => {
         switch (s) {
             case "pago": return "Pago";
+            case "parcial": return "Pgto. Parcial";
             case "atrasado": return "Atrasado";
             case "cancelado": return "Cancelado";
             default: return "Pendente";
@@ -195,6 +339,7 @@ export function CrediarioDetalhes({ crediarioId, onClose, onUpdate }: CrediarioD
     const statusColor = (s: string) => {
         switch (s) {
             case "pago": return "bg-emerald-50 text-emerald-600 border-emerald-200";
+            case "parcial": return "bg-lime-50 text-lime-600 border-lime-200";
             case "atrasado": return "bg-red-50 text-red-600 border-red-200";
             case "cancelado": return "bg-slate-50 text-slate-400 border-slate-200";
             default: return "bg-amber-50 text-amber-600 border-amber-200";
@@ -233,6 +378,14 @@ export function CrediarioDetalhes({ crediarioId, onClose, onUpdate }: CrediarioD
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
+                        <button
+                            onClick={imprimirCarneCompleto}
+                            className="px-3 py-1.5 rounded-xl bg-slate-50 text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-xs font-bold transition-colors flex items-center gap-1.5"
+                            title="Imprimir Carnê Completo"
+                        >
+                            <Printer size={14} />
+                            Imprimir Carnê
+                        </button>
                         {crediario.status !== "cancelado" && crediario.status !== "quitado" && (
                             <button
                                 onClick={handleCancelarCrediario}
@@ -275,117 +428,145 @@ export function CrediarioDetalhes({ crediarioId, onClose, onUpdate }: CrediarioD
                         <div
                             key={p.id}
                             className={cn(
-                                "flex items-center justify-between p-4 rounded-2xl border-2 transition-all",
+                                "flex flex-col gap-2 p-4 rounded-2xl border-2 transition-all",
                                 p.status === "pago" ? "bg-emerald-50/50 border-emerald-100" :
                                     p.status === "atrasado" ? "bg-red-50/50 border-red-100" :
                                         "bg-white border-slate-100 hover:border-brand-100"
                             )}
                         >
-                            <div className="flex items-center gap-4">
-                                <div className={cn(
-                                    "w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black",
-                                    p.status === "pago" ? "bg-emerald-100 text-emerald-600" :
-                                        p.status === "atrasado" ? "bg-red-100 text-red-600" :
-                                            "bg-slate-100 text-slate-600"
-                                )}>
-                                    {p.numero_parcela}
-                                </div>
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        {statusIcon(p.status)}
-                                        <span className="text-sm font-black text-slate-800">{formatarValor(p.valor_centavos)}</span>
+                            <div className="flex items-center justify-between w-full">
+                                <div className="flex items-center gap-4">
+                                    <div className={cn(
+                                        "w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black",
+                                        p.status === "pago" ? "bg-emerald-100 text-emerald-600" :
+                                            p.status === "parcial" ? "bg-lime-100 text-lime-600" :
+                                                p.status === "atrasado" ? "bg-red-100 text-red-600" :
+                                                    "bg-slate-100 text-slate-600"
+                                    )}>
+                                        {p.numero_parcela}
                                     </div>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                        <Calendar size={10} className="text-slate-300" />
-                                        <span className="text-[10px] text-slate-400">
-                                            Vence: {new Date(p.vencimento + "T12:00:00").toLocaleDateString("pt-BR")}
-                                        </span>
-                                        {p.data_pagamento && (
-                                            <span className="text-[10px] text-emerald-500 font-bold">
-                                                • Pago em {new Date(p.data_pagamento).toLocaleDateString("pt-BR")}
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            {statusIcon(p.status)}
+                                            <span className="text-sm font-black text-slate-800">{formatarValor(p.valor_centavos)}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <Calendar size={10} className="text-slate-300" />
+                                            <span className="text-[10px] text-slate-400">
+                                                Vence: {new Date(p.vencimento + "T12:00:00").toLocaleDateString("pt-BR")}
                                             </span>
+                                            {p.data_pagamento && (
+                                                <span className="text-[10px] text-emerald-500 font-bold">
+                                                    • Pago em {new Date(p.data_pagamento).toLocaleDateString("pt-BR")}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Inline Edit Mode */}
+                                        {editandoParcela === p.id && (
+                                            <div className="mt-3 flex items-center gap-2 bg-slate-50 p-2 rounded-xl">
+                                                <input
+                                                    type="date"
+                                                    value={editVencimento}
+                                                    onChange={(e) => setEditVencimento(e.target.value)}
+                                                    className="px-2 py-1.5 text-xs font-bold rounded-lg border-2 border-transparent focus:border-brand-500/20 outline-none w-32"
+                                                />
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={editValor}
+                                                    onChange={(e) => setEditValor(e.target.value)}
+                                                    className="px-2 py-1.5 text-xs font-bold rounded-lg border-2 border-transparent focus:border-brand-500/20 outline-none w-24"
+                                                    placeholder="Valor"
+                                                />
+                                                <button
+                                                    onClick={() => handleSalvarEdicao(p.id)}
+                                                    className="px-3 py-1.5 bg-brand-500 text-white text-xs font-bold rounded-lg hover:bg-brand-600 transition-colors"
+                                                >
+                                                    Salvar
+                                                </button>
+                                                <button
+                                                    onClick={() => setEditandoParcela(null)}
+                                                    className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
+                                </div>
 
-                                    {/* Inline Edit Mode */}
-                                    {editandoParcela === p.id && (
-                                        <div className="mt-3 flex items-center gap-2 bg-slate-50 p-2 rounded-xl">
-                                            <input
-                                                type="date"
-                                                value={editVencimento}
-                                                onChange={(e) => setEditVencimento(e.target.value)}
-                                                className="px-2 py-1.5 text-xs font-bold rounded-lg border-2 border-transparent focus:border-brand-500/20 outline-none w-32"
-                                            />
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                value={editValor}
-                                                onChange={(e) => setEditValor(e.target.value)}
-                                                className="px-2 py-1.5 text-xs font-bold rounded-lg border-2 border-transparent focus:border-brand-500/20 outline-none w-24"
-                                                placeholder="Valor"
-                                            />
+                                <div className="flex items-center gap-1">
+                                    {p.status !== "pago" && p.status !== "cancelado" && (
+                                        <>
                                             <button
-                                                onClick={() => handleSalvarEdicao(p.id)}
-                                                className="px-3 py-1.5 bg-brand-500 text-white text-xs font-bold rounded-lg hover:bg-brand-600 transition-colors"
+                                                onClick={() => {
+                                                    setEditandoParcela(p.id);
+                                                    setEditValor((p.valor_centavos / 100).toFixed(2));
+                                                    setEditVencimento(p.vencimento);
+                                                    setShowBaixaModal(null);
+                                                }}
+                                                className="p-2 rounded-xl text-slate-400 hover:text-brand-500 hover:bg-brand-50 transition-colors"
+                                                title="Editar parcela"
                                             >
-                                                Salvar
+                                                <Edit3 size={14} />
                                             </button>
                                             <button
-                                                onClick={() => setEditandoParcela(null)}
-                                                className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors"
+                                                onClick={() => {
+                                                    setShowBaixaModal(p.id);
+                                                    setFormaBaixa("dinheiro");
+                                                    setValorBaixaInput((p.valor_centavos / 100).toFixed(2));
+                                                    setEditandoParcela(null);
+                                                }}
+                                                className={cn("px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-colors", p.status === 'parcial' ? 'bg-lime-50 text-lime-600 hover:bg-lime-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100')}
                                             >
-                                                <X size={14} />
+                                                {p.status === 'parcial' ? 'Baixar Restante' : 'Baixar'}
                                             </button>
-                                        </div>
+                                        </>
                                     )}
+                                    {p.efibank_link && (
+                                        <a
+                                            href={p.efibank_link}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="p-2 rounded-xl hover:bg-slate-50 text-slate-400 hover:text-brand-500 transition-colors"
+                                        >
+                                            <ExternalLink size={14} />
+                                        </a>
+                                    )}
+                                    <button
+                                        onClick={() => imprimirRecibo(p)}
+                                        className="p-2 rounded-xl hover:bg-slate-50 text-slate-400 hover:text-brand-500 transition-colors"
+                                        title="Imprimir Recibo (Total da Parcela Atual)"
+                                    >
+                                        <Printer size={14} />
+                                    </button>
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-1">
-                                {p.status !== "pago" && p.status !== "cancelado" && (
-                                    <>
-                                        <button
-                                            onClick={() => {
-                                                setEditandoParcela(p.id);
-                                                setEditValor((p.valor_centavos / 100).toFixed(2));
-                                                setEditVencimento(p.vencimento);
-                                                setShowBaixaModal(null);
-                                            }}
-                                            className="p-2 rounded-xl text-slate-400 hover:text-brand-500 hover:bg-brand-50 transition-colors"
-                                            title="Editar parcela"
-                                        >
-                                            <Edit3 size={14} />
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setShowBaixaModal(p.id);
-                                                setFormaBaixa("dinheiro");
-                                                setValorBaixaInput((p.valor_centavos / 100).toFixed(2));
-                                                setEditandoParcela(null);
-                                            }}
-                                            className="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase hover:bg-emerald-100 transition-colors"
-                                        >
-                                            Baixar
-                                        </button>
-                                    </>
-                                )}
-                                {p.efibank_link && (
-                                    <a
-                                        href={p.efibank_link}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="p-2 rounded-xl hover:bg-slate-50 text-slate-400 hover:text-brand-500 transition-colors"
-                                    >
-                                        <ExternalLink size={14} />
-                                    </a>
-                                )}
-                                <button
-                                    onClick={() => imprimirRecibo(p)}
-                                    className="p-2 rounded-xl hover:bg-slate-50 text-slate-400 hover:text-brand-500 transition-colors"
-                                >
-                                    <Printer size={14} />
-                                </button>
-                            </div>
+                            {/* Histórico de Pagamentos Parciais */}
+                            {Array.isArray(p.pagamentos_json) && p.pagamentos_json.length > 0 && (
+                                <div className="mt-2 pt-3 border-t border-slate-200/60 pl-14">
+                                    <p className="text-[10px] uppercase font-black tracking-widest text-slate-400 mb-2">Histórico de Recebimentos desta parcela</p>
+                                    <div className="space-y-1.5">
+                                        {p.pagamentos_json.map((pag: any) => (
+                                            <div key={pag.id} className="flex justify-between items-center text-xs text-slate-600">
+                                                <span>{new Date(pag.data).toLocaleDateString("pt-BR")} as {new Date(pag.data).toLocaleTimeString("pt-BR")} - <span className="uppercase">{pag.forma_pagamento}</span></span>
+                                                <div className="flex items-center gap-4">
+                                                    <span className="font-black text-slate-700">{formatarValor(pag.valor)}</span>
+                                                    <button
+                                                        onClick={() => imprimirRecibo(p, pag)}
+                                                        className="text-[10px] font-bold text-brand-500 hover:underline uppercase flex items-center gap-1 bg-brand-50 px-2 py-1 rounded"
+                                                        title="Re-imprimir Recibo deste Pagamento"
+                                                    >
+                                                        <Printer size={10} /> Imprimir 2ª Via
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>

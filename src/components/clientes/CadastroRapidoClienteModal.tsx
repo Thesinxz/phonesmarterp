@@ -37,7 +37,14 @@ export function CadastroRapidoClienteModal({ onClose, onSuccess, initialName = "
                 telefone: telefone.trim() || null,
                 cpf_cnpj: cpfCnpj.trim() || null,
                 segmento: "novo",
-            } as any);
+                instagram: null,
+                email: null,
+                endereco_json: null,
+                pontos_fidelidade: 0,
+                inscricao_estadual: null,
+                indicador_ie: 9,
+                inscricao_municipal: null,
+            });
             toast.success("Cliente cadastrado com sucesso!");
             onSuccess(novoCliente);
         } catch (error: any) {

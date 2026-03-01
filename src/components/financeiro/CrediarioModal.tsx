@@ -13,7 +13,7 @@ import { cn } from "@/utils/cn";
 
 interface CrediarioModalProps {
     onClose: () => void;
-    onCreated: () => void;
+    onCreated: (credId?: string) => void;
     vendaId?: string;
     valorInicial?: number;
     clienteInicial?: string;
@@ -78,7 +78,7 @@ export function CrediarioModal({ onClose, onCreated, vendaId, valorInicial, clie
 
         setLoading(true);
         try {
-            await criarCrediario({
+            const res = await criarCrediario({
                 cliente_id: clienteId,
                 venda_id: vendaId,
                 valor_total_centavos: valorTotalCentavos,
@@ -91,7 +91,7 @@ export function CrediarioModal({ onClose, onCreated, vendaId, valorInicial, clie
             });
 
             toast.success("Crediário criado com sucesso!");
-            onCreated();
+            onCreated(res.crediario_id);
         } catch (err: any) {
             toast.error(err.message || "Erro ao criar crediário");
         } finally {

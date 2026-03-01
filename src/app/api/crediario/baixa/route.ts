@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { baixaManual, type EfiBankConfig } from "@/services/efibank";
+import crypto from "crypto";
 
 /**
  * POST /api/crediario/baixa
@@ -52,49 +53,89 @@ export async function POST(request: NextRequest) {
         }
 
         const valorTotalOriginal = parcela.valor_centavos;
-        const valorPago = valor_pago_centavos ? parseInt(valor_pago_centavos, 10) : valorTotalOriginal;
-        const isPartial = valorPago < valorTotalOriginal && valorPago > 0;
+        const valorRecebidoAteO_Momento = parcela.valor_pago_centavos || 0;
 
-        // Atualizar status e valor pago da parcela original
+        // Se o usuario não enviou valor especifico, assume o restante
+        const valorPagamentoNovo = valor_pago_centavos ? parseInt(valor_pago_centavos, 10) : (valorTotalOriginal - valorRecebidoAteO_Momento);
+
+        const novoValorRecebidoTotal = valorRecebidoAteO_Momento + valorPagamentoNovo;
+        const isQuitado = novoValorRecebidoTotal >= valorTotalOriginal;
+
+        const pagamentosAntigos = Array.isArray(parcela.pagamentos_json) ? parcela.pagamentos_json : [];
+        const novoPagamento = {
+            id: crypto.randomUUID(),
+            data: new Date().toISOString(),
+            valor: valorPagamentoNovo,
+            forma_pagamento,
+            usuario_id: user.id
+        };
+        const novosPagamentos = [...pagamentosAntigos, novoPagamento];
+
+        // Atualizar parcela original
         const { error: updateErr } = await (supabaseAdmin.from("crediario_parcelas") as any)
             .update({
-                status: "pago",
-                valor_centavos: valorPago, // O registro atual fica com o valor exato que foi pago
-                data_pagamento: new Date().toISOString(),
-                forma_pagamento,
+                status: isQuitado ? "pago" : "pendente", // usuario pediu pra ficar pendente caso seja parcial
+                valor_pago_centavos: novoValorRecebidoTotal,
+                data_pagamento: isQuitado ? new Date().toISOString() : parcela.data_pagamento, // data_pagamento final so quando quitar
+                forma_pagamento: forma_pagamento, // utima forma
+                pagamentos_json: novosPagamentos,
                 updated_at: new Date().toISOString(),
             })
             .eq("id", parcela_id);
 
         if (updateErr) throw updateErr;
 
-        // Se for parcial, criar uma nova parcela com o saldo restante
-        if (isPartial) {
-            const saldoRestante = valorTotalOriginal - valorPago;
-            const resNovaParcela = await (supabaseAdmin.from("crediario_parcelas") as any)
-                .insert({
-                    crediario_id: parcela.crediario_id,
-                    empresa_id: parcela.empresa_id,
-                    numero_parcela: parcela.numero_parcela, // Mantém o mesmo número para saber que é a mesma cota
-                    valor_centavos: saldoRestante,
-                    vencimento: parcela.vencimento, // Mantém o vencimento
-                    status: "pendente"
-                })
-                .select()
-                .single();
+        // ============================================
+        // INTEGRAÇÃO FINANCEIRA / CAIXA
+        // ============================================
 
-            if (resNovaParcela.error) {
-                console.error("Erro ao gerar saldo restante:", resNovaParcela.error);
-                // Não throw para não cancelar a baixa já feita, mas loga severamente.
-            }
+        // 1. Tentar achar um caixa aberto do usuário para registrar
+        const hojeHora = new Date().toISOString();
+        const { data: caixaAberto } = await (supabaseAdmin.from("caixas") as any)
+            .select("id")
+            .eq("empresa_id", parcela.empresa_id)
+            .eq("usuario_abertura_id", user.id)
+            .eq("status", "aberto")
+            .single();
+
+        if (caixaAberto) {
+            await (supabaseAdmin.from("caixa_movimentacoes") as any)
+                .insert({
+                    empresa_id: parcela.empresa_id,
+                    caixa_id: caixaAberto.id,
+                    usuario_id: user.id,
+                    tipo: "venda", // Classificando como venda manual ou recebimento.
+                    forma_pagamento: forma_pagamento,
+                    valor_centavos: valorPagamentoNovo,
+                    observacao: `Recebimento Parcela ${parcela.numero_parcela} Crediário #${parcela.crediario?.numero || parcela.crediario_id}`,
+                    origem_id: parcela_id
+                });
         }
 
-        // Se EfíBank, fazer baixa manual via API
-        if (parcela.crediario?.tipo === "efibank" && parcela.efibank_charge_id) {
+        // 2. Registrar no financeiro_titulos (entradas/saídas da DRE / Relatório Financeiro)
+        // Isso é opcional mas ideal para bater DRE. Pode ser registrado como 'pago' direto.
+        await (supabaseAdmin.from("financeiro_titulos") as any)
+            .insert({
+                empresa_id: parcela.empresa_id,
+                tipo: "receber",
+                status: "pago",
+                descricao: `Receb. Parcela Crediário #${parcela.crediario?.numero || parcela.crediario_id}`,
+                valor_total_centavos: valorPagamentoNovo,
+                valor_pago_centavos: valorPagamentoNovo,
+                data_vencimento: parcela.vencimento,
+                data_pagamento: hojeHora,
+                categoria: "Recebimento de Crediário",
+                forma_pagamento_prevista: forma_pagamento,
+                origem_tipo: "crediario",
+                origem_id: parcela_id
+            });
+
+        // Se EfíBank, fazer baixa manual via API (APENAS se for total ou se EfíBank suportar. Normalmente EfíBank não suporta baixar parcialmente um carnê sem reprogramar, então vamos manter)
+        if (isQuitado && parcela.crediario?.tipo === "efibank" && parcela.efibank_charge_id) {
             try {
                 const { data: configData } = await (supabaseAdmin.from("configuracoes") as any)
                     .select("valor")
-                    .eq("empresa_id", parcela.crediario.empresa_id)
+                    .eq("empresa_id", parcela.empresa_id)
                     .eq("chave", "efibank_credentials")
                     .single();
 
@@ -112,7 +153,7 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        return NextResponse.json({ success: true, parcela_id });
+        return NextResponse.json({ success: true, parcela_id, pagamento: novoPagamento, isQuitado });
 
     } catch (error: any) {
         console.error("Erro na baixa de parcela:", error);

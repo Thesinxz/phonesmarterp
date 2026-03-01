@@ -201,6 +201,7 @@ export function OSStep1Cliente({ onSelect, selectedId }: OSStep1ClienteProps) {
                 inscricao_estadual: newClient.inscricaoEstadual || null,
                 indicador_ie: parseInt(newClient.indicadorIe, 10),
                 inscricao_municipal: newClient.inscricaoMunicipal || null,
+                instagram: null,
             });
 
             console.log("DEBUG: Cliente cadastrado com sucesso. ID:", data.id);

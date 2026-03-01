@@ -279,9 +279,12 @@ export default function CrediarioPage() {
             {showModal && (
                 <CrediarioModal
                     onClose={() => setShowModal(false)}
-                    onCreated={() => {
+                    onCreated={(novoId) => {
                         setShowModal(false);
                         carregarDados();
+                        if (novoId) {
+                            setSelectedCrediario(novoId);
+                        }
                     }}
                 />
             )}
