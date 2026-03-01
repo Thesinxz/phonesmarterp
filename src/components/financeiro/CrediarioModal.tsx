@@ -20,7 +20,7 @@ interface CrediarioModalProps {
 }
 
 export function CrediarioModal({ onClose, onCreated, vendaId, valorInicial, clienteInicial }: CrediarioModalProps) {
-    const { empresa } = useAuth();
+    const { profile, empresa } = useAuth();
     const [loading, setLoading] = useState(false);
     const [clientes, setClientes] = useState<any[]>([]);
     const [buscaCliente, setBuscaCliente] = useState("");
@@ -40,14 +40,21 @@ export function CrediarioModal({ onClose, onCreated, vendaId, valorInicial, clie
     // Buscar clientes
     useEffect(() => {
         async function fetchClientes() {
+            if (!profile?.empresa_id) return;
             const supabase = createClient();
-            const { data } = await (supabase.from("clientes") as any)
+            const { data, error } = await (supabase.from("clientes") as any)
                 .select("id, nome, cpf_cnpj, telefone")
+                .eq("empresa_id", profile.empresa_id)
                 .order("nome");
+
+            if (error) {
+                console.error("Erro ao buscar clientes:", error);
+                return;
+            }
             setClientes(data || []);
         }
         fetchClientes();
-    }, []);
+    }, [profile?.empresa_id]);
 
     const clientesFiltrados = useMemo(() => {
         if (!buscaCliente.trim()) return clientes.slice(0, 10);
@@ -79,6 +86,7 @@ export function CrediarioModal({ onClose, onCreated, vendaId, valorInicial, clie
         setLoading(true);
         try {
             const res = await criarCrediario({
+                empresa_id: profile?.empresa_id || "",
                 cliente_id: clienteId,
                 venda_id: vendaId,
                 valor_total_centavos: valorTotalCentavos,

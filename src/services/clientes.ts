@@ -7,6 +7,7 @@ const supabase = createClient();
 export interface ClienteFilters {
     search?: string;
     segmento?: string;
+    empresa_id?: string;
 }
 
 export async function getClientes(page = 1, limit = 10, filters?: ClienteFilters) {
@@ -18,6 +19,10 @@ export async function getClientes(page = 1, limit = 10, filters?: ClienteFilters
         .select("*", { count: "exact" })
         .order("created_at", { ascending: false })
         .range(from, to);
+
+    if (filters?.empresa_id) {
+        query = query.eq("empresa_id", filters.empresa_id);
+    }
 
     if (filters?.search) {
         const cleanSearch = filters.search.trim().replace(/\s+/g, "%");

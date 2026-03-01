@@ -100,8 +100,10 @@ export function OSStep1Cliente({ onSelect, selectedId }: OSStep1ClienteProps) {
         setSearching(true);
         const supabase = createClient();
 
-        // Constrói a query de forma mais segura
-        let orQuery = `nome.ilike.%${val.trim()}%`;
+        // Constrói a query com suporte a espaços (fuzzy)
+        const cleanSearch = val.trim().replace(/\s+/g, "%");
+        let orQuery = `nome.ilike.%${cleanSearch}%`;
+
         if (onlyDigits.length >= 3) {
             orQuery += `,cpf_cnpj.ilike.%${onlyDigits}%,telefone.ilike.%${onlyDigits}%`;
         }

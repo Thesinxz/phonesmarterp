@@ -11,6 +11,7 @@ export interface ParcelaPreview {
 }
 
 export interface CrediarioCreateData {
+    empresa_id: string;
     cliente_id: string;
     venda_id?: string;
     valor_total_centavos: number;

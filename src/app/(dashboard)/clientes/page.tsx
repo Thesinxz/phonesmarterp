@@ -50,9 +50,10 @@ export default function ClientesPage() {
     });
 
     async function loadClientes() {
+        if (!profile?.empresa_id) return;
         setLoading(true);
         try {
-            const { data } = await getClientes(1, 50, filters);
+            const { data } = await getClientes(1, 50, { ...filters, empresa_id: profile.empresa_id });
             setClientes(data);
         } catch (error) {
             console.error("Erro ao carregar clientes:", error);
