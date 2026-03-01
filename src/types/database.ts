@@ -62,6 +62,7 @@ export interface Database {
                     endereco_json: Json | null;
                     pontos_fidelidade: number;
                     segmento: "novo" | "vip" | "atacadista" | null;
+                    instagram: string | null;
                     inscricao_estadual: string | null;
                     indicador_ie: number | null;
                     inscricao_municipal: string | null;

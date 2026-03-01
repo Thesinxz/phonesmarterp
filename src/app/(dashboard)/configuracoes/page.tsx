@@ -44,7 +44,7 @@ import { cn } from "@/utils/cn";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
 import { syncConfigToAll } from "@/services/configuracoes";
 
-type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "ai_config" | "vitrine" | "etiquetas" | "auditoria" | "contador";
+type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "ai_config" | "vitrine" | "etiquetas" | "auditoria" | "contador" | "crediario";
 
 import { type WhatsappConfig, type FinanceiroConfig } from "@/types/configuracoes";
 import { getFiscalConfig, upsertFiscalConfig, ConfiguracaoFiscal } from "@/services/fiscal";
@@ -161,8 +161,13 @@ export default function ConfiguracoesPage() {
         mensagem_whatsapp: "Olá! Vi um produto na vitrine e gostaria de mais informações.",
         mostrar_grade: true,
         max_parcelas: 12,
-        cor_tema: "#6366f1",
         produtos_destaque: [] as string[],
+    });
+
+    const [crediarioConfig, setCrediarioConfig] = useState({
+        client_id: "",
+        client_secret: "",
+        sandbox: true
     });
 
     // Subdomínio da empresa (slug da vitrine)
@@ -218,6 +223,7 @@ export default function ConfiguracoesPage() {
                 if (chave === "gemini") setGeminiConfig(valor as any);
                 if (chave === "vitrine") setVitrineConfig((prev: any) => ({ ...prev, ...valor as any }));
                 if (chave === "contador") setContadorConfig(valor as any);
+                if (chave === "efibank_credentials") setCrediarioConfig(valor as any);
 
                 toast.info(`Configuração "${chave}" foi atualizada remotamente.`, {
                     duration: 3000,
@@ -278,6 +284,7 @@ export default function ConfiguracoesPage() {
                     if (row.chave === "gemini") setGeminiConfig(row.valor as any);
                     if (row.chave === "vitrine") setVitrineConfig((prev: any) => ({ ...prev, ...row.valor as any }));
                     if (row.chave === "contador") setContadorConfig(row.valor as any);
+                    if (row.chave === "efibank_credentials") setCrediarioConfig(row.valor as any);
                 });
 
                 // Ler as configurações fiscais reais da nova tabela (Phase 13)
@@ -497,6 +504,7 @@ export default function ConfiguracoesPage() {
         { id: "financeiro", label: "Margens & Taxas", icon: DollarSign, desc: "Calculadoras e Lucro" },
         { id: "ai_config", label: "IA e OCR", icon: Sparkles, desc: "Gemini 2.5 Flash" },
         { id: "vitrine", label: "Vitrine Online", icon: ShoppingBag, desc: "Catálogo público + TV" },
+        { id: "crediario", label: "Crediário & Efíbank", icon: CreditCard, desc: "Fiado e Boletos" },
         { id: "etiquetas", label: "Etiquetas", icon: Scan, desc: "Modelos Térmicos e A4" },
         { id: "contador", label: "Contabilidade", icon: FileText, desc: "Fechamento e XML Automático" },
         { id: "auditoria", label: "Auditoria", icon: HistoryIcon, desc: "Log de alterações e segurança" },
@@ -1782,6 +1790,75 @@ export default function ConfiguracoesPage() {
                                         </p>
                                     </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* ── CREDIÁRIO / EFÍBANK ── */}
+                        {activeTab === "crediario" && (
+                            <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                                <div>
+                                    <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800">
+                                        <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center">
+                                            <CreditCard className="text-brand-500" size={20} />
+                                        </div>
+                                        Geração de Boletos EfíBank
+                                    </h2>
+                                    <p className="text-sm text-slate-500 mt-1 pl-12">
+                                        Configure suas credenciais da EfíBank para gerar carnês com código de barras e Pix integrados.
+                                    </p>
+                                </div>
+
+                                <GlassCard className="p-6 md:p-8 space-y-6">
+                                    <div className="flex items-center justify-between p-4 bg-orange-50 border border-orange-100 rounded-2xl">
+                                        <div>
+                                            <h3 className="font-bold text-orange-800">Modo Sandbox (Testes)</h3>
+                                            <p className="text-xs text-orange-600 mt-1">Ao ativar, nenhuma cobrança real será gerada para os clientes.</p>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                className="sr-only peer"
+                                                checked={crediarioConfig.sandbox}
+                                                onChange={(e) => setCrediarioConfig(p => ({ ...p, sandbox: e.target.checked }))}
+                                            />
+                                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                                        </label>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Client ID (Aplicação)</label>
+                                            <input
+                                                type="text"
+                                                value={crediarioConfig.client_id}
+                                                onChange={e => setCrediarioConfig(p => ({ ...p, client_id: e.target.value }))}
+                                                className="w-full text-sm font-medium text-slate-700 bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 focus:outline-none focus:border-brand-500/20 focus:ring-4 focus:ring-brand-500/10 transition-all font-mono"
+                                                placeholder="Client_Id_..."
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Client Secret (Aplicação)</label>
+                                            <input
+                                                type="password"
+                                                value={crediarioConfig.client_secret}
+                                                onChange={e => setCrediarioConfig(p => ({ ...p, client_secret: e.target.value }))}
+                                                className="w-full text-sm font-medium text-slate-700 bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 focus:outline-none focus:border-brand-500/20 focus:ring-4 focus:ring-brand-500/10 transition-all font-mono"
+                                                placeholder="Client_Secret_..."
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-6 border-t border-slate-100 flex justify-end">
+                                        <button
+                                            disabled={saving}
+                                            onClick={() => saveConfig("efibank_credentials", crediarioConfig)}
+                                            className="bg-brand-600 hover:bg-brand-500 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-brand-glow flex items-center gap-2 disabled:opacity-50 active:scale-95"
+                                        >
+                                            {saving ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                                            Salvar Credenciais
+                                        </button>
+                                    </div>
+                                </GlassCard>
                             </div>
                         )}
 

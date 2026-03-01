@@ -165,6 +165,19 @@ export default function ClienteDetalhesPage() {
                                 </div>
                             </div>
                             <div className="flex items-start gap-3">
+                                <span className="w-4 h-4 text-slate-400 mt-0.5 font-bold text-center">@</span>
+                                <div>
+                                    <p className="text-xs text-slate-400 uppercase font-semibold">Instagram</p>
+                                    {cliente.instagram ? (
+                                        <a href={`https://instagram.com/${cliente.instagram}`} target="_blank" rel="noopener noreferrer" className="text-sm text-brand-500 hover:underline">
+                                            @{cliente.instagram}
+                                        </a>
+                                    ) : (
+                                        <p className="text-sm text-slate-700">Não informado</p>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3">
                                 <MapPin className="w-4 h-4 text-slate-400 mt-0.5" />
                                 <div>
                                     <p className="text-xs text-slate-400 uppercase font-semibold">Endereço</p>

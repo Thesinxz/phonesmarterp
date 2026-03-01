@@ -25,7 +25,9 @@ import { type Produto, type Cliente } from "@/types/database";
 import { useAuth } from "@/context/AuthContext";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
+import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { CadastroCompletoClienteModal } from "@/components/clientes/CadastroCompletoClienteModal";
 
 interface CartItem extends Produto {
     quantity: number;
@@ -44,6 +46,7 @@ export default function NovoPedidoPage() {
     const [searchClient, setSearchClient] = useState("");
     const [clients, setClients] = useState<Cliente[]>([]);
     const [selectedClient, setSelectedClient] = useState<Cliente | null>(null);
+    const [showNewClientModal, setShowNewClientModal] = useState(false);
 
     // Order Meta
     const [canalVenda, setCanalVenda] = useState<string>("whatsapp");
@@ -89,22 +92,44 @@ export default function NovoPedidoPage() {
         setCart(prev => {
             const existing = prev.find(item => item.id === product.id);
             if (existing) {
+                if (existing.quantity >= product.estoque_qtd) {
+                    toast.error(`Apenas ${product.estoque_qtd} un. de ${product.nome} em estoque`);
+                    return prev;
+                }
                 return prev.map(item =>
                     item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
                 );
+            }
+            if (product.estoque_qtd <= 0) {
+                toast.error(`Produto sem estoque suficiente`);
+                return prev;
             }
             return [...prev, { ...product, quantity: 1 }];
         });
     };
 
     const updateQuantity = (productId: string, delta: number) => {
-        setCart(prev => prev.map(item => {
-            if (item.id === productId) {
-                const newQtd = Math.max(1, item.quantity + delta);
-                return { ...item, quantity: newQtd };
+        setCart(prev => {
+            const existingProduct = prev.find(item => item.id === productId);
+            if (!existingProduct) return prev;
+
+            if (delta > 0 && existingProduct.quantity >= existingProduct.estoque_qtd) {
+                toast.error(`Limite de estoque atingido para ${existingProduct.nome}`);
+                return prev;
             }
-            return item;
-        }));
+
+            return prev.map(item => {
+                if (item.id === productId) {
+                    const newQtd = Math.max(1, item.quantity + delta);
+                    return { ...item, quantity: newQtd };
+                }
+                return item;
+            });
+        });
+    };
+
+    const removeFromCart = (productId: string) => {
+        setCart(prev => prev.filter(p => p.id !== productId));
     };
 
     const total = cart.reduce((acc, item) => acc + (item.preco_venda_centavos * item.quantity), 0);
@@ -200,11 +225,19 @@ export default function NovoPedidoPage() {
                     <div className="flex-1 overflow-y-auto space-y-6 scrollbar-none">
                         {/* Client */}
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</label>
+                            <div className="flex justify-between items-center">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</label>
+                                <button
+                                    onClick={() => setShowNewClientModal(true)}
+                                    className="text-[10px] font-bold text-brand-500 hover:text-brand-600 uppercase flex items-center gap-1"
+                                >
+                                    <Plus size={12} /> Novo
+                                </button>
+                            </div>
                             <div className="relative">
                                 <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                                 <input
-                                    className="input-glass pl-10 h-11 text-sm font-bold"
+                                    className="input-glass pl-10 h-11 text-sm font-bold w-full"
                                     placeholder="Buscar cliente..."
                                     value={selectedClient ? selectedClient.nome : searchClient}
                                     onChange={e => {
@@ -225,7 +258,7 @@ export default function NovoPedidoPage() {
                                                 className="w-full text-left px-4 py-3 hover:bg-slate-50 text-sm transition-all"
                                             >
                                                 <p className="font-bold text-slate-700">{c.nome}</p>
-                                                <p className="text-[10px] text-slate-400">{c.telefone}</p>
+                                                <p className="text-[10px] text-slate-400">{c.telefone || "Sem telefone"}</p>
                                             </button>
                                         ))}
                                     </div>
@@ -268,10 +301,19 @@ export default function NovoPedidoPage() {
                                             <p className="text-xs font-bold text-slate-700 truncate">{item.nome}</p>
                                             <p className="text-[10px] text-slate-400">R$ {(item.preco_venda_centavos / 100).toLocaleString('pt-BR')}</p>
                                         </div>
-                                        <div className="flex items-center gap-1">
-                                            <button onClick={() => updateQuantity(item.id, -1)} className="p-1 text-slate-400 hover:text-slate-600"><Minus size={12} /></button>
-                                            <span className="text-xs font-black w-4 text-center">{item.quantity}</span>
-                                            <button onClick={() => updateQuantity(item.id, 1)} className="p-1 text-slate-400 hover:text-slate-600"><Plus size={12} /></button>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex items-center bg-slate-200/50 rounded-lg p-0.5">
+                                                <button onClick={() => updateQuantity(item.id, -1)} className="p-1 text-slate-500 hover:text-slate-700 hover:bg-white rounded-md transition-colors"><Minus size={12} /></button>
+                                                <span className="text-xs font-black w-6 text-center text-slate-700">{item.quantity}</span>
+                                                <button onClick={() => updateQuantity(item.id, 1)} className="p-1 text-slate-500 hover:text-slate-700 hover:bg-white rounded-md transition-colors"><Plus size={12} /></button>
+                                            </div>
+                                            <button
+                                                onClick={() => removeFromCart(item.id)}
+                                                className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors ml-1"
+                                                title="Remover Item"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
                                         </div>
                                     </div>
                                 ))}
@@ -305,6 +347,17 @@ export default function NovoPedidoPage() {
                     </div>
                 </GlassCard>
             </div>
+            {showNewClientModal && (
+                <CadastroCompletoClienteModal
+                    onClose={() => setShowNewClientModal(false)}
+                    initialName={searchClient}
+                    onSuccess={(novoCliente) => {
+                        setSelectedClient(novoCliente);
+                        setSearchClient("");
+                        setShowNewClientModal(false);
+                    }}
+                />
+            )}
         </div>
     );
 }

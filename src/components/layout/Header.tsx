@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { cn } from "@/utils/cn";
 
 interface HeaderProps {
     title?: string;
@@ -13,7 +14,7 @@ interface HeaderProps {
 export function Header({ title }: HeaderProps) {
     const [unidade, setUnidade] = useState("Matriz");
     const [solicitationsCount, setSolicitationsCount] = useState(0);
-    const { user, profile } = useAuth();
+    const { user, profile, empresa, trialDaysLeft, isTrialExpired } = useAuth();
     const supabase = createClient();
 
     useEffect(() => {
@@ -98,6 +99,24 @@ export function Header({ title }: HeaderProps) {
                         className="input-glass pl-9 h-9 text-sm"
                     />
                 </div>
+
+                {/* Trial Badge */}
+                {empresa?.plano === 'starter' && !isTrialExpired && (
+                    <div className={cn(
+                        "flex items-center gap-2 px-3 py-1.5 rounded-xl border font-bold animate-in fade-in slide-in-from-left-2",
+                        trialDaysLeft <= 3
+                            ? "bg-amber-50 border-amber-200 text-amber-700 shadow-sm shadow-amber-200/50"
+                            : "bg-blue-50 border-blue-200 text-blue-700"
+                    )}>
+                        <div className={cn(
+                            "w-2 h-2 rounded-full",
+                            trialDaysLeft <= 3 ? "bg-amber-500 animate-pulse" : "bg-blue-500"
+                        )} />
+                        <span className="text-[10px] uppercase tracking-wider">
+                            {trialDaysLeft === 0 ? "Último dia de teste!" : `${trialDaysLeft} dias de teste grátis`}
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* Right: Actions */}

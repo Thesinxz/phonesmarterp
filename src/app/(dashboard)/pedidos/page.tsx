@@ -20,6 +20,7 @@ import { formatDate } from "@/utils/formatDate";
 import { cn } from "@/utils/cn";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import { PedidoMenuDropdown } from "@/components/pedidos/PedidoMenuDropdown";
 
 const STATUS_CONFIG = {
     rascunho: { label: "Rascunho", color: "bg-slate-100 text-slate-600" },
@@ -143,9 +144,11 @@ export default function PedidosPage() {
                                             {pedido.cliente?.nome || "Consumidor Final"}
                                         </h3>
                                     </div>
-                                    <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-400">
-                                        <MoreHorizontal size={16} />
-                                    </button>
+                                    <PedidoMenuDropdown
+                                        pedidoId={pedido.id}
+                                        telefoneCliente={pedido.cliente?.telefone}
+                                        onCancel={(id) => handleStatusChange(id, "cancelado")}
+                                    />
                                 </div>
 
                                 <div className="p-5 space-y-4">

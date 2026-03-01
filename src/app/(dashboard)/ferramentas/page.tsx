@@ -15,7 +15,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 
 const TOOLS = [
     {
-        title: "Calculadora Inteligente",
+        title: "Calculadora de Venda",
         desc: "Cálculo reverso de margem e precificação até 21x no cartão.",
         href: "/ferramentas/calculadora",
         icon: TrendingUp,
@@ -78,7 +78,7 @@ export default function FerramentasHub() {
                         </div>
                         <h2 className="text-2xl font-black mb-4">Dica de Gestão: Margem Real</h2>
                         <p className="text-white/60 text-sm leading-relaxed mb-6 italic">
-                            "Muitos lojistas calculam a margem sobre o custo (Markup), mas esquecem que as taxas de cartão e impostos incidem sobre o preço de venda final. Use a nossa Calculadora Inteligente para garantir que sua margem seja líquida de verdade."
+                            "Muitos lojistas calculam a margem sobre o custo (Markup), mas esquecem que as taxas de cartão e impostos incidem sobre o preço de venda final. Use a nossa Calculadora de Venda para garantir que sua margem seja líquida de verdade."
                         </p>
                         <div className="flex gap-4">
                             <div className="bg-white/10 px-4 py-2 rounded-xl border border-white/5">

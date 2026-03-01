@@ -242,11 +242,11 @@ export async function atualizarStatusPedido(vendaId: string, status: Venda["stat
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    // const { error } = await (supabase.from("vendas") as any)
-    //     .update({ status_pedido: status })
-    //     .eq("id", vendaId);
+    const { error } = await (supabase.from("vendas") as any)
+        .update({ status_pedido: status })
+        .eq("id", vendaId);
 
-    // if (error) throw error;
+    if (error) throw error;
 
     // Log de Auditoria
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

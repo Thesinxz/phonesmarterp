@@ -153,7 +153,6 @@ export async function getClienteTimeline(clienteId: string) {
         const { data: fetchedTitulos, error: tituloError } = await (supabase.from("financeiro_titulos"))
             .select(`
                 id,
-                numero,
                 created_at,
                 valor_total_centavos,
                 tipo,

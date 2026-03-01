@@ -15,6 +15,8 @@ interface AuthContextProps {
     empresa: Empresa | null;
     userCompanies: CompanyLink[];
     isLoading: boolean;
+    isTrialExpired: boolean;
+    trialDaysLeft: number;
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
     switchCompany: (empresaId: string) => Promise<void>;
@@ -219,6 +221,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    // Lógica de Trial (14 dias)
+    let isTrialExpired = false;
+    let trialDaysLeft = 0;
+
+    if (empresa && empresa.plano === 'starter') {
+        const creationDate = new Date(empresa.created_at);
+        const expirationDate = new Date(creationDate.getTime() + (14 * 24 * 60 * 60 * 1000));
+        const now = new Date();
+
+        trialDaysLeft = Math.max(0, Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+        isTrialExpired = now > expirationDate;
+    }
+
     const value = {
         user,
         session,
@@ -226,6 +241,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         empresa,
         userCompanies,
         isLoading,
+        isTrialExpired,
+        trialDaysLeft,
         signOut,
         refreshProfile,
         switchCompany

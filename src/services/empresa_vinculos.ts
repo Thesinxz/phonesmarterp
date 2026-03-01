@@ -66,9 +66,17 @@ export async function getUsuarioEmpresas(authUserId: string) {
 }
 
 /**
- * Cria uma empresa adicional para o usuário logado
+ * Cria uma empresa adicional para o usuário logado com dados completos
  */
-export async function provisionAdditionalCompany(nome: string, subdominio: string, authUserId: string, userEmail: string, userName: string) {
+export async function provisionAdditionalCompany(
+    nome: string,
+    subdominio: string,
+    authUserId: string,
+    userEmail: string,
+    userName: string,
+    cnpj?: string,
+    emitenteJson: any = {}
+) {
     const supabase = createClient();
 
     const { data, error } = await (supabase as any).rpc('provision_additional_company', {
@@ -76,7 +84,9 @@ export async function provisionAdditionalCompany(nome: string, subdominio: strin
         p_subdominio: subdominio,
         p_nome_usuario: userName,
         p_email_usuario: userEmail,
-        p_auth_user_id: authUserId
+        p_auth_user_id: authUserId,
+        p_cnpj: cnpj || null,
+        p_emitente_json: emitenteJson
     });
 
     if (error) throw error;
@@ -86,7 +96,7 @@ export async function provisionAdditionalCompany(nome: string, subdominio: strin
 /**
  * Clona dados de uma empresa para outra
  */
-export async function cloneCompanyData(sourceId: string, targetId: string, options: { products: boolean; clients: boolean }) {
+export async function cloneCompanyData(sourceId: string, targetId: string, options: { products: boolean; clients: boolean; configs?: boolean }) {
     const supabase = createClient();
 
     const { error } = await (supabase as any).rpc('clone_company_data', {

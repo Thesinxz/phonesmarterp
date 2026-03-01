@@ -47,6 +47,8 @@ const navItems = [
             { label: "Nova OS", href: "/os/nova" },
             { label: "Prateleira / Abandonos", href: "/os/prateleira" },
             { label: "Garantia Estendida", href: "/os/garantias" },
+            { label: "Orçamento Rápido", href: "/orcamento" },
+            { label: "Técnicos", href: "/tecnicos" },
         ]
     },
     {
@@ -56,28 +58,15 @@ const navItems = [
         permission: "ordens_servico"
     },
     {
-        label: "PDV",
-        href: "/pdv",
-        icon: ShoppingCart,
-        permission: "vendas"
-    },
-    {
-        label: "Orçamento Rápido",
-        href: "/orcamento",
-        icon: MessageCircle,
-        permission: "vendas"
-    },
-    {
-        label: "Pedidos",
-        href: "/pedidos",
-        icon: ClipboardCheck,
-        permission: "vendas"
-    },
-    {
         label: "Vendas",
         href: "/vendas",
-        icon: Receipt,
-        permission: "vendas"
+        icon: ShoppingCart,
+        permission: "vendas",
+        children: [
+            { label: "PDV (Caixa)", href: "/pdv" },
+            { label: "Todas as Vendas", href: "/vendas" },
+            { label: "Pedidos / Encomendas", href: "/pedidos" },
+        ]
     },
     {
         label: "Clientes",
@@ -108,13 +97,8 @@ const navItems = [
             { label: "A Pagar", href: "/financeiro/pagar" },
             { label: "Caixa (PDV)", href: "/financeiro/caixa" },
             { label: "DRE Gerencial", href: "/financeiro/dre" },
+            { label: "Crediário", href: "/financeiro/crediario" },
         ]
-    },
-    {
-        label: "Técnicos",
-        href: "/tecnicos",
-        icon: Wrench,
-        permission: "ordens_servico"
     },
     {
         label: "Equipe",
@@ -138,7 +122,7 @@ const navItems = [
         icon: Calculator,
         permission: "estoque",
         children: [
-            { label: "Calculadora Inteligente", href: "/ferramentas/calculadora" },
+            { label: "Calculadora de Venda", href: "/ferramentas/calculadora" },
             { label: "Cálculo em Massa", href: "/ferramentas/calculo-em-massa" },
             { label: "Importação iPhone", href: "/ferramentas/importacao" },
         ]
