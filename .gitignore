@@ -44,3 +44,7 @@ npm-cache-2/
 npm-cache-limpo/
 npm-cache-temp/
 temp_build/
+.npm_tmp/
+.npm_local/
+.npm_global/
+.npmrc
