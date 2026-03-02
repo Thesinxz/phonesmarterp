@@ -154,7 +154,7 @@ export async function getAutomacoes(): Promise<MarketingAutomacao[]> {
     const { data } = await (supabase.from("configuracoes") as any)
         .select("valor")
         .eq("chave", "marketing_automacoes")
-        .single();
+        .maybeSingle();
 
     if (data?.valor && Array.isArray(data.valor)) {
         // Merge com defaults para garantir que novos fields existam
@@ -229,7 +229,7 @@ export async function getTemplates(): Promise<MarketingTemplate[]> {
     const { data } = await (supabase.from("configuracoes") as any)
         .select("valor")
         .eq("chave", "marketing_templates")
-        .single();
+        .maybeSingle();
 
     if (data?.valor && Array.isArray(data.valor)) {
         return data.valor as MarketingTemplate[];

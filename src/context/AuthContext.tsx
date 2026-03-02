@@ -147,6 +147,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         let mounted = true;
+
+        // ── FIX: Resolver sessão PROATIVAMENTE do storage/cookie ──
+        // getSession() lê instantaneamente do localStorage, enquanto
+        // onAuthStateChange depende de um listener assíncrono que pode
+        // disparar com delay. Isso garante que a sessão esteja pronta
+        // ANTES de qualquer página tentar fazer queries via RLS.
+        supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+            if (!mounted) return;
+            if (initialSession?.user) {
+                setSession(initialSession);
+                setUser(initialSession.user);
+                fetchProfile(initialSession.user.id, initialSession.user.email);
+            } else {
+                setIsLoading(false);
+            }
+        });
+
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
             if (!mounted) return;
             setSession(newSession);

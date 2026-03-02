@@ -76,6 +76,13 @@ export function useDashboardMetrics() {
     const supabase = createClient();
 
     const fetchMetrics = async () => {
+        // Guard: verificar se a sessão está pronta antes de executar queries
+        // Sem sessão, auth.uid() retorna NULL → get_my_empresa_id() = NULL → dados vazios
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            console.warn("[Dashboard] Sessão não pronta, adiando fetch...");
+            return;
+        }
         try {
             // ──── Métricas Top Cards ────────────────────────────────
 
