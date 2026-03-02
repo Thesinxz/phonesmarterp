@@ -21,23 +21,47 @@ interface PDFBranding {
     uf?: string;
     telefone?: string;
     email?: string;
+    logo_url?: string | null;
 }
 
-export const generateSOPDF = (os: any, branding?: PDFBranding) => {
+const getBase64ImageFromUrl = async (imageUrl: string): Promise<string> => {
+    const res = await fetch(imageUrl);
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+};
+
+export const generateSOPDF = async (os: any, branding?: PDFBranding) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 15;
+    let startX = margin;
+
+    // --- Logo ---
+    if (branding?.logo_url) {
+        try {
+            const logoBase64 = await getBase64ImageFromUrl(branding.logo_url);
+            doc.addImage(logoBase64, "PNG", margin, 15, 30, 15);
+            startX = margin + 35; // Shift text to right
+        } catch (error) {
+            console.error("Erro ao carregar logo para o PDF", error);
+        }
+    }
 
     // --- Header ---
     doc.setFont("helvetica", "bold");
     doc.setFontSize(22);
-    doc.text(branding?.nome_fantasia || "SmartOS ERP", margin, 20);
+    doc.text(branding?.nome_fantasia || "SmartOS ERP", startX, 20);
 
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     const address = `${branding?.logradouro || ""}, ${branding?.numero || ""} - ${branding?.bairro || ""} - ${branding?.municipio || ""}/${branding?.uf || ""}`;
-    doc.text(address, margin, 26);
-    doc.text(`CNPJ: ${branding?.cnpj || "N/I"} | Tel: ${branding?.telefone || "N/I"}`, margin, 31);
+    doc.text(address, startX, 26);
+    doc.text(`CNPJ: ${branding?.cnpj || "N/I"} | Tel: ${branding?.telefone || "N/I"}`, startX, 31);
 
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
@@ -147,21 +171,33 @@ export const generateSOPDF = (os: any, branding?: PDFBranding) => {
     doc.save(`OS_${String(os.numero).padStart(5, '0')}.pdf`);
 };
 
-export const generateVendaPDF = (venda: any, branding?: PDFBranding) => {
+export const generateVendaPDF = async (venda: any, branding?: PDFBranding) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 15;
+    let startX = margin;
+
+    // --- Logo ---
+    if (branding?.logo_url) {
+        try {
+            const logoBase64 = await getBase64ImageFromUrl(branding.logo_url);
+            doc.addImage(logoBase64, "PNG", margin, 15, 30, 15);
+            startX = margin + 35; // Shift text to right
+        } catch (error) {
+            console.error("Erro ao carregar logo para o PDF", error);
+        }
+    }
 
     // --- Header ---
     doc.setFont("helvetica", "bold");
     doc.setFontSize(22);
-    doc.text(branding?.nome_fantasia || "SmartOS ERP", margin, 20);
+    doc.text(branding?.nome_fantasia || "SmartOS ERP", startX, 20);
 
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     const address = `${branding?.logradouro || ""}, ${branding?.numero || ""} - ${branding?.bairro || ""} - ${branding?.municipio || ""}/${branding?.uf || ""}`;
-    doc.text(address, margin, 26);
-    doc.text(`CNPJ: ${branding?.cnpj || "N/I"} | Tel: ${branding?.telefone || "N/I"}`, margin, 31);
+    doc.text(address, startX, 26);
+    doc.text(`CNPJ: ${branding?.cnpj || "N/I"} | Tel: ${branding?.telefone || "N/I"}`, startX, 31);
 
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");

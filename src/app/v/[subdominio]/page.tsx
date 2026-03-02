@@ -289,9 +289,13 @@ export default function VitrinePage() {
                     <div className="flex items-center justify-between">
                         {/* Logo + Nome */}
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                                <ShoppingBag className="w-5 h-5 text-white" />
-                            </div>
+                            {empresa.logo_url ? (
+                                <img src={empresa.logo_url} alt={`Logo ${empresa.nome}`} className="w-10 h-10 object-contain rounded-xl bg-white p-1" />
+                            ) : (
+                                <div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                                    <ShoppingBag className="w-5 h-5 text-white" />
+                                </div>
+                            )}
                             <div>
                                 <h1 className="text-white font-bold text-lg leading-tight">{empresa.nome}</h1>
                                 <p className="text-slate-500 text-xs">{config.titulo}</p>

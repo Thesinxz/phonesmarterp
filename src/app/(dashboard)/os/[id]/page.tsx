@@ -158,8 +158,13 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
         setGerandoPDF(true);
         try {
             const configs = await getConfigs(profile.empresa_id);
-            const branding = configs.nfe_emitente || {};
-            generateSOPDF(os, branding);
+            const branding: any = configs.nfe_emitente || {};
+
+            const supabase = createClient();
+            const { data: empresa } = await supabase.from('empresas').select('logo_url').eq('id', profile.empresa_id).single();
+            if (empresa?.logo_url) branding.logo_url = empresa.logo_url;
+
+            await generateSOPDF(os, branding);
         } catch (error) {
             console.error("Erro ao gerar PDF:", error);
         } finally {

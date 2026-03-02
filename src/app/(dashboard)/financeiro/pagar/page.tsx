@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { getTitulos, getResumoTitulos, darBaixaTitulo } from "@/services/titulos";
+import { getTitulos, getResumoTitulos, darBaixaTitulo, deleteTitulo } from "@/services/titulos";
 import { type FinanceiroTitulo } from "@/types/database";
 import { useRealtimeSubscription } from "@/hooks/useRealtime";
 import { GlassCard } from "@/components/ui/GlassCard";
 import {
     Filter, Plus, CheckCircle2, Clock, AlertCircle,
     MoreHorizontal, ArrowUpRight, Search, TrendingDown,
-    Calendar, FileCode2, UploadCloud
+    Calendar, FileCode2, UploadCloud, Trash2
 } from "lucide-react";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { formatDate } from "@/utils/formatDate";
@@ -33,6 +33,21 @@ export default function ContasPagarPage() {
     const [statusFilter, setStatusFilter] = useState("todos");
     const [filterStart, setFilterStart] = useState<string | undefined>(undefined);
     const [filterEnd, setFilterEnd] = useState<string | undefined>(undefined);
+
+    // Menu de Ações (Dropdown)
+    const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    // Fechar menu ao clicar fora
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setActionMenuOpen(null);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     useEffect(() => {
         if (profile?.empresa_id) {
@@ -104,8 +119,22 @@ export default function ContasPagarPage() {
             await darBaixaTitulo(id, valorTotal);
             toast.success("Despesa paga com sucesso!");
             loadData();
+            setActionMenuOpen(null);
         } catch (error: any) {
             toast.error("Erro ao pagar título: " + error.message);
+        }
+    };
+
+    const handleExcluirTitulo = async (id: string) => {
+        if (!confirm("Tem certeza que deseja excluir esta conta a pagar permanentemente?\n\nEsta ação não pode ser desfeita.")) return;
+
+        try {
+            await deleteTitulo(id);
+            toast.success("Conta a pagar excluída com sucesso.");
+            setActionMenuOpen(null);
+            loadData();
+        } catch (error: any) {
+            toast.error("Erro ao excluir conta: " + error.message);
         }
     };
 
@@ -301,7 +330,7 @@ export default function ContasPagarPage() {
                                                     </p>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 text-center">
+                                            <td className="px-6 py-4 text-center relative">
                                                 <div className="flex justify-center items-center gap-2">
                                                     {item.status !== 'pago' && item.status !== 'cancelado' && (
                                                         <button
@@ -312,9 +341,40 @@ export default function ContasPagarPage() {
                                                             <ArrowUpRight size={14} /> Pagar
                                                         </button>
                                                     )}
-                                                    <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all opacity-0 group-hover:opacity-100">
-                                                        <MoreHorizontal size={18} />
-                                                    </button>
+                                                    <div className="relative">
+                                                        <button
+                                                            onClick={() => setActionMenuOpen(actionMenuOpen === item.id ? null : item.id)}
+                                                            className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                                                        >
+                                                            <MoreHorizontal size={18} />
+                                                        </button>
+
+                                                        {actionMenuOpen === item.id && (
+                                                            <div
+                                                                ref={menuRef}
+                                                                className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2"
+                                                            >
+                                                                <div className="py-1">
+                                                                    {item.status !== 'pago' && item.status !== 'cancelado' && (
+                                                                        <button
+                                                                            onClick={() => handleBaixarTitulo(item.id, saldoRestante)}
+                                                                            className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                                                        >
+                                                                            <ArrowUpRight size={16} className="text-emerald-500" />
+                                                                            Pagar Total
+                                                                        </button>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={() => handleExcluirTitulo(item.id)}
+                                                                        className="w-full px-4 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                                                    >
+                                                                        <Trash2 size={16} />
+                                                                        Excluir Conta
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </td>
                                         </tr>

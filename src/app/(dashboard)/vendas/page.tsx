@@ -24,6 +24,7 @@ import { PermissionGuard } from "@/components/auth/PermissionGuard";
 import { generateVendaPDF } from "@/utils/pdfGenerator";
 import { getConfigs } from "@/services/configuracoes";
 import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
+import { createClient } from "@/lib/supabase/client";
 
 export default function VendasPage() {
     const { profile } = useAuth();
@@ -95,8 +96,13 @@ export default function VendasPage() {
         setExportingId(venda.id);
         try {
             const configs = await getConfigs(profile.empresa_id);
-            const branding = configs.nfe_emitente || {};
-            generateVendaPDF(venda, branding);
+            const branding: any = configs.nfe_emitente || {};
+
+            const supabase = createClient();
+            const { data: empresa } = await supabase.from('empresas').select('logo_url').eq('id', profile.empresa_id).single();
+            if (empresa?.logo_url) branding.logo_url = empresa.logo_url;
+
+            await generateVendaPDF(venda, branding);
         } catch (error) {
             console.error("Erro ao gerar PDF:", error);
         } finally {

@@ -241,6 +241,55 @@ export async function atualizarStatusPedido(vendaId: string, status: Venda["stat
         }
     }
 
+    // Tratamento de estorno para cancelamento de pedidos
+    if (status === "cancelado" && pedido.status_pedido !== "cancelado") {
+        // Verifica se estoque já havia sido deduzido
+        const statusesQueDeduzemEstoque = ["separando", "enviado", "entregue"];
+        if (statusesQueDeduzemEstoque.includes(pedido.status_pedido as string)) {
+            for (const item of pedido.itens) {
+                if (item.produto_id) {
+                    const { data: prod } = await supabase
+                        .from("produtos")
+                        .select("estoque_qtd")
+                        .eq("id", item.produto_id)
+                        .single();
+
+                    if (prod) {
+                        const estoqueAtual = (prod as any).estoque_qtd;
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        await (supabase.from("produtos") as any)
+                            .update({ estoque_qtd: estoqueAtual + item.quantidade })
+                            .eq("id", item.produto_id);
+
+                        // Log na timeline do produto
+                        try {
+                            await addProdutoHistorico(
+                                item.produto_id,
+                                pedido.empresa_id,
+                                "devolucao",
+                                `Retorno por Pedido Cancelado (#${pedido.numero ? String(pedido.numero).padStart(5, '0') : pedido.id.split('-')[0]})`,
+                                pedido.id,
+                                usuarioId
+                            );
+                        } catch (e) {
+                            console.error("Erro ao registrar timeline:", e);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Limpar financeiro vinculado a este pedido
+        await (supabase.from("financeiro_titulos") as any)
+            .delete()
+            .eq("origem_id", vendaId)
+            .eq("origem_tipo", "venda");
+
+        await (supabase.from("caixa_movimentacoes") as any)
+            .delete()
+            .eq("origem_id", vendaId);
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase.from("vendas") as any)
         .update({ status_pedido: status })

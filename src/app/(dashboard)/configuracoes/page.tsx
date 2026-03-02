@@ -170,12 +170,16 @@ export default function ConfiguracoesPage() {
         sandbox: true
     });
 
-    // Subdomínio da empresa (slug da vitrine)
     const [empresaSubdominio, setEmpresaSubdominio] = useState("");
     const [editingSlug, setEditingSlug] = useState("");
     const [slugDisponivel, setSlugDisponivel] = useState<boolean | null>(null);
     const [checkingSlug, setCheckingSlug] = useState(false);
     const [savingSlug, setSavingSlug] = useState(false);
+
+    // Upload Logo
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
+    const [uploadingLogo, setUploadingLogo] = useState(false);
+    const logoFileRef = useRef<HTMLInputElement>(null);
 
     const [contadorConfig, setContadorConfig] = useState<ContadorConfig>({
         email: "",
@@ -305,19 +309,25 @@ export default function ConfiguracoesPage() {
                 setConfigsLoaded(true);
             }
 
-            // Carregar subdomínio da empresa
+            // Carregar subdomínio e logo da empresa
             try {
                 const sb = createClient();
                 const { data: emp } = await (sb.from("empresas") as any)
-                    .select("subdominio")
+                    .select("subdominio, logo_url")
                     .eq("id", profile.empresa_id)
                     .single();
-                if (emp?.subdominio && !ignore) {
-                    setEmpresaSubdominio(emp.subdominio);
-                    setEditingSlug(emp.subdominio);
+
+                if (!ignore && emp) {
+                    if (emp.subdominio) {
+                        setEmpresaSubdominio(emp.subdominio);
+                        setEditingSlug(emp.subdominio);
+                    }
+                    if (emp.logo_url) {
+                        setLogoUrl(emp.logo_url);
+                    }
                 }
             } catch (e) {
-                console.warn("Erro ao carregar subdomínio", e);
+                console.warn("Erro ao carregar dados adicionais da empresa", e);
             }
         }
 
@@ -358,6 +368,46 @@ export default function ConfiguracoesPage() {
                 </button>
             </div>
         );
+    }
+
+    async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (!file || !profile?.empresa_id) return;
+
+        setUploadingLogo(true);
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${profile.empresa_id}/logo_${Date.now()}.${fileExt}`;
+            const supabase = createClient();
+
+            // 1. Upload to logos bucket
+            const { error: uploadError } = await supabase.storage
+                .from('logos')
+                .upload(fileName, file, { upsert: true });
+
+            if (uploadError) throw uploadError;
+
+            // 2. Obter URL pública
+            const { data: { publicUrl } } = supabase.storage
+                .from('logos')
+                .getPublicUrl(fileName);
+
+            // 3. Atualizar tabela empresas
+            const { error: updateError } = await (supabase.from('empresas') as any)
+                .update({ logo_url: publicUrl })
+                .eq('id', profile.empresa_id);
+
+            if (updateError) throw updateError;
+
+            setLogoUrl(publicUrl);
+            toast.success("Logo atualizada com sucesso!");
+        } catch (error: any) {
+            console.error("Erro no upload do logo:", error);
+            toast.error("Erro ao fazer upload da logo. O bucket 'logos' existe no Supabase?");
+        } finally {
+            setUploadingLogo(false);
+            if (logoFileRef.current) logoFileRef.current.value = "";
+        }
     }
 
     async function buscarCnpj() {
@@ -568,6 +618,44 @@ export default function ConfiguracoesPage() {
                         {/* ── EMPRESA ── */}
                         {activeTab === "empresa" && (
                             <GlassCard title="Dados do Emitente" icon={Building2}>
+                                {/* Area de Logo */}
+                                <div className="mb-6 pb-6 border-b border-slate-100 flex items-center gap-6">
+                                    <div
+                                        className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 relative group cursor-pointer hover:border-brand-300 transition-colors"
+                                        onClick={() => logoFileRef.current?.click()}
+                                    >
+                                        {uploadingLogo ? (
+                                            <Loader2 size={24} className="animate-spin text-slate-400" />
+                                        ) : logoUrl ? (
+                                            <>
+                                                <img src={logoUrl} alt="Logo Empresa" className="w-full h-full object-contain p-2 group-hover:opacity-50 transition-opacity" />
+                                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Upload size={20} className="text-brand-500" />
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="text-center group-hover:scale-110 transition-transform">
+                                                <Upload size={20} className="text-slate-400 mx-auto mb-1 group-hover:text-brand-400 transition-colors" />
+                                                <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-500 transition-colors block leading-tight">ENVIAR<br />LOGO</span>
+                                            </div>
+                                        )}
+                                        <input type="file" className="hidden" accept="image/*" ref={logoFileRef} onChange={handleLogoUpload} disabled={uploadingLogo} />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-slate-700 text-sm">Logo da Empresa</h3>
+                                        <p className="text-xs text-slate-500 mt-1 max-w-sm">
+                                            A logo será utilizada em orçamentos, recibos, ordens de serviço (PDF) e no topo da Vitrine Online.
+                                        </p>
+                                        <button
+                                            onClick={() => logoFileRef.current?.click()}
+                                            disabled={uploadingLogo}
+                                            className="mt-3 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+                                        >
+                                            Substituir Imagem
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="col-span-2 md:col-span-1">
                                         <label className="label-sm">CNPJ *</label>

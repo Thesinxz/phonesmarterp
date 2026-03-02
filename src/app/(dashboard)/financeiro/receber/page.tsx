@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { getTitulos, getResumoTitulos, darBaixaTitulo } from "@/services/titulos";
+import { getTitulos, getResumoTitulos, darBaixaTitulo, deleteTitulo } from "@/services/titulos";
 import { type FinanceiroTitulo } from "@/types/database";
 import { useRealtimeSubscription } from "@/hooks/useRealtime";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -24,6 +24,7 @@ export default function ContasReceberPage() {
     const [resumo, setResumo] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
+    const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
 
     // Filtros
     const [statusFilter, setStatusFilter] = useState("todos");
@@ -90,6 +91,18 @@ export default function ContasReceberPage() {
             loadData();
         } catch (error: any) {
             toast.error("Erro ao baixar título: " + error.message);
+        }
+    };
+
+    const handleExcluirTitulo = async (id: string) => {
+        if (!confirm("Tem certeza que deseja excluir/cancelar este título?")) return;
+
+        try {
+            await deleteTitulo(id);
+            toast.success("Título removido com sucesso!");
+            loadData();
+        } catch (error: any) {
+            toast.error("Erro ao excluir título: " + error.message);
         }
     };
 
@@ -284,9 +297,48 @@ export default function ContasReceberPage() {
                                                             <ArrowUpRight size={14} /> Baixar
                                                         </button>
                                                     )}
-                                                    <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all opacity-0 group-hover:opacity-100">
-                                                        <MoreHorizontal size={18} />
-                                                    </button>
+                                                    <div className="relative">
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActionMenuOpen(actionMenuOpen === item.id ? null : item.id);
+                                                            }}
+                                                            className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all opacity-0 group-hover:opacity-100"
+                                                        >
+                                                            <MoreHorizontal size={18} />
+                                                        </button>
+
+                                                        {actionMenuOpen === item.id && (
+                                                            <>
+                                                                <div
+                                                                    className="fixed inset-0 z-[60]"
+                                                                    onClick={() => setActionMenuOpen(null)}
+                                                                />
+                                                                <div className="absolute right-0 mt-1 w-48 bg-white rounded-xl shadow-2xl border border-slate-100 z-[70] py-2 animate-in fade-in zoom-in-95 duration-100">
+                                                                    {item.status !== 'pago' && (
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                handleBaixarTitulo(item.id, saldoRestante);
+                                                                                setActionMenuOpen(null);
+                                                                            }}
+                                                                            className="w-full text-left px-4 py-2 text-sm text-emerald-600 hover:bg-emerald-50 font-bold flex items-center gap-2"
+                                                                        >
+                                                                            <CheckCircle2 size={16} /> Receber Total
+                                                                        </button>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            handleExcluirTitulo(item.id);
+                                                                            setActionMenuOpen(null);
+                                                                        }}
+                                                                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-bold flex items-center gap-2"
+                                                                    >
+                                                                        <AlertCircle size={16} /> Excluir Título
+                                                                    </button>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </td>
                                         </tr>

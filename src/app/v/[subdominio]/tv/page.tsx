@@ -359,9 +359,13 @@ export default function VitrineTV() {
             {/* ── Header Fixo ── */}
             <header className="fixed top-0 left-0 right-0 z-50 p-12 flex items-center justify-between">
                 <div className="flex items-center gap-8">
-                    <div className="w-24 h-24 rounded-[2rem] bg-indigo-500 flex items-center justify-center shadow-[0_0_50px_rgba(99,102,241,0.4)]">
-                        <ShoppingBag className="w-12 h-12 text-white" />
-                    </div>
+                    {empresa.logo_url ? (
+                        <img src={empresa.logo_url} alt={`Logo ${empresa.nome}`} className="w-24 h-24 object-contain rounded-[2rem] bg-white p-2 shadow-[0_0_50px_rgba(99,102,241,0.4)]" />
+                    ) : (
+                        <div className="w-24 h-24 rounded-[2rem] bg-indigo-500 flex items-center justify-center shadow-[0_0_50px_rgba(99,102,241,0.4)]">
+                            <ShoppingBag className="w-12 h-12 text-white" />
+                        </div>
+                    )}
                     <div>
                         <h1 className="text-white font-black text-6xl tracking-tighter leading-none">{empresa.nome}</h1>
                         <p className="text-indigo-400 text-2xl font-black uppercase tracking-[0.4em] mt-2">{config.titulo}</p>

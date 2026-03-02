@@ -30,11 +30,46 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
         }
 
-        // Opcionalmente podemos cancelar na Efibank se for tipo efibank
-        // e se não tiver pagamentos.
-        // Por hora, apenas excluiremos do banco local. O RLS + FK Cascade fará o resto.
-        // A trigger e as fk properties (ON DELETE CASCADE) nas parcelas facilitarão as exclusões.
+        // 1. Buscar o crediário antes de excluir para pegar o venda_id e empresa_id
+        const { data: crediarioData } = await (supabaseAdmin.from("crediarios") as any)
+            .select("id, empresa_id, venda_id")
+            .eq("id", crediario_id)
+            .single();
 
+        if (crediarioData) {
+            // 2. Buscar as parcelas deste crediário para limpeza financeira
+            const { data: parcelas } = await (supabaseAdmin.from("crediario_parcelas") as any)
+                .select("id")
+                .eq("crediario_id", crediario_id);
+
+            const parcelaIds = (parcelas || []).map((p: any) => p.id);
+
+            // 3. Limpar movimentações de caixa relacionadas às parcelas
+            if (parcelaIds.length > 0) {
+                await (supabaseAdmin.from("caixa_movimentacoes") as any)
+                    .delete()
+                    .in("origem_id", parcelaIds);
+
+                await (supabaseAdmin.from("financeiro_titulos") as any)
+                    .delete()
+                    .in("origem_id", parcelaIds);
+            }
+
+            // 4. Se o crediário estiver vinculado a uma venda, limpar os títulos da venda também
+            // Isso resolve o problema de valores duplicados (venda + crediario) que continuam aparecendo
+            if (crediarioData.venda_id) {
+                await (supabaseAdmin.from("financeiro_titulos") as any)
+                    .delete()
+                    .eq("origem_id", crediarioData.venda_id)
+                    .eq("origem_tipo", "venda");
+
+                await (supabaseAdmin.from("caixa_movimentacoes") as any)
+                    .delete()
+                    .eq("origem_id", crediarioData.venda_id);
+            }
+        }
+
+        // 5. Excluir o crediário
         const { error: delErr } = await (supabaseAdmin.from("crediarios") as any)
             .delete()
             .eq("id", crediario_id);
