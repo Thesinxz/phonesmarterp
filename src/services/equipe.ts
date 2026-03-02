@@ -22,57 +22,30 @@ export async function getMembrosEquipe(empresaId: string) {
 }
 
 export async function criarMembroEquipe(data: Omit<Usuario, "id" | "created_at">) {
-    console.log("[equipe.ts] Iniciando criarMembroEquipe para:", data.email);
+    console.log("[equipe.ts] V4 - criarMembroEquipe para:", data.email);
 
-    // Gerar ID no client
     const token = crypto.randomUUID();
 
-    const convite = {
-        p_id: token,
-        p_empresa_id: data.empresa_id,
-        p_email: data.email,
-        p_nome: data.nome || 'Convidado',
-        p_papel: data.papel,
-        p_permissoes: data.permissoes_json || {}
-    };
+    // INSERT direto — RLS desabilitado em equipe_convites
+    const { error } = await supabase
+        .from("equipe_convites")
+        .insert({
+            id: token,
+            empresa_id: data.empresa_id,
+            email: data.email,
+            nome: data.nome || 'Convidado',
+            papel: data.papel,
+            permissoes_json: data.permissoes_json || {}
+        });
 
-    try {
-        console.log("[equipe.ts] Chamando RPC criar_convite_equipe...", convite);
-
-        // 1. Tentar via RPC (SECURITY DEFINER bypasses RLS) - É o método mais seguro
-        const { error: rpcError } = await supabase.rpc("criar_convite_equipe", convite);
-
-        if (!rpcError) {
-            console.log("[equipe.ts] Sucesso via RPC!");
-        } else {
-            console.warn("[equipe.ts] RPC falhou ou não existe, tentando INSERT direto...", rpcError);
-
-            // 2. Fallback: INSERT direto (apenas se a RPC não existir ou falhar)
-            const { error: insertError } = await supabase
-                .from("equipe_convites")
-                .insert({
-                    id: token,
-                    empresa_id: data.empresa_id,
-                    email: data.email,
-                    nome: data.nome || 'Convidado',
-                    papel: data.papel,
-                    permissoes_json: data.permissoes_json || {}
-                });
-
-            if (insertError) {
-                console.error("[equipe.ts] Ambos métodos falharam. Erro INSERT:", insertError);
-                throw insertError;
-            }
-        }
-
-        const inviteLink = `${window.location.origin}/cadastro?token=${token}`;
-        console.log("[equipe.ts] Convite gerado com sucesso! Link:", inviteLink);
-        return { success: true, token, inviteLink };
-
-    } catch (err: any) {
-        console.error("[equipe.ts] Erro fatal:", err);
-        throw new Error(err.message || "Não foi possível criar o convite da equipe.");
+    if (error) {
+        console.error("[equipe.ts] Erro ao criar convite:", error);
+        throw new Error(error.message || "Não foi possível criar o convite.");
     }
+
+    const inviteLink = `${window.location.origin}/cadastro?token=${token}`;
+    console.log("[equipe.ts] Convite criado com sucesso! Link:", inviteLink);
+    return { success: true, token, inviteLink };
 }
 
 /**
