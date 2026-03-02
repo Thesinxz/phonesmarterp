@@ -161,7 +161,7 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
             const branding: any = configs.nfe_emitente || {};
 
             const supabase = createClient();
-            const { data: empresa } = await supabase.from('empresas').select('logo_url').eq('id', profile.empresa_id).single();
+            const { data: empresa } = await (supabase.from('empresas') as any).select('logo_url').eq('id', profile.empresa_id).single();
             if (empresa?.logo_url) branding.logo_url = empresa.logo_url;
 
             await generateSOPDF(os, branding);
