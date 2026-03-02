@@ -21,31 +21,67 @@ export async function getMembrosEquipe(empresaId: string) {
     return data as Usuario[];
 }
 
-export async function criarMembroEquipe(data: Omit<Usuario, "id" | "created_at">) {
-    console.log("[equipe.ts] V4 - criarMembroEquipe para:", data.email);
-
+export async function criarMembroEquipe(data: Omit<Usuario, "id" | "created_at">, explicitToken?: string) {
     const token = crypto.randomUUID();
+    const payload = {
+        id: token,
+        empresa_id: data.empresa_id,
+        email: data.email,
+        nome: data.nome || 'Convidado',
+        papel: data.papel,
+        permissoes_json: data.permissoes_json || {}
+    };
 
-    // INSERT direto — RLS desabilitado em equipe_convites
-    const { error } = await supabase
-        .from("equipe_convites")
-        .insert({
-            id: token,
-            empresa_id: data.empresa_id,
-            email: data.email,
-            nome: data.nome || 'Convidado',
-            papel: data.papel,
-            permissoes_json: data.permissoes_json || {}
+    try {
+        let accessToken = explicitToken || '';
+
+        // Fallback: Busca manual se o token não foi injetado (via LocalStorage)
+        if (!accessToken) {
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+            const projectRef = supabaseUrl?.split('.')[0].split('//')[1];
+            const storageKey = `sb-${projectRef}-auth-token`;
+            const storageData = localStorage.getItem(storageKey);
+            if (storageData) {
+                const parsed = JSON.parse(storageData);
+                accessToken = parsed.access_token;
+            }
+        }
+
+        // Último recurso: busca via client (com risco de hang)
+        if (!accessToken) {
+            const { data: { session } } = await supabase.auth.getSession();
+            accessToken = session?.access_token || '';
+        }
+
+        if (!accessToken) throw new Error("Sessão expirada. Por favor, faça login novamente.");
+
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+        // Fetch direto para evitar deadlocks da biblioteca oficial durante INSERT
+        const response = await fetch(`${supabaseUrl}/rest/v1/equipe_convites`, {
+            method: 'POST',
+            headers: {
+                'apikey': supabaseAnonKey!,
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify(payload)
         });
 
-    if (error) {
-        console.error("[equipe.ts] Erro ao criar convite:", error);
-        throw new Error(error.message || "Não foi possível criar o convite.");
-    }
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Erro ao salvar no banco: ${response.status}`);
+        }
 
-    const inviteLink = `${window.location.origin}/cadastro?token=${token}`;
-    console.log("[equipe.ts] Convite criado com sucesso! Link:", inviteLink);
-    return { success: true, token, inviteLink };
+        const inviteLink = `${window.location.origin}/cadastro?token=${token}`;
+        return { success: true, token, inviteLink };
+
+    } catch (err: any) {
+        console.error("[equipe.ts] Falha ao criar convite:", err);
+        throw err;
+    }
 }
 
 /**

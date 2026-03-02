@@ -17,7 +17,7 @@ interface MembroModalProps {
 }
 
 export default function MembroModal({ isOpen, onClose, onSuccess, membro }: MembroModalProps) {
-    const { profile } = useAuth();
+    const { profile, session } = useAuth();
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState<"dados" | "permissoes">("dados");
@@ -82,7 +82,7 @@ export default function MembroModal({ isOpen, onClose, onSuccess, membro }: Memb
                     ...form,
                     empresa_id: profile.empresa_id,
                     auth_user_id: null
-                });
+                }, session?.access_token);
 
                 if (result.inviteLink) {
                     setInviteLink(result.inviteLink);
