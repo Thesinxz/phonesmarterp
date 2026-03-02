@@ -22,7 +22,8 @@ import {
     History as HistoryIcon,
     Bell,
     Shield,
-    MessageCircle
+    MessageCircle,
+    Megaphone
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useState, useEffect } from "react";
@@ -108,6 +109,18 @@ const navItems = [
         children: [
             { label: "Membros", href: "/equipe" },
             { label: "Metas de Vendas", href: "/equipe/metas" },
+        ]
+    },
+    {
+        label: "Marketing",
+        href: "/marketing",
+        icon: Megaphone,
+        permission: "vendas",
+        children: [
+            { label: "Visão Geral", href: "/marketing" },
+            { label: "Pós-Venda", href: "/marketing/pos-venda" },
+            { label: "Templates", href: "/marketing/templates" },
+            { label: "Campanhas", href: "/marketing/campanhas" },
         ]
     },
     {
