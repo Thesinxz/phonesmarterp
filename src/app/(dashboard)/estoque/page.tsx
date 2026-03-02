@@ -108,22 +108,43 @@ export default function EstoquePage() {
             await deleteProduto(id);
             toast.success("Produto excluído com sucesso!");
             loadProdutos();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Erro ao excluir produto:", error);
-            toast.error("Erro ao excluir produto.");
+            if (error?.code === '23503') {
+                toast.error("Este produto não pode ser excluído pois possui vendas associadas. Para removê-lo, primeiro exclua as vendas relacionadas.", { duration: 6000 });
+            } else {
+                toast.error(`Erro ao excluir produto: ${error?.message || 'Erro desconhecido'}`);
+            }
         }
     };
 
     const handleBulkDelete = async () => {
         if (!confirm(`Tem certeza que deseja excluir ${selectedIds.length} produtos?`)) return;
         try {
-            await deleteProdutos(selectedIds);
-            toast.success(`${selectedIds.length} produtos excluídos com sucesso!`);
+            const result = await deleteProdutos(selectedIds);
+
+            if (result.blocked === 0) {
+                // Todos deletados com sucesso
+                toast.success(`${result.deleted} produtos excluídos com sucesso!`);
+            } else if (result.deleted > 0) {
+                // Parcialmente deletados
+                toast.warning(
+                    `${result.deleted} produtos excluídos. ${result.blocked} não puderam ser removidos pois possuem vendas associadas: ${result.blockedNames.slice(0, 3).join(', ')}${result.blockedNames.length > 3 ? ` e mais ${result.blockedNames.length - 3}...` : ''}`,
+                    { duration: 8000 }
+                );
+            } else {
+                // Nenhum deletado
+                toast.error(
+                    `Nenhum produto pôde ser excluído. Todos possuem vendas associadas: ${result.blockedNames.slice(0, 3).join(', ')}${result.blockedNames.length > 3 ? ` e mais ${result.blockedNames.length - 3}...` : ''}`,
+                    { duration: 8000 }
+                );
+            }
+
             setSelectedIds([]);
             loadProdutos();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Erro ao excluir produtos em massa:", error);
-            toast.error("Erro ao excluir produtos em massa.");
+            toast.error(`Erro ao excluir produtos: ${error.message || 'Erro desconhecido'}`);
         }
     };
 

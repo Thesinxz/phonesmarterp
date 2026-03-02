@@ -54,6 +54,7 @@ const supabase = createClient();
 interface OCRItem {
     item: string;
     cost: string;
+    qtd: number;
     price: string;
     pricePix: string;
     priceDebito: string;
@@ -461,21 +462,21 @@ export default function CalculoEmMassa() {
                             const qtdNum = parseInt(gItem.qtd) || 1;
                             const safeQtd = qtdNum > 100 ? 1 : qtdNum;
 
-                            for (let q = 0; q < safeQtd; q++) {
-                                pageItemsFromGemini.push({
-                                    item: gItem.item || "Sem nome",
-                                    cost: costNum.toFixed(2),
-                                    price: prices.base,
-                                    pricePix: prices.pix,
-                                    priceDebito: prices.debito,
-                                    priceCredit1x: prices.credit1x,
-                                    margin: String(margin),
-                                    marginType: (bestCat?.tipo_margem as 'porcentagem' | 'fixo') || 'porcentagem',
-                                    categoria: bestCat?.nome || "",
-                                    subcategoria: "",
-                                    exigeNF: bestCat?.nf_obrigatoria ?? true
-                                });
-                            }
+                            // Um cadastro único com a quantidade correta (não desdobrar em N linhas)
+                            pageItemsFromGemini.push({
+                                item: gItem.item || "Sem nome",
+                                cost: costNum.toFixed(2),
+                                qtd: safeQtd,
+                                price: prices.base,
+                                pricePix: prices.pix,
+                                priceDebito: prices.debito,
+                                priceCredit1x: prices.credit1x,
+                                margin: String(margin),
+                                marginType: (bestCat?.tipo_margem as 'porcentagem' | 'fixo') || 'porcentagem',
+                                categoria: bestCat?.nome || "",
+                                subcategoria: "",
+                                exigeNF: bestCat?.nf_obrigatoria ?? true
+                            });
                         }
                     } catch (parseError: any) {
                         console.error("Erro interno ao processar os itens do Gemini:", parseError);
@@ -643,23 +644,25 @@ export default function CalculoEmMassa() {
         const performImport = async () => {
             try {
                 // Preparar dados para inserção em massa
+                // Cada item agora tem sua quantidade correta (1 cadastro = N unidades)
                 const produtosParaInserir = ocrResult.map(item => {
                     const baseCost = parseFloat(item.cost) || 0;
                     const dollar = (currencyType === 'USD' ? dollarRate : 1) || 1;
                     const costBrl = baseCost * dollar;
 
                     const custoCentavos = Math.round(costBrl * 100);
-                    const vendaFloat = parseFloat(item.price) || (costBrl * 1.3); // Fallback margin 30% if price is NaN
+                    const vendaFloat = parseFloat(item.price) || (costBrl * 1.3);
                     const vendaCentavos = Math.round(vendaFloat * 100);
+                    const qtd = item.qtd || 1;
 
-                    console.log(`[Mass Import] Preparando item: ${item.item} | Custo: ${custoCentavos} | Venda: ${vendaCentavos}`);
+                    console.log(`[Mass Import] Preparando item: ${item.item} | Qtd: ${qtd} | Custo: ${custoCentavos} | Venda: ${vendaCentavos}`);
 
                     return {
                         empresa_id: profile.empresa_id,
                         nome: item.item || "Produto sem nome",
                         preco_custo_centavos: isNaN(custoCentavos) ? 0 : custoCentavos,
                         preco_venda_centavos: isNaN(vendaCentavos) ? 0 : vendaCentavos,
-                        estoque_qtd: 1,
+                        estoque_qtd: qtd,
                         estoque_minimo: 1,
                         ncm: "85171231",
                         cfop: "5102",
@@ -966,6 +969,7 @@ export default function CalculoEmMassa() {
                                             <tr className="border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                                 <th className="px-4 py-4 text-left">Produto extraído</th>
                                                 <th className="px-4 py-4 text-left w-32">Categoria</th>
+                                                <th className="px-4 py-4 text-center w-16">Qtd</th>
                                                 <th className="px-4 py-4 text-center w-24">Custo {currencyType === 'USD' ? "(U$)" : "(R$)"}</th>
                                                 <th className="px-4 py-4 text-center w-20">Margem</th>
                                                 <th className="px-4 py-4 text-center w-28">Venda Pix</th>
@@ -976,7 +980,7 @@ export default function CalculoEmMassa() {
                                         <tbody className="divide-y divide-slate-50">
                                             {ocrResult.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={7} className="py-20 text-center">
+                                                    <td colSpan={8} className="py-20 text-center">
                                                         <div className="flex flex-col items-center gap-4 text-slate-300">
                                                             <FileSearch size={48} className="opacity-10" />
                                                             <p className="text-sm font-bold uppercase tracking-widest">Aguardando leitura de tabela...</p>
@@ -1012,6 +1016,15 @@ export default function CalculoEmMassa() {
                                                                     <option key={cat.nome} value={cat.nome}>{cat.nome}</option>
                                                                 ))}
                                                             </select>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <input
+                                                                type="number"
+                                                                min="1"
+                                                                className="bg-amber-50/50 h-8 w-16 rounded-lg text-center text-xs font-black text-amber-700 focus:ring-1 focus:ring-brand-500 outline-none mx-auto block"
+                                                                value={res.qtd}
+                                                                onChange={e => updateItem(i, 'qtd', Math.max(1, parseInt(e.target.value) || 1))}
+                                                            />
                                                         </td>
                                                         <td className="px-4 py-3">
                                                             <div className="relative">
@@ -1069,7 +1082,7 @@ export default function CalculoEmMassa() {
                                     <div className="p-6 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
                                         <div>
                                             <p className="text-[10px] font-black text-slate-400 uppercase">Resumo da Carga</p>
-                                            <p className="text-sm font-bold text-slate-700">{ocrResult.length} itens prontos para importação</p>
+                                            <p className="text-sm font-bold text-slate-700">{ocrResult.length} produtos ({ocrResult.reduce((sum, r) => sum + (r.qtd || 1), 0)} unidades) prontos para importação</p>
                                         </div>
                                         <button onClick={() => setStep(2)} className="btn-primary shadow-emerald-glow bg-emerald-600 hover:bg-emerald-700 h-12 px-8">
                                             <Plus size={18} /> IMPORTAR TUDO PARA ESTOQUE
@@ -1400,9 +1413,16 @@ export default function CalculoEmMassa() {
                                     {/* Card Header */}
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-start">
-                                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest bg-slate-50 px-2 py-1 rounded-lg">
-                                                {res.categoria || "Sem Categoria"}
-                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest bg-slate-50 px-2 py-1 rounded-lg">
+                                                    {res.categoria || "Sem Categoria"}
+                                                </span>
+                                                {(res.qtd || 1) > 1 && (
+                                                    <span className="text-[10px] font-black text-amber-700 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200">
+                                                        x{res.qtd} un.
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="flex items-center gap-1">
                                                 <button
                                                     onClick={(e) => {

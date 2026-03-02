@@ -198,13 +198,49 @@ export async function deleteProduto(id: string) {
     if (error) throw error;
 }
 
-export async function deleteProdutos(ids: string[]) {
+export async function deleteProdutos(ids: string[]): Promise<{ deleted: number; blocked: number; blockedNames: string[] }> {
+    if (ids.length === 0) return { deleted: 0, blocked: 0, blockedNames: [] };
+
+    // 1. Tentar deletar todos de uma vez (rápido se nenhum tiver venda associada)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase.from("produtos") as any)
         .delete()
         .in("id", ids);
 
-    if (error) throw error;
+    if (!error) {
+        return { deleted: ids.length, blocked: 0, blockedNames: [] };
+    }
+
+    // 2. Se falhou por FK constraint, deletar um por um
+    if (error.code === '23503') {
+        console.warn("[Service:Estoque] FK constraint em exclusão em massa. Tentando individualmente...");
+        let deleted = 0;
+        const blockedNames: string[] = [];
+
+        for (const id of ids) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { error: delErr } = await (supabase.from("produtos") as any)
+                .delete()
+                .eq("id", id);
+
+            if (delErr) {
+                // Buscar o nome do produto bloqueado para mostrar ao usuário
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const { data: prod } = await (supabase.from("produtos") as any)
+                    .select("nome")
+                    .eq("id", id)
+                    .single();
+                blockedNames.push(prod?.nome || id);
+            } else {
+                deleted++;
+            }
+        }
+
+        return { deleted, blocked: blockedNames.length, blockedNames };
+    }
+
+    // 3. Outro tipo de erro — lançar
+    throw error;
 }
 
 export async function uploadProdutoImage(file: File, empresaId: string): Promise<string> {
