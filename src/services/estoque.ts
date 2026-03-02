@@ -74,43 +74,96 @@ export async function createProduto(produto: Database["public"]["Tables"]["produ
 export async function createProdutos(produtos: Database["public"]["Tables"]["produtos"]["Insert"][]) {
     if (produtos.length === 0) return [];
 
-    // Pegamos a empresa_id do primeiro item (todos devem ser da mesma empresa no fluxo atual)
     const empresaId = produtos[0].empresa_id;
-    console.log(`[Service:Estoque] Iniciando importação para ${produtos.length} produtos na empresa ${empresaId}...`);
+    const totalItens = produtos.length;
+    console.log(`[Service:Estoque] Iniciando importação para ${totalItens} produtos na empresa ${empresaId}...`);
 
-    try {
-        // 1. Tentar via RPC (Mais rápido, fura RLS e evita loops)
-        // Passamos 'p_empresa_id' explicitamente para a nova versão da função
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data, error } = await (supabase as any).rpc("importar_produtos_massa", {
-            p_produtos: produtos,
-            p_empresa_id: empresaId
+    // Helper: Timeout para evitar travamento eterno (RLS hanging)
+    const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                console.error(`[Service:Estoque] TIMEOUT (${ms}ms) em: ${label}`);
+                reject(new Error(`Timeout de ${ms / 1000}s em ${label}. Provável travamento por RLS no banco de dados.`));
+            }, ms);
+            promise.then(
+                (val) => { clearTimeout(timer); resolve(val); },
+                (err) => { clearTimeout(timer); reject(err); }
+            );
         });
+    };
 
-        if (error) {
-            console.warn("[Service:Estoque] Erro no RPC (Tentando Fallback Direto):", error.message);
-            // Fallback para inserção direta lote a lote se o RPC falhar (ex: função não existe no banco)
-            const { data: directData, error: directError } = await (supabase.from("produtos") as any)
-                .insert(produtos)
-                .select("id");
+    // === ESTRATÉGIA 1: RPC com empresa_id (Nova versão, mais segura) ===
+    try {
+        console.log("[Service:Estoque] Tentativa 1: RPC importar_produtos_massa (v2, com empresa_id)...");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result: any = await withTimeout(
+            (supabase as any).rpc("importar_produtos_massa", {
+                p_produtos: produtos,
+                p_empresa_id: empresaId
+            }),
+            15000,
+            "RPC v2"
+        );
 
-            if (directError) {
-                console.error("[Service:Estoque] Erro crítico na importação direta:", directError);
-                throw directError;
-            }
-            console.log(`[Service:Estoque] Importação direta concluída. Total: ${directData?.length} itens.`);
-            return directData || [] as Produto[];
+        if (!result.error && typeof result.data === 'number' && result.data > 0) {
+            console.log(`[Service:Estoque] ✅ RPC v2 OK! ${result.data} produtos importados.`);
+            return new Array(result.data).fill({ id: 'imported' }) as Produto[];
         }
+        if (result.error) {
+            console.warn("[Service:Estoque] RPC v2 falhou:", result.error.message);
+        }
+    } catch (e: any) {
+        console.warn("[Service:Estoque] RPC v2 erro/timeout:", e.message);
+    }
 
-        const count = typeof data === 'number' ? data : 0;
-        console.log(`[Service:Estoque] Importação via RPC concluída. Total: ${count} itens.`);
+    // === ESTRATÉGIA 2: RPC sem empresa_id (Versão antiga, se existir no banco) ===
+    try {
+        console.log("[Service:Estoque] Tentativa 2: RPC importar_produtos_massa (v1, sem empresa_id)...");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result: any = await withTimeout(
+            (supabase as any).rpc("importar_produtos_massa", {
+                p_produtos: produtos
+            }),
+            15000,
+            "RPC v1"
+        );
 
-        // Retornamos um array mockado com IDs se o chamador precisar contar,
-        // mas idealmente o chamador deve lidar com o sucesso/contagem.
-        return new Array(count).fill({ id: 'imported' }) as Produto[];
-    } catch (err: any) {
-        console.error("[Service:Estoque] Erro crítico em createProdutos:", err);
-        throw err;
+        if (!result.error && typeof result.data === 'number' && result.data > 0) {
+            console.log(`[Service:Estoque] ✅ RPC v1 OK! ${result.data} produtos importados.`);
+            return new Array(result.data).fill({ id: 'imported' }) as Produto[];
+        }
+        if (result.error) {
+            console.warn("[Service:Estoque] RPC v1 falhou:", result.error.message);
+        }
+    } catch (e: any) {
+        console.warn("[Service:Estoque] RPC v1 erro/timeout:", e.message);
+    }
+
+    // === ESTRATÉGIA 3: INSERT direto SEM .select() ===
+    // IMPORTANTE: NÃO chamamos .select() após .insert() pois o PostgREST
+    // tentará executar um SELECT na tabela com RLS, causando recursão infinita.
+    try {
+        console.log("[Service:Estoque] Tentativa 3: INSERT direto (sem .select(), sem retorno de dados)...");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result: any = await withTimeout(
+            (supabase.from("produtos") as any).insert(produtos),
+            20000,
+            "INSERT direto"
+        );
+
+        if (!result.error) {
+            console.log(`[Service:Estoque] ✅ INSERT direto OK! ${totalItens} produtos enviados.`);
+            return new Array(totalItens).fill({ id: 'imported' }) as Produto[];
+        }
+        console.error("[Service:Estoque] INSERT direto falhou:", result.error.message);
+        throw result.error;
+    } catch (e: any) {
+        console.error("[Service:Estoque] ❌ Todas as 3 estratégias falharam:", e.message);
+        throw new Error(
+            `Falha ao importar produtos. O banco de dados pode estar com problemas de RLS. ` +
+            `Detalhes: ${e.message}. ` +
+            `Solução: Execute a migration 058 no SQL Editor do Supabase.`
+        );
     }
 }
 

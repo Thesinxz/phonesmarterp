@@ -1443,10 +1443,13 @@ export default function CalculoEmMassa() {
                                                 profitPerc > 15 ? "bg-amber-50 border-amber-100 text-amber-700" :
                                                     "bg-red-50 border-red-100 text-red-700"
                                         )}>
-                                            <span className="text-[9px] font-black opacity-60 uppercase block mb-1">Margem Lucro</span>
-                                            <span className="text-sm font-black text-current">
-                                                {profitPerc.toFixed(1)}%
-                                            </span>
+                                            <span className="text-[9px] font-black opacity-60 uppercase block mb-1">Lucro Líquido</span>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-sm font-black text-current">
+                                                    {profitPerc.toFixed(1)}%
+                                                </span>
+                                                <span className="text-[8px] opacity-70 font-bold uppercase">Margem</span>
+                                            </div>
                                         </div>
                                     </div>
 

@@ -18,18 +18,21 @@ export function calculateReverseMarkup(cost: number, margin: number, marginType:
     const taxaImposto = impostoPct / 100;
     const taxaGw = gatewayPct / 100;
 
-    // Lógica 1: Margem % (Markup Inverso sobre Preço de Venda)
-    // Preço = Custo / (1 - Margem% - Imposto% - Gateway%)
+    const divisorImpostos = 1 - taxaImposto - taxaGw;
+
+    // Proteção contra divisor zero (caso improvável de taxas somarem 100%)
+    if (divisorImpostos <= 0.001) return cost * 2;
+
+    // Lógica 1: Markup sobre o Custo (% sobre o que você pagou)
+    // Preço = [Custo * (1 + %Markup)] / (1 - %Impostos)
+    // Isso garante exatamente o lucro desejado sobre o custo, cobrindo os impostos sobre a venda.
     if (marginType === "porcentagem") {
-        const divisor = 1 - taxaMargem - taxaImposto - taxaGw;
-        // Proteção contra divisor zero ou negativo (margem impossível)
-        return divisor > 0.001 ? cost / divisor : cost * 10; // Retorna valor alto para alertar erro
+        return (cost * (1 + taxaMargem)) / divisorImpostos;
     }
 
     // Lógica 2: Margem Fixa R$ (Lucro Líquido no Bolso)
-    // Preço = (Custo + MargemFixa) / (1 - Imposto% - Gateway%)
+    // Preço = (Custo + MargemFixa) / (1 - %Impostos)
     else {
-        const divisor = 1 - taxaImposto - taxaGw;
-        return divisor > 0.001 ? (cost + margemReais) / divisor : (cost + margemReais) * 10;
+        return (cost + margemReais) / divisorImpostos;
     }
 }
