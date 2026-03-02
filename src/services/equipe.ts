@@ -24,60 +24,55 @@ export async function getMembrosEquipe(empresaId: string) {
 export async function criarMembroEquipe(data: Omit<Usuario, "id" | "created_at">) {
     console.log("[equipe.ts] Iniciando criarMembroEquipe para:", data.email);
 
-    // Gerar UUID no client para evitar necessidade de .select().single() (que trava em RLS)
+    // Gerar ID no client
     const token = crypto.randomUUID();
 
     const convite = {
-        id: token,
-        empresa_id: data.empresa_id,
-        email: data.email,
-        nome: data.nome || 'Convidado',
-        papel: data.papel,
-        permissoes_json: data.permissoes_json || {},
+        p_id: token,
+        p_empresa_id: data.empresa_id,
+        p_email: data.email,
+        p_nome: data.nome || 'Convidado',
+        p_papel: data.papel,
+        p_permissoes: data.permissoes_json || {}
     };
 
-    console.log("[equipe.ts] Gerando convite...", convite);
-
-    // INSERT simples com timeout de 10s — sem .select().single() para evitar hang de RLS
-    const insertPromise = supabase
-        .from("equipe_convites")
-        .insert(convite);
-
-    const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Timeout: INSERT demorou mais de 10s (possível RLS hang)")), 10000)
-    );
-
     try {
-        const { error } = await Promise.race([insertPromise, timeoutPromise]) as any;
+        console.log("[equipe.ts] Chamando RPC criar_convite_equipe...", convite);
 
-        if (error) {
-            console.error("[equipe.ts] Erro ao criar convite:", error);
-            throw error;
-        }
-    } catch (err: any) {
-        if (err.message?.includes("Timeout")) {
-            console.error("[equipe.ts] TIMEOUT no INSERT — RLS pode estar travando. Tentando via RPC...");
-            // Fallback: tentar via RPC SECURITY DEFINER
-            const { error: rpcError } = await supabase.rpc("criar_convite_equipe", {
-                p_id: token,
-                p_empresa_id: data.empresa_id,
-                p_email: data.email,
-                p_nome: data.nome || 'Convidado',
-                p_papel: data.papel,
-                p_permissoes: data.permissoes_json || {}
-            });
-            if (rpcError) {
-                console.error("[equipe.ts] RPC fallback também falhou:", rpcError);
-                throw new Error("Não foi possível criar o convite. Verifique as permissões.");
-            }
+        // 1. Tentar via RPC (SECURITY DEFINER bypasses RLS) - É o método mais seguro
+        const { error: rpcError } = await supabase.rpc("criar_convite_equipe", convite);
+
+        if (!rpcError) {
+            console.log("[equipe.ts] Sucesso via RPC!");
         } else {
-            throw err;
-        }
-    }
+            console.warn("[equipe.ts] RPC falhou ou não existe, tentando INSERT direto...", rpcError);
 
-    const inviteLink = `${window.location.origin}/cadastro?token=${token}`;
-    console.log("[equipe.ts] Convite gerado! Link:", inviteLink);
-    return { success: true, token, inviteLink };
+            // 2. Fallback: INSERT direto (apenas se a RPC não existir ou falhar)
+            const { error: insertError } = await supabase
+                .from("equipe_convites")
+                .insert({
+                    id: token,
+                    empresa_id: data.empresa_id,
+                    email: data.email,
+                    nome: data.nome || 'Convidado',
+                    papel: data.papel,
+                    permissoes_json: data.permissoes_json || {}
+                });
+
+            if (insertError) {
+                console.error("[equipe.ts] Ambos métodos falharam. Erro INSERT:", insertError);
+                throw insertError;
+            }
+        }
+
+        const inviteLink = `${window.location.origin}/cadastro?token=${token}`;
+        console.log("[equipe.ts] Convite gerado com sucesso! Link:", inviteLink);
+        return { success: true, token, inviteLink };
+
+    } catch (err: any) {
+        console.error("[equipe.ts] Erro fatal:", err);
+        throw new Error(err.message || "Não foi possível criar o convite da equipe.");
+    }
 }
 
 /**
