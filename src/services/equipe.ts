@@ -24,41 +24,59 @@ export async function getMembrosEquipe(empresaId: string) {
 export async function criarMembroEquipe(data: Omit<Usuario, "id" | "created_at">) {
     console.log("[equipe.ts] Iniciando criarMembroEquipe para:", data.email);
 
-    // ============================================================
-    // NOVO SISTEMA NATIVO DE CONVITE (TRIGGER-BASED)
-    // Inserimos o convite na tabela `equipe_convites`.
-    // Retornamos o UUID (token) para ser usado no link.
-    // O Trigger fará a vinculação automática no momento do Cadastro.
-    // ============================================================
-
-    // Buscar o ID do usuário logado (quem está criando o convite)
-    const { data: authUser } = await supabase.auth.getUser();
+    // Gerar UUID no client para evitar necessidade de .select().single() (que trava em RLS)
+    const token = crypto.randomUUID();
 
     const convite = {
+        id: token,
         empresa_id: data.empresa_id,
         email: data.email,
         nome: data.nome || 'Convidado',
         papel: data.papel,
         permissoes_json: data.permissoes_json || {},
-        criado_por: undefined // opcional, apenas se usássemos RPC segura, mas o RLS fará o check do auth.uid()
     };
 
-    const { data: inserted, error } = await supabase
-        .from("equipe_convites")
-        .insert(convite)
-        .select()
-        .single();
+    console.log("[equipe.ts] Gerando convite...", convite);
 
-    if (error) {
-        console.error("[equipe.ts] Erro ao criar convite nativo:", error);
-        throw error;
+    // INSERT simples com timeout de 10s — sem .select().single() para evitar hang de RLS
+    const insertPromise = supabase
+        .from("equipe_convites")
+        .insert(convite);
+
+    const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout: INSERT demorou mais de 10s (possível RLS hang)")), 10000)
+    );
+
+    try {
+        const { error } = await Promise.race([insertPromise, timeoutPromise]) as any;
+
+        if (error) {
+            console.error("[equipe.ts] Erro ao criar convite:", error);
+            throw error;
+        }
+    } catch (err: any) {
+        if (err.message?.includes("Timeout")) {
+            console.error("[equipe.ts] TIMEOUT no INSERT — RLS pode estar travando. Tentando via RPC...");
+            // Fallback: tentar via RPC SECURITY DEFINER
+            const { error: rpcError } = await supabase.rpc("criar_convite_equipe", {
+                p_id: token,
+                p_empresa_id: data.empresa_id,
+                p_email: data.email,
+                p_nome: data.nome || 'Convidado',
+                p_papel: data.papel,
+                p_permissoes: data.permissoes_json || {}
+            });
+            if (rpcError) {
+                console.error("[equipe.ts] RPC fallback também falhou:", rpcError);
+                throw new Error("Não foi possível criar o convite. Verifique as permissões.");
+            }
+        } else {
+            throw err;
+        }
     }
 
-    const token = inserted.id; // UUID gerado pelo banco
     const inviteLink = `${window.location.origin}/cadastro?token=${token}`;
-
-    console.log("[equipe.ts] Convite nativo gerado no DB! Link:", inviteLink);
-
+    console.log("[equipe.ts] Convite gerado! Link:", inviteLink);
     return { success: true, token, inviteLink };
 }
 
