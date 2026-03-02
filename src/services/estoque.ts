@@ -72,32 +72,44 @@ export async function createProduto(produto: Database["public"]["Tables"]["produ
 }
 
 export async function createProdutos(produtos: Database["public"]["Tables"]["produtos"]["Insert"][]) {
-    console.log(`[Service:Estoque] Iniciando importação via RPC para ${produtos.length} produtos...`);
+    if (produtos.length === 0) return [];
+
+    // Pegamos a empresa_id do primeiro item (todos devem ser da mesma empresa no fluxo atual)
+    const empresaId = produtos[0].empresa_id;
+    console.log(`[Service:Estoque] Iniciando importação para ${produtos.length} produtos na empresa ${empresaId}...`);
 
     try {
-        // Chamamos o RPC especializado que retorna apenas o NÚMERO de itens inseridos
-        // Isso é crucial para evitar que o PostgREST tente aplicar RLS no conjunto de resultados, o que causa o travamento.
+        // 1. Tentar via RPC (Mais rápido, fura RLS e evita loops)
+        // Passamos 'p_empresa_id' explicitamente para a nova versão da função
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data, error } = await (supabase as any).rpc("importar_produtos_massa", {
-            p_produtos: produtos
+            p_produtos: produtos,
+            p_empresa_id: empresaId
         });
 
         if (error) {
-            console.error("[Service:Estoque] Erro no RPC de Importação:", error);
-            throw error;
+            console.warn("[Service:Estoque] Erro no RPC (Tentando Fallback Direto):", error.message);
+            // Fallback para inserção direta lote a lote se o RPC falhar (ex: função não existe no banco)
+            const { data: directData, error: directError } = await (supabase.from("produtos") as any)
+                .insert(produtos)
+                .select("id");
+
+            if (directError) {
+                console.error("[Service:Estoque] Erro crítico na importação direta:", directError);
+                throw directError;
+            }
+            console.log(`[Service:Estoque] Importação direta concluída. Total: ${directData?.length} itens.`);
+            return directData || [] as Produto[];
         }
 
         const count = typeof data === 'number' ? data : 0;
         console.log(`[Service:Estoque] Importação via RPC concluída. Total: ${count} itens.`);
 
-        // Como o RPC agora retorna apenas a contagem (por performance/RLS),
-        // não registramos histórico individual aqui para não onerar o banco.
-
-        // Retornamos um array vazio ou mockado se a tipagem exigir, 
+        // Retornamos um array mockado com IDs se o chamador precisar contar,
         // mas idealmente o chamador deve lidar com o sucesso/contagem.
-        return new Array(count).fill({}) as Produto[];
+        return new Array(count).fill({ id: 'imported' }) as Produto[];
     } catch (err: any) {
-        console.error("[Service:Estoque] Erro crítico no RPC createProdutos:", err);
+        console.error("[Service:Estoque] Erro crítico em createProdutos:", err);
         throw err;
     }
 }

@@ -75,7 +75,8 @@ export default function CalculoEmMassa() {
     const [selectedGateway, setSelectedGateway] = useState<PaymentGateway | null>(null);
     const [ocrLoading, setOcrLoading] = useState(false);
     const [ocrProgress, setOcrProgress] = useState(0);
-    const [ocrImage, setOcrImage] = useState<string | null>(null);
+    const [ocrImages, setOcrImages] = useState<string[]>([]);
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [ocrResult, setOcrResult] = useState<OCRItem[]>([]);
     const [knownProducts, setKnownProducts] = useState<{ item: string; categoria: string }[]>([]);
     const [dollarRate, setDollarRate] = useState<number>(0);
@@ -170,9 +171,9 @@ export default function CalculoEmMassa() {
                     if (blob) {
                         e.preventDefault();
                         const url = URL.createObjectURL(blob);
-                        setOcrImage(url);
+                        setOcrImages(prev => [...prev, url]);
                         // @ts-ignore - processOCR is defined below but hoisted
-                        processOCR(blob);
+                        processOCR([blob]);
                     }
                 }
             }
@@ -354,140 +355,148 @@ export default function CalculoEmMassa() {
         });
     };
 
-    async function processOCR(file: File) {
+    async function processOCR(files: File[]) {
         setOcrLoading(true);
         setOcrProgress(0);
-        setRawText("");
-        setOcrResult([]);
-        setDebugLines([]);
-        let allItems: OCRItem[] = [];
+        // Não limpamos ocrResult nem ocrImages pois queremos acumular
+        // mas se for o PRIMEIRO upload do reset, garantimos que comece novo
+        let allItems: OCRItem[] = [...ocrResult];
+        let newImages: string[] = [...ocrImages];
+        let totalRawText = "";
         try {
-            const imagesToProcess: string[] = [];
+            for (let fIndex = 0; fIndex < files.length; fIndex++) {
+                const file = files[fIndex];
+                const imagesToProcess: string[] = [];
 
-            // 1. Check Identificar se é PDF
-            if (file.type === "application/pdf") {
-                await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js");
+                // 1. Identificar se é PDF
+                if (file.type === "application/pdf") {
+                    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js");
 
-                // @ts-ignore
-                const pdfjsLib = window['pdfjsLib'];
-                if (!pdfjsLib) throw new Error("Erro ao carregar motor PDF. Tente novamente.");
+                    // @ts-ignore
+                    const pdfjsLib = window['pdfjsLib'];
+                    if (!pdfjsLib) throw new Error("Erro ao carregar motor PDF. Tente novamente.");
 
-                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
 
-                const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-                // Processar até 5 páginas para não travar
-                const maxPages = Math.min(pdf.numPages, 5);
+                    // Processar até 5 páginas para não travar
+                    const maxPages = Math.min(pdf.numPages, 5);
 
-                for (let i = 1; i <= maxPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const viewport = page.getViewport({ scale: 3.0 }); // Aumentar escala para melhor leitura
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
+                    for (let i = 1; i <= maxPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const viewport = page.getViewport({ scale: 3.0 }); // Aumentar escala para melhor leitura
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
 
-                    if (context) {
-                        canvas.height = viewport.height;
-                        canvas.width = viewport.width;
-                        await page.render({ canvasContext: context, viewport }).promise;
-                        imagesToProcess.push(canvas.toDataURL('image/jpeg', 0.95));
-                    }
-                }
-            } else {
-                // Para Gemini, preferimos a imagem original de alta qualidade
-                // Mas precisamos converter blob URL para Base64 para garantir envio via REST
-                const reader = new FileReader();
-                const base64Promise = new Promise<string>((resolve) => {
-                    reader.onloadend = () => resolve(reader.result as string);
-                });
-                reader.readAsDataURL(file);
-                const base64 = await base64Promise;
-                imagesToProcess.push(base64);
-            }
-
-            // 2. Processar cada imagem (Página do PDF ou Imagem única)
-            let fullRawText = "";
-
-            for (let i = 0; i < imagesToProcess.length; i++) {
-                const imgUrl = imagesToProcess[i];
-                const baseProgress = (i / imagesToProcess.length) * 100;
-                let resultText = "";
-                let pageItemsFromGemini: OCRItem[] = [];
-
-                console.log(`Página ${i + 1}: Tamanho da imagem base64:`, imgUrl.length);
-                let currentApiKey = "";
-                const cacheKey = "smartos_ai_config";
-                try {
-                    const cached = sessionStorage.getItem(cacheKey);
-                    if (cached) {
-                        const val = JSON.parse(cached);
-                        currentApiKey = val.geminiApiKey || "";
-                    }
-                } catch { /* ignore */ }
-
-                if (!currentApiKey) {
-                    toast.error("Chave da API Gemini não encontrada. Configure no painel.", { duration: 5000 });
-                    setOcrLoading(false);
-                    return;
-                }
-
-                console.log("Aguardando resposta do Gemini...");
-                setOcrProgress(Math.round(baseProgress + 20));
-                const geminiResult = await extractProductsWithGemini(imgUrl, currentApiKey);
-                console.log("Gemini respondeu:", geminiResult);
-
-                if (geminiResult.error) {
-                    toast.error(`Erro Gemini IA: ${geminiResult.error}`, { duration: 10000 });
-                    setOcrLoading(false);
-                    return;
-                }
-
-                const gItems = geminiResult.items || [];
-                try {
-                    for (const gItem of gItems) {
-                        const costNum = parseFloat(gItem.cost) || 0;
-                        if (costNum <= 0) continue;
-
-                        let bestCat = config?.categorias?.find(c =>
-                            c.nome?.toLowerCase() === gItem.categoria?.toLowerCase() ||
-                            gItem.item?.toLowerCase().includes(c.nome?.toLowerCase() || '')
-                        ) || config?.categorias?.[0];
-
-                        const margin = bestCat?.margem_padrao || 30;
-                        const prices = calculatePrices(costNum, margin, selectedGateway, bestCat?.nome);
-                        const qtdNum = parseInt(gItem.qtd) || 1;
-                        const safeQtd = qtdNum > 100 ? 1 : qtdNum;
-
-                        for (let q = 0; q < safeQtd; q++) {
-                            pageItemsFromGemini.push({
-                                item: gItem.item || "Sem nome",
-                                cost: costNum.toFixed(2),
-                                price: prices.base,
-                                pricePix: prices.pix,
-                                priceDebito: prices.debito,
-                                priceCredit1x: prices.credit1x,
-                                margin: String(margin),
-                                marginType: (bestCat?.tipo_margem as 'porcentagem' | 'fixo') || 'porcentagem',
-                                categoria: bestCat?.nome || "",
-                                subcategoria: "",
-                                exigeNF: bestCat?.nf_obrigatoria ?? true
-                            });
+                        if (context) {
+                            canvas.height = viewport.height;
+                            canvas.width = viewport.width;
+                            await page.render({ canvasContext: context, viewport }).promise;
+                            imagesToProcess.push(canvas.toDataURL('image/jpeg', 0.95));
                         }
                     }
-                } catch (parseError: any) {
-                    console.error("Erro interno ao processar os itens do Gemini:", parseError);
-                    alert("Aviso: Houve um erro processando parte dos itens da nota. " + parseError.message);
+                } else {
+                    // Para Gemini, preferimos a imagem original de alta qualidade
+                    // Mas precisamos converter blob URL para Base64 para garantir envio via REST
+                    const reader = new FileReader();
+                    const base64Promise = new Promise<string>((resolve) => {
+                        reader.onloadend = () => resolve(reader.result as string);
+                    });
+                    reader.readAsDataURL(file);
+                    const base64 = await base64Promise;
+                    imagesToProcess.push(base64);
                 }
-                resultText = `ITENS ENCONTRADOS PELO GEMINI:\n` + gItems.map((gi: any) => `- ${gi.item}: ${gi.cost} (x${gi.qtd})`).join('\n');
-                setOcrProgress(Math.round(baseProgress + 95));
 
-                fullRawText += `--- PÁGINA ${i + 1} (GEMINI) ---\n${resultText}\n\n`;
-                allItems = [...allItems, ...pageItemsFromGemini];
+                // 2. Processar cada imagem (Página do PDF ou Imagem única)
+
+                for (let i = 0; i < imagesToProcess.length; i++) {
+                    const imgUrl = imagesToProcess[i];
+                    const baseProgress = (i / imagesToProcess.length) * 100;
+                    let resultText = "";
+                    let pageItemsFromGemini: OCRItem[] = [];
+
+                    console.log(`Página ${i + 1}: Tamanho da imagem base64:`, imgUrl.length);
+                    let currentApiKey = "";
+                    const cacheKey = "smartos_ai_config";
+                    try {
+                        const cached = sessionStorage.getItem(cacheKey);
+                        if (cached) {
+                            const val = JSON.parse(cached);
+                            currentApiKey = val.geminiApiKey || "";
+                        }
+                    } catch { /* ignore */ }
+
+                    if (!currentApiKey) {
+                        toast.error("Chave da API Gemini não encontrada. Configure no painel.", { duration: 5000 });
+                        setOcrLoading(false);
+                        return;
+                    }
+
+                    console.log("Aguardando resposta do Gemini...");
+                    setOcrProgress(Math.round(baseProgress + 20));
+                    const geminiResult = await extractProductsWithGemini(imgUrl, currentApiKey);
+                    console.log("Gemini respondeu:", geminiResult);
+
+                    if (geminiResult.error) {
+                        toast.error(`Erro Gemini IA: ${geminiResult.error}`, { duration: 10000 });
+                        setOcrLoading(false);
+                        return;
+                    }
+
+                    const gItems = geminiResult.items || [];
+                    try {
+                        for (const gItem of gItems) {
+                            const costNum = parseFloat(gItem.cost) || 0;
+                            if (costNum <= 0) continue;
+
+                            let bestCat = config?.categorias?.find(c =>
+                                c.nome?.toLowerCase() === gItem.categoria?.toLowerCase() ||
+                                gItem.item?.toLowerCase().includes(c.nome?.toLowerCase() || '')
+                            ) || config?.categorias?.[0];
+
+                            const margin = bestCat?.margem_padrao || 30;
+                            const prices = calculatePrices(costNum, margin, selectedGateway, bestCat?.nome);
+                            const qtdNum = parseInt(gItem.qtd) || 1;
+                            const safeQtd = qtdNum > 100 ? 1 : qtdNum;
+
+                            for (let q = 0; q < safeQtd; q++) {
+                                pageItemsFromGemini.push({
+                                    item: gItem.item || "Sem nome",
+                                    cost: costNum.toFixed(2),
+                                    price: prices.base,
+                                    pricePix: prices.pix,
+                                    priceDebito: prices.debito,
+                                    priceCredit1x: prices.credit1x,
+                                    margin: String(margin),
+                                    marginType: (bestCat?.tipo_margem as 'porcentagem' | 'fixo') || 'porcentagem',
+                                    categoria: bestCat?.nome || "",
+                                    subcategoria: "",
+                                    exigeNF: bestCat?.nf_obrigatoria ?? true
+                                });
+                            }
+                        }
+                    } catch (parseError: any) {
+                        console.error("Erro interno ao processar os itens do Gemini:", parseError);
+                        alert("Aviso: Houve um erro processando parte dos itens da nota. " + parseError.message);
+                    }
+                    resultText = `ITENS ENCONTRADOS PELO GEMINI:\n` + gItems.map((gi: any) => `- ${gi.item}: ${gi.cost} (x${gi.qtd})`).join('\n');
+                    setOcrProgress(Math.round(baseProgress + 95));
+
+                    totalRawText += `--- PÁGINA ${i + 1} (GEMINI) ---\n${resultText}\n\n`;
+                    allItems = [...allItems, ...pageItemsFromGemini];
+                }
+
+                if (imagesToProcess.length > 0) {
+                    newImages = [...newImages, ...imagesToProcess];
+                }
             }
 
-            setRawText(fullRawText);
+            setRawText(prev => prev + totalRawText);
             setOcrResult(allItems);
-            if (imagesToProcess.length > 0) setOcrImage(imagesToProcess[0]);
+            setOcrImages(newImages);
+            setCurrentImageIndex(newImages.length > 0 ? newImages.length - 1 : 0);
 
         } finally {
             setOcrLoading(false);
@@ -559,7 +568,8 @@ export default function CalculoEmMassa() {
 
     const resetCalculation = () => {
         setOcrResult([]);
-        setOcrImage(null);
+        setOcrImages([]);
+        setCurrentImageIndex(0);
         setRawText("");
         setOcrProgress(0);
         setOcrLoading(false);
@@ -830,20 +840,26 @@ export default function CalculoEmMassa() {
                                     <input
                                         ref={fileInputRef}
                                         type="file"
-                                        accept="image/*"
+                                        accept="image/*,application/pdf"
+                                        multiple
                                         className="hidden"
                                         onChange={async (e) => {
-                                            const file = e.target.files?.[0];
-                                            if (!file) return;
-                                            setOcrImage(URL.createObjectURL(file));
-                                            processOCR(file);
+                                            const files = Array.from(e.target.files || []);
+                                            if (files.length === 0) return;
+                                            const urls = files.map(f => URL.createObjectURL(f));
+                                            setOcrImages(prev => [...prev, ...urls]);
+                                            processOCR(files);
                                         }}
                                     />
-                                    {ocrImage ? (
+                                    {ocrImages.length > 0 ? (
                                         <div className="relative group/img">
-                                            <img src={ocrImage} className="max-h-64 mx-auto rounded-xl shadow-lg transition-all group-hover/img:opacity-40" />
-                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all">
-                                                <p className="text-xs font-black text-slate-800 uppercase tracking-widest bg-white/80 px-4 py-2 rounded-full">Trocar Imagem</p>
+                                            <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto p-2 scrollbar-thin">
+                                                {ocrImages.map((img, idx) => (
+                                                    <img key={idx} src={img} className="w-full h-24 object-cover rounded-lg shadow-sm" />
+                                                ))}
+                                            </div>
+                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all bg-white/40 backdrop-blur-sm rounded-[32px]">
+                                                <p className="text-xs font-black text-slate-800 uppercase tracking-widest bg-white/80 px-4 py-2 rounded-full">Adicionar mais Imagens</p>
                                             </div>
                                         </div>
                                     ) : (
@@ -1197,19 +1213,39 @@ export default function CalculoEmMassa() {
                     {/* Right: Image Preview Column */}
                     <div className="xl:col-span-4 space-y-6 sticky top-24 h-fit max-h-[80vh]">
                         <GlassCard
-                            title="Documento Original"
+                            title={`Doc. Original (${currentImageIndex + 1}/${ocrImages.length})`}
                             icon={Scan}
                             action={
-                                ocrImage ? (
-                                    <button
-                                        onClick={() => setShowFullImage(true)}
-                                        className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-brand-500 transition-all flex items-center gap-1.5"
-                                        title="Expandir Imagem"
-                                    >
-                                        <Maximize2 size={16} />
-                                        <span className="text-[10px] font-black uppercase">Expandir</span>
-                                    </button>
-                                ) : undefined
+                                <div className="flex items-center gap-2">
+                                    {ocrImages.length > 1 && (
+                                        <div className="flex items-center bg-slate-100 rounded-lg p-1 mr-2">
+                                            <button
+                                                onClick={() => setCurrentImageIndex(prev => Math.max(0, prev - 1))}
+                                                disabled={currentImageIndex === 0}
+                                                className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"
+                                            >
+                                                <ArrowLeft size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => setCurrentImageIndex(prev => Math.min(ocrImages.length - 1, prev + 1))}
+                                                disabled={currentImageIndex === ocrImages.length - 1}
+                                                className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"
+                                            >
+                                                <ChevronRight size={14} />
+                                            </button>
+                                        </div>
+                                    )}
+                                    {ocrImages.length > 0 && (
+                                        <button
+                                            onClick={() => setShowFullImage(true)}
+                                            className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-brand-500 transition-all flex items-center gap-1.5"
+                                            title="Expandir Imagem"
+                                        >
+                                            <Maximize2 size={16} />
+                                            <span className="text-[10px] font-black uppercase">Expandir</span>
+                                        </button>
+                                    )}
+                                </div>
                             }
                         >
                             <div className="p-4 bg-slate-900 overflow-hidden relative group">
@@ -1220,9 +1256,9 @@ export default function CalculoEmMassa() {
                                     </span>
                                 </div>
                                 <div className="h-[600px] overflow-y-auto overflow-x-hidden custom-scrollbar bg-slate-800 rounded-2xl border border-white/5 relative">
-                                    {ocrImage ? (
+                                    {ocrImages.length > 0 ? (
                                         <img
-                                            src={ocrImage}
+                                            src={ocrImages[currentImageIndex]}
                                             alt="OCR Invoice"
                                             className="w-full h-auto object-contain opacity-90 group-hover:opacity-100 transition-opacity cursor-zoom-in"
                                             onClick={() => setShowFullImage(true)}
@@ -1613,9 +1649,30 @@ export default function CalculoEmMassa() {
                 </div>
             )}
             {/* Image Preview Modal */}
-            {showFullImage && ocrImage && (
+            {showFullImage && ocrImages.length > 0 && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/90 backdrop-blur-md p-4 md:p-10 animate-in fade-in duration-300">
-                    <div className="absolute top-6 right-6 z-[110]">
+                    <div className="absolute top-6 right-6 z-[110] flex items-center gap-3">
+                        {ocrImages.length > 1 && (
+                            <div className="flex items-center bg-white/10 backdrop-blur-md rounded-full p-2 border border-white/10">
+                                <button
+                                    onClick={() => setCurrentImageIndex(prev => Math.max(0, prev - 1))}
+                                    disabled={currentImageIndex === 0}
+                                    className="w-10 h-10 flex items-center justify-center text-white hover:bg-white/10 rounded-full transition-all disabled:opacity-30"
+                                >
+                                    <ArrowLeft size={20} />
+                                </button>
+                                <span className="px-4 text-white text-xs font-black">
+                                    {currentImageIndex + 1} / {ocrImages.length}
+                                </span>
+                                <button
+                                    onClick={() => setCurrentImageIndex(prev => Math.min(ocrImages.length - 1, prev + 1))}
+                                    disabled={currentImageIndex === ocrImages.length - 1}
+                                    className="w-10 h-10 flex items-center justify-center text-white hover:bg-white/10 rounded-full transition-all disabled:opacity-30"
+                                >
+                                    <ChevronRight size={20} />
+                                </button>
+                            </div>
+                        )}
                         <button
                             onClick={() => setShowFullImage(false)}
                             className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-slate-800 hover:scale-110 transition-all shadow-2xl"
@@ -1626,7 +1683,7 @@ export default function CalculoEmMassa() {
 
                     <div className="relative w-full h-full flex items-center justify-center overflow-auto custom-scrollbar rounded-[40px]">
                         <img
-                            src={ocrImage}
+                            src={ocrImages[currentImageIndex]}
                             alt="Full View"
                             className="max-w-none w-auto h-auto min-w-full md:min-w-0"
                         />
