@@ -25,10 +25,12 @@ import {
     Eye,
     CreditCard,
     Copy,
+    X,
     MessageCircle,
     ExternalLink,
     Scale,
-    ShoppingBag
+    ShoppingBag,
+    Maximize2
 } from "lucide-react";
 import Link from "next/link";
 import Tesseract from 'tesseract.js';
@@ -89,6 +91,7 @@ export default function CalculoEmMassa() {
     const [mounted, setMounted] = useState(false);
     const [activeSimulatorItem, setActiveSimulatorItem] = useState<number | null>(null);
     const [distributionMode, setDistributionMode] = useState<'proportional' | 'equal'>('proportional');
+    const [showFullImage, setShowFullImage] = useState(false);
 
     // 2. Hydration Effect
     useEffect(() => {
@@ -802,9 +805,12 @@ export default function CalculoEmMassa() {
             </div>
 
             {step === 1 && (
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className={cn(
+                    "animate-in fade-in slide-in-from-bottom-4 duration-500",
+                    ocrResult.length === 0 ? "max-w-xl mx-auto" : "grid grid-cols-1 lg:grid-cols-4 gap-8"
+                )}>
                     {/* Upload Column */}
-                    <div className="lg:col-span-1 space-y-4">
+                    <div className={cn(ocrResult.length === 0 ? "w-full" : "lg:col-span-1", "space-y-4")}>
                         <GlassCard title="Documento / Tabela" icon={Scan}>
                             <div className="space-y-4">
                                 <div className="flex items-center gap-3 mb-6 bg-slate-50/80 p-4 rounded-[24px] border border-slate-100">
@@ -934,134 +940,136 @@ export default function CalculoEmMassa() {
                         </div>
                     </div>
 
-                    {/* Table Column */}
-                    <div className="lg:col-span-3">
-                        <GlassCard title={`Produtos Identificados (${ocrResult.length})`} icon={TrendingUp} className="h-full flex flex-col">
-                            <div className="flex-1 overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                            <th className="px-4 py-4 text-left">Produto extraído</th>
-                                            <th className="px-4 py-4 text-left w-32">Categoria</th>
-                                            <th className="px-4 py-4 text-center w-24">Custo {currencyType === 'USD' ? "(U$)" : "(R$)"}</th>
-                                            <th className="px-4 py-4 text-center w-20">Margem</th>
-                                            <th className="px-4 py-4 text-center w-28">Venda Pix</th>
-                                            <th className="px-4 py-4 text-center w-28">Venda 1x</th>
-                                            <th className="px-4 py-4 text-right w-12"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50">
-                                        {ocrResult.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={7} className="py-20 text-center">
-                                                    <div className="flex flex-col items-center gap-4 text-slate-300">
-                                                        <FileSearch size={48} className="opacity-10" />
-                                                        <p className="text-sm font-bold uppercase tracking-widest">Aguardando leitura de tabela...</p>
-                                                    </div>
-                                                </td>
+                    {/* Table Column - Only show if has results */}
+                    {ocrResult.length > 0 && (
+                        <div className="lg:col-span-3">
+                            <GlassCard title={`Produtos Identificados (${ocrResult.length})`} icon={TrendingUp} className="h-full flex flex-col">
+                                <div className="flex-1 overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                <th className="px-4 py-4 text-left">Produto extraído</th>
+                                                <th className="px-4 py-4 text-left w-32">Categoria</th>
+                                                <th className="px-4 py-4 text-center w-24">Custo {currencyType === 'USD' ? "(U$)" : "(R$)"}</th>
+                                                <th className="px-4 py-4 text-center w-20">Margem</th>
+                                                <th className="px-4 py-4 text-center w-28">Venda Pix</th>
+                                                <th className="px-4 py-4 text-center w-28">Venda 1x</th>
+                                                <th className="px-4 py-4 text-right w-12"></th>
                                             </tr>
-                                        ) : (
-                                            ocrResult.map((res, i) => (
-                                                <tr key={i} className="group hover:bg-slate-50/50 transition-colors">
-                                                    <td className="px-4 py-3">
-                                                        <input
-                                                            className="bg-transparent text-xs font-bold text-slate-800 w-full focus:outline-none mb-1"
-                                                            value={res.item}
-                                                            onChange={e => updateItem(i, 'item', e.target.value)}
-                                                            placeholder="Nome do Produto"
-                                                        />
-                                                        <input
-                                                            className="bg-transparent text-[10px] font-semibold text-slate-400 w-full focus:outline-none focus:text-slate-600 transition-colors"
-                                                            value={res.subcategoria}
-                                                            onChange={e => updateItem(i, 'subcategoria', e.target.value)}
-                                                            placeholder="Subcategoria (Ex: iPhone, Xiaomi...)"
-                                                            list="subcategorias-bulk"
-                                                        />
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <select
-                                                            className="bg-slate-100/50 h-8 rounded-lg px-2 text-[9px] font-black uppercase text-slate-600 w-full focus:ring-1 focus:ring-brand-500 outline-none appearance-none"
-                                                            value={res.categoria}
-                                                            onChange={e => updateItem(i, 'categoria', e.target.value)}
-                                                        >
-                                                            <option value="">...</option>
-                                                            {config?.categorias.map(cat => (
-                                                                <option key={cat.nome} value={cat.nome}>{cat.nome}</option>
-                                                            ))}
-                                                        </select>
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <div className="relative">
-                                                            <input
-                                                                type="number"
-                                                                className={cn(
-                                                                    "bg-slate-100/50 h-8 rounded-lg text-center text-xs font-black w-full focus:ring-1 focus:ring-brand-500 outline-none",
-                                                                    currencyType === 'USD' ? "text-emerald-600 bg-emerald-50/30" : "text-slate-700"
-                                                                )}
-                                                                value={res.cost}
-                                                                onChange={e => updateItem(i, 'cost', e.target.value)}
-                                                            />
-                                                            {currencyType === 'USD' && (
-                                                                <div className="text-[8px] text-center text-emerald-400 mt-0.5 font-bold">
-                                                                    = {formatCurrency(Math.round(parseFloat(res.cost) * dollarRate * 100))}
-                                                                </div>
-                                                            )}
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50">
+                                            {ocrResult.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={7} className="py-20 text-center">
+                                                        <div className="flex flex-col items-center gap-4 text-slate-300">
+                                                            <FileSearch size={48} className="opacity-10" />
+                                                            <p className="text-sm font-bold uppercase tracking-widest">Aguardando leitura de tabela...</p>
                                                         </div>
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <input
-                                                            type="number"
-                                                            className="bg-brand-50/50 h-8 rounded-lg text-center text-xs font-black text-brand-600 w-full focus:ring-1 focus:ring-brand-500 outline-none"
-                                                            value={res.margin}
-                                                            onChange={e => updateItem(i, 'margin', e.target.value)}
-                                                        />
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <div className="h-8 px-2 bg-emerald-50 border border-emerald-100 rounded-lg flex items-center justify-center">
-                                                            <span className="text-[11px] font-black text-emerald-600">
-                                                                {formatCurrency(Math.round(parseFloat(res.pricePix) * 100))}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <div className="h-8 px-2 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-center">
-                                                            <span className="text-[11px] font-black text-blue-600">
-                                                                {formatCurrency(Math.round(parseFloat(res.priceCredit1x) * 100))}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right">
-                                                        <button onClick={() => removeItem(i)} className="p-1.5 text-slate-300 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100">
-                                                            <Trash2 size={14} />
-                                                        </button>
                                                     </td>
                                                 </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            {ocrResult.length > 0 && (
-                                <div className="p-6 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
-                                    <div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase">Resumo da Carga</p>
-                                        <p className="text-sm font-bold text-slate-700">{ocrResult.length} itens prontos para importação</p>
-                                    </div>
-                                    <button onClick={() => setStep(2)} className="btn-primary shadow-emerald-glow bg-emerald-600 hover:bg-emerald-700 h-12 px-8">
-                                        <Plus size={18} /> IMPORTAR TUDO PARA ESTOQUE
-                                    </button>
+                                            ) : (
+                                                ocrResult.map((res, i) => (
+                                                    <tr key={i} className="group hover:bg-slate-50/50 transition-colors">
+                                                        <td className="px-4 py-3">
+                                                            <input
+                                                                className="bg-transparent text-xs font-bold text-slate-800 w-full focus:outline-none mb-1"
+                                                                value={res.item}
+                                                                onChange={e => updateItem(i, 'item', e.target.value)}
+                                                                placeholder="Nome do Produto"
+                                                            />
+                                                            <input
+                                                                className="bg-transparent text-[10px] font-semibold text-slate-400 w-full focus:outline-none focus:text-slate-600 transition-colors"
+                                                                value={res.subcategoria}
+                                                                onChange={e => updateItem(i, 'subcategoria', e.target.value)}
+                                                                placeholder="Subcategoria (Ex: iPhone, Xiaomi...)"
+                                                                list="subcategorias-bulk"
+                                                            />
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <select
+                                                                className="bg-slate-100/50 h-8 rounded-lg px-2 text-[9px] font-black uppercase text-slate-600 w-full focus:ring-1 focus:ring-brand-500 outline-none appearance-none"
+                                                                value={res.categoria}
+                                                                onChange={e => updateItem(i, 'categoria', e.target.value)}
+                                                            >
+                                                                <option value="">...</option>
+                                                                {config?.categorias.map(cat => (
+                                                                    <option key={cat.nome} value={cat.nome}>{cat.nome}</option>
+                                                                ))}
+                                                            </select>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="number"
+                                                                    className={cn(
+                                                                        "bg-slate-100/50 h-8 rounded-lg text-center text-xs font-black w-full focus:ring-1 focus:ring-brand-500 outline-none",
+                                                                        currencyType === 'USD' ? "text-emerald-600 bg-emerald-50/30" : "text-slate-700"
+                                                                    )}
+                                                                    value={res.cost}
+                                                                    onChange={e => updateItem(i, 'cost', e.target.value)}
+                                                                />
+                                                                {currencyType === 'USD' && (
+                                                                    <div className="text-[8px] text-center text-emerald-400 mt-0.5 font-bold">
+                                                                        = {formatCurrency(Math.round(parseFloat(res.cost) * dollarRate * 100))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <input
+                                                                type="number"
+                                                                className="bg-brand-50/50 h-8 rounded-lg text-center text-xs font-black text-brand-600 w-full focus:ring-1 focus:ring-brand-500 outline-none"
+                                                                value={res.margin}
+                                                                onChange={e => updateItem(i, 'margin', e.target.value)}
+                                                            />
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="h-8 px-2 bg-emerald-50 border border-emerald-100 rounded-lg flex items-center justify-center">
+                                                                <span className="text-[11px] font-black text-emerald-600">
+                                                                    {formatCurrency(Math.round(parseFloat(res.pricePix) * 100))}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="h-8 px-2 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-center">
+                                                                <span className="text-[11px] font-black text-blue-600">
+                                                                    {formatCurrency(Math.round(parseFloat(res.priceCredit1x) * 100))}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right">
+                                                            <button onClick={() => removeItem(i)} className="p-1.5 text-slate-300 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100">
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
                                 </div>
-                            )}
-                        </GlassCard>
-                    </div>
+
+                                {ocrResult.length > 0 && (
+                                    <div className="p-6 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase">Resumo da Carga</p>
+                                            <p className="text-sm font-bold text-slate-700">{ocrResult.length} itens prontos para importação</p>
+                                        </div>
+                                        <button onClick={() => setStep(2)} className="btn-primary shadow-emerald-glow bg-emerald-600 hover:bg-emerald-700 h-12 px-8">
+                                            <Plus size={18} /> IMPORTAR TUDO PARA ESTOQUE
+                                        </button>
+                                    </div>
+                                )}
+                            </GlassCard>
+                        </div>
+                    )}
                 </div>
             )}
 
             {step === 2 && (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {/* Left: Table Column */}
-                    <div className="space-y-6">
+                    <div className="xl:col-span-8 space-y-6">
                         <GlassCard title="Passo 2: Conferência Técnica" icon={FileSearch}>
                             <div className="p-6 bg-brand-50/30 border-b border-brand-100/50">
                                 <p className="text-xs font-bold text-brand-700">
@@ -1187,8 +1195,23 @@ export default function CalculoEmMassa() {
                     </div>
 
                     {/* Right: Image Preview Column */}
-                    <div className="space-y-6 sticky top-24 h-fit max-h-[80vh]">
-                        <GlassCard title="Documento Original" icon={Scan}>
+                    <div className="xl:col-span-4 space-y-6 sticky top-24 h-fit max-h-[80vh]">
+                        <GlassCard
+                            title="Documento Original"
+                            icon={Scan}
+                            action={
+                                ocrImage ? (
+                                    <button
+                                        onClick={() => setShowFullImage(true)}
+                                        className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-brand-500 transition-all flex items-center gap-1.5"
+                                        title="Expandir Imagem"
+                                    >
+                                        <Maximize2 size={16} />
+                                        <span className="text-[10px] font-black uppercase">Expandir</span>
+                                    </button>
+                                ) : undefined
+                            }
+                        >
                             <div className="p-4 bg-slate-900 overflow-hidden relative group">
                                 <div className="absolute top-4 left-4 z-10">
                                     <span className="bg-brand-500 text-[9px] font-black text-white px-3 py-1.5 rounded-full uppercase tracking-widest flex items-center gap-2 shadow-emerald-glow">
@@ -1201,7 +1224,8 @@ export default function CalculoEmMassa() {
                                         <img
                                             src={ocrImage}
                                             alt="OCR Invoice"
-                                            className="w-full h-auto object-contain opacity-90 group-hover:opacity-100 transition-opacity"
+                                            className="w-full h-auto object-contain opacity-90 group-hover:opacity-100 transition-opacity cursor-zoom-in"
+                                            onClick={() => setShowFullImage(true)}
                                         />
                                     ) : (
                                         <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-4">
@@ -1586,6 +1610,33 @@ export default function CalculoEmMassa() {
                             </div>
                         );
                     })()}
+                </div>
+            )}
+            {/* Image Preview Modal */}
+            {showFullImage && ocrImage && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/90 backdrop-blur-md p-4 md:p-10 animate-in fade-in duration-300">
+                    <div className="absolute top-6 right-6 z-[110]">
+                        <button
+                            onClick={() => setShowFullImage(false)}
+                            className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-slate-800 hover:scale-110 transition-all shadow-2xl"
+                        >
+                            <X size={24} />
+                        </button>
+                    </div>
+
+                    <div className="relative w-full h-full flex items-center justify-center overflow-auto custom-scrollbar rounded-[40px]">
+                        <img
+                            src={ocrImage}
+                            alt="Full View"
+                            className="max-w-none w-auto h-auto min-w-full md:min-w-0"
+                        />
+                    </div>
+
+                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[110] bg-white/10 backdrop-blur-xl border border-white/20 px-6 py-3 rounded-full">
+                        <p className="text-white text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                            Use o mouse/touch para navegar e conferir os detalhes
+                        </p>
+                    </div>
                 </div>
             )}
         </div>
