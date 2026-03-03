@@ -12,6 +12,7 @@ export async function getMembrosEquipe(empresaId: string) {
         .from("usuarios")
         .select("*")
         .eq("empresa_id", empresaId)
+        .eq("excluido", false)
         .order("nome", { ascending: true });
 
     if (error) {
@@ -126,9 +127,10 @@ export async function atualizarMembroEquipe(id: string, updates: Partial<Usuario
 }
 
 export async function excluirMembroEquipe(id: string) {
+    // Soft Delete: Apenas marca como excluído para manter histórico
     const { error } = await supabase
         .from("usuarios")
-        .delete()
+        .update({ excluido: true, ativo: false })
         .eq("id", id);
 
     if (error) {

@@ -109,7 +109,7 @@ export default function MembroModal({ isOpen, onClose, onSuccess, membro }: Memb
 
     const handleDelete = async () => {
         if (!membro) return;
-        if (!confirm("Tem certeza que deseja excluir este funcionário? Isso removerá permanentemente o acesso dele à empresa. Funcionários com histórico de vendas/OS podem não ser excluídos (desative-os em vez disso).")) return;
+        if (!confirm("Tem certeza que deseja excluir este funcionário? Ele será removido da lista da equipe, mas o histórico de vendas e ordens de serviço vinculado a ele será mantido.")) return;
 
         try {
             setSubmitting(true);

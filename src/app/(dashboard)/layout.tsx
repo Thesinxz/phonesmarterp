@@ -8,6 +8,7 @@ import { useOnboardingStatus } from "@/hooks/useOnboardingStatus";
 import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
 import { useAuth } from "@/context/AuthContext";
 import { TrialExpiredOverlay } from "@/components/trial/TrialExpiredOverlay";
+import { DeactivatedOverlay } from "@/components/auth/DeactivatedOverlay";
 
 export default function DashboardLayout({
     children,
@@ -15,9 +16,10 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     const { status, loading: loadingOnboarding } = useOnboardingStatus();
-    const { isTrialExpired, isLoading: loadingAuth } = useAuth();
+    const { isTrialExpired, profile, isLoading: loadingAuth } = useAuth();
 
     const loading = loadingOnboarding || loadingAuth;
+    const isDeactivated = profile && profile.ativo === false;
 
     // Show nothing while checking status to avoid flashing dashboard
     if (loading) {
@@ -41,6 +43,7 @@ export default function DashboardLayout({
     return (
         <FinanceConfigProvider>
             <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50/30 to-slate-100">
+                {isDeactivated && <DeactivatedOverlay />}
                 {isTrialExpired && <TrialExpiredOverlay />}
                 <Sidebar />
                 <Header />
