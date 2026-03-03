@@ -89,14 +89,13 @@ export default function OSPage() {
     useRealtimeSubscription({
         table: "ordens_servico",
         filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
-        callback: (payload: any) => {
-            console.log("Realtime OS:", payload.eventType, payload);
-            loadOS();
+        callback: () => {
+            loadOS(true);
         }
     });
 
-    async function loadOS() {
-        setLoading(true);
+    const loadOS = async (background = false) => {
+        if (!background) setLoading(true);
         try {
             const limit = viewMode === "kanban" ? 100 : 20;
             const filters = {
@@ -112,9 +111,9 @@ export default function OSPage() {
         } catch (error) {
             console.error("Erro ao carregar OS:", error);
         } finally {
-            setLoading(false);
+            if (!background) setLoading(false);
         }
-    }
+    };
 
     async function handleDeleteOS(id: string) {
         try {
@@ -154,7 +153,7 @@ export default function OSPage() {
                     <p className="text-slate-500 text-sm">Gerencie todos os consertos e manutenções.</p>
                 </div>
                 <Link
-                    href="/os/novo"
+                    href="/os/nova"
                     className="h-12 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition-all active:scale-95"
                 >
                     <Plus size={20} />

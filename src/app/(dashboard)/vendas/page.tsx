@@ -47,14 +47,12 @@ export default function VendasPage() {
         table: "vendas",
         filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
         callback: (payload: any) => {
-            console.log("Realtime Vendas:", payload.eventType, payload);
-
             if (payload.eventType === 'UPDATE') {
                 setVendas(current => current.map(v =>
                     v.id === payload.new.id ? { ...v, ...payload.new } : v
                 ));
             } else if (payload.eventType === 'INSERT') {
-                loadData();
+                loadData(true);
             } else if (payload.eventType === 'DELETE') {
                 setVendas(current => current.filter(v => v.id !== payload.old.id));
             }
@@ -74,8 +72,8 @@ export default function VendasPage() {
         return () => clearTimeout(timer);
     }, [search]);
 
-    async function loadData() {
-        setLoading(true);
+    async function loadData(background = false) {
+        if (!background) setLoading(true);
         try {
             const response = await getVendas(currentPage, 50, {
                 startDate: filterStartDate,
@@ -87,7 +85,7 @@ export default function VendasPage() {
         } catch (error) {
             console.error("Erro ao carregar vendas:", error);
         } finally {
-            setLoading(false);
+            if (!background) setLoading(false);
         }
     }
 

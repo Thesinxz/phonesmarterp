@@ -196,20 +196,97 @@ export default function ConfiguracoesPage() {
     const [searchingCnpj, setSearchingCnpj] = useState(false);
     const [configsLoaded, setConfigsLoaded] = useState(false);
 
+    // ── Carregar configs ──
+    const fetchConfigs = async (background = false) => {
+        if (!profile?.empresa_id) return;
+
+        if (!background) setConfigsLoaded(false);
+
+        try {
+            const supabase = createClient();
+            const { data, error } = await supabase
+                .from('configuracoes')
+                .select('chave, valor')
+                .eq('empresa_id', profile.empresa_id);
+
+            if (error) throw error;
+
+            if (!data || data.length === 0) {
+                console.warn("[Config] ⚠ Nenhuma configuração encontrada.");
+                if (!background) setConfigsLoaded(true);
+                return;
+            }
+
+            data.forEach((row: any) => {
+                const { chave, valor } = row;
+                if (chave === "nfe_emitente") setEmitente(valor as EmitenteConfig);
+                if (chave === "whatsapp") setWhatsappConfig(valor as any);
+                if (chave === "financeiro") {
+                    const config = valor as FinanceiroConfig;
+                    if (config.gateways && Array.isArray(config.gateways)) {
+                        config.gateways = config.gateways.map(gw => ({
+                            ...gw,
+                            taxa_pix_pct: gw.taxa_pix_pct ?? config.taxa_pix_pct ?? 0,
+                            taxa_debito_pct: gw.taxa_debito_pct ?? config.taxa_debito_pct ?? 0,
+                            taxas_credito: gw.taxas_credito ?? config.taxas_credito ?? Array.from({ length: 21 }, (_, i) => ({ parcela: i + 1, taxa: 0 })),
+                        }));
+                    }
+                    if (!config.categorias) config.categorias = [];
+                    setFinanceiroConfig(config);
+                }
+                if (chave === "gemini") setGeminiConfig(valor as any);
+                if (chave === "vitrine") setVitrineConfig((prev: any) => ({ ...prev, ...valor as any }));
+                if (chave === "contador") setContadorConfig(valor as any);
+                if (chave === "efibank_credentials") setCrediarioConfig(valor as any);
+            });
+
+            // Configurações fiscais
+            try {
+                const fconf = await getFiscalConfig(profile.empresa_id);
+                if (fconf) setFiscalConfig(fconf);
+                else setFiscalConfig(prev => ({ ...prev, empresa_id: profile.empresa_id! }));
+            } catch (e) {
+                console.error("Erro ao carregar fiscalConfig", e);
+            }
+
+            if (!background) setConfigsLoaded(true);
+        } catch (err) {
+            console.error("[Config] ❌ Erro ao carregar:", err);
+            if (!background) setConfigsLoaded(true);
+        }
+
+        // Subdominio e logo
+        try {
+            const sb = createClient();
+            const { data: emp } = await (sb.from("empresas") as any)
+                .select("subdominio, logo_url")
+                .eq("id", profile.empresa_id)
+                .single();
+
+            if (emp) {
+                if (emp.subdominio) {
+                    setEmpresaSubdominio(emp.subdominio);
+                    setEditingSlug(emp.subdominio);
+                }
+                if (emp.logo_url) setLogoUrl(emp.logo_url);
+            }
+        } catch (e) {
+            console.warn("Erro ao carregar dados adicionais", e);
+        }
+    };
+
+    useEffect(() => {
+        if (profile?.empresa_id) fetchConfigs();
+    }, [profile?.empresa_id]);
+
     // Realtime Sync
     useRealtimeSubscription({
         table: "configuracoes",
         filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
         callback: (payload: any) => {
-            console.log("Realtime Configuração alterada:", payload.eventType, payload);
-
             if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-                const chave = payload.new.chave;
-                const valor = payload.new.valor;
-
-                // Atualiza instantaneamente a tela de acordo com a chave modificada
+                const { chave, valor } = payload.new;
                 if (chave === "nfe_emitente") setEmitente(valor as EmitenteConfig);
-                // "nfe_certificado" was deprecated for realtime. Realtime table for configuracoes_fiscais requires generic subscription
                 if (chave === "whatsapp") setWhatsappConfig(valor as any);
                 if (chave === "financeiro") {
                     const config = valor as FinanceiroConfig;
@@ -229,114 +306,10 @@ export default function ConfiguracoesPage() {
                 if (chave === "contador") setContadorConfig(valor as any);
                 if (chave === "efibank_credentials") setCrediarioConfig(valor as any);
 
-                toast.info(`Configuração "${chave}" foi atualizada remotamente.`, {
-                    duration: 3000,
-                    icon: '🔄'
-                });
+                toast.info(`Configuração "${chave}" atualizada.`);
             }
         }
     });
-
-    // ── Carregar configs: roda na montagem e quando empresa_id muda ──
-    useEffect(() => {
-        if (!profile?.empresa_id) return;
-
-        let ignore = false;
-
-        async function fetchConfigs() {
-            if (!profile?.empresa_id) return;
-
-            console.log("[Config] ▶ Iniciando carregamento para empresa:", profile.empresa_id);
-            setConfigsLoaded(false);
-
-            try {
-                const supabase = createClient();
-                const { data, error } = await supabase
-                    .from('configuracoes')
-                    .select('chave, valor')
-                    .eq('empresa_id', profile.empresa_id);
-
-                if (error) throw error;
-
-                if (ignore) return;
-
-                if (!data || data.length === 0) {
-                    console.warn("[Config] ⚠ Nenhuma configuração encontrada no banco.");
-                    setConfigsLoaded(true);
-                    return;
-                }
-
-                console.log(`[Config] ✅ ${data.length} configs carregadas`);
-
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                data.forEach((row: any) => {
-                    if (row.chave === "nfe_emitente") setEmitente(row.valor as EmitenteConfig);
-                    if (row.chave === "whatsapp") setWhatsappConfig(row.valor as any);
-                    if (row.chave === "financeiro") {
-                        const config = row.valor as FinanceiroConfig;
-                        if (config.gateways && Array.isArray(config.gateways)) {
-                            config.gateways = config.gateways.map(gw => ({
-                                ...gw,
-                                taxa_pix_pct: gw.taxa_pix_pct ?? config.taxa_pix_pct ?? 0,
-                                taxa_debito_pct: gw.taxa_debito_pct ?? config.taxa_debito_pct ?? 0,
-                                taxas_credito: gw.taxas_credito ?? config.taxas_credito ?? Array.from({ length: 21 }, (_, i) => ({ parcela: i + 1, taxa: 0 })),
-                            }));
-                        }
-                        if (!config.categorias) config.categorias = [];
-                        setFinanceiroConfig(config);
-                    }
-                    if (row.chave === "gemini") setGeminiConfig(row.valor as any);
-                    if (row.chave === "vitrine") setVitrineConfig((prev: any) => ({ ...prev, ...row.valor as any }));
-                    if (row.chave === "contador") setContadorConfig(row.valor as any);
-                    if (row.chave === "efibank_credentials") setCrediarioConfig(row.valor as any);
-                });
-
-                // Ler as configurações fiscais reais da nova tabela (Phase 13)
-                try {
-                    const fconf = await getFiscalConfig(profile.empresa_id);
-                    if (fconf) {
-                        setFiscalConfig(fconf);
-                    } else {
-                        setFiscalConfig(prev => ({ ...prev, empresa_id: profile.empresa_id }));
-                    }
-                } catch (e) {
-                    console.error("Erro ao carregar fiscalConfig", e);
-                }
-
-                setConfigsLoaded(true);
-            } catch (err) {
-                console.error("[Config] ❌ Erro inesperado:", err);
-                setConfigsLoaded(true);
-            }
-
-            // Carregar subdomínio e logo da empresa
-            try {
-                const sb = createClient();
-                const { data: emp } = await (sb.from("empresas") as any)
-                    .select("subdominio, logo_url")
-                    .eq("id", profile.empresa_id)
-                    .single();
-
-                if (!ignore && emp) {
-                    if (emp.subdominio) {
-                        setEmpresaSubdominio(emp.subdominio);
-                        setEditingSlug(emp.subdominio);
-                    }
-                    if (emp.logo_url) {
-                        setLogoUrl(emp.logo_url);
-                    }
-                }
-            } catch (e) {
-                console.warn("Erro ao carregar dados adicionais da empresa", e);
-            }
-        }
-
-        fetchConfigs();
-
-        return () => {
-            ignore = true;
-        };
-    }, [profile?.empresa_id]);
 
     if (isLoading) {
         return (

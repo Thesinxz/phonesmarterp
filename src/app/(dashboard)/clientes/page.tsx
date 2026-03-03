@@ -37,28 +37,26 @@ export default function ClientesPage() {
         table: "clientes",
         filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
         callback: (payload: any) => {
-            console.log("Realtime Clientes:", payload.eventType, payload);
-
             if (payload.eventType === 'UPDATE') {
                 setClientes(current => current.map(c =>
                     c.id === payload.new.id ? { ...c, ...payload.new } : c
                 ));
             } else {
-                loadClientes();
+                loadClientes(true); // background refresh
             }
         }
     });
 
-    async function loadClientes() {
+    async function loadClientes(background = false) {
         if (!profile?.empresa_id) return;
-        setLoading(true);
+        if (!background) setLoading(true);
         try {
             const { data } = await getClientes(1, 50, { ...filters, empresa_id: profile.empresa_id });
             setClientes(data);
         } catch (error) {
             console.error("Erro ao carregar clientes:", error);
         } finally {
-            setLoading(false);
+            if (!background) setLoading(false);
         }
     }
 

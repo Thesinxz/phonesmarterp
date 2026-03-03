@@ -34,13 +34,13 @@ export default function FinanceiroPage() {
     useRealtimeSubscription({
         table: "titulos",
         filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
-        callback: () => loadData()
+        callback: () => loadData(true)
     });
 
     useRealtimeSubscription({
         table: "financeiro",
         filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
-        callback: () => loadData()
+        callback: () => loadData(true)
     });
 
     useEffect(() => {
@@ -49,8 +49,8 @@ export default function FinanceiroPage() {
         }
     }, [profile?.empresa_id, filterStart, filterEnd]);
 
-    async function loadData() {
-        setLoading(true);
+    async function loadData(background = false) {
+        if (!background) setLoading(true);
         try {
             const dateFilters = { startDate: filterStart, endDate: filterEnd };
             const [receber, pagar] = await Promise.all([
@@ -63,7 +63,7 @@ export default function FinanceiroPage() {
         } catch (error) {
             console.error("Erro ao carregar resumos financeiros:", error);
         } finally {
-            setLoading(false);
+            if (!background) setLoading(false);
         }
     }
 

@@ -20,6 +20,7 @@ import { getMembrosEquipe, type Usuario } from "@/services/equipe";
 import { toast } from "sonner";
 import { cn } from "@/utils/cn";
 import MembroModal from "@/components/equipe/MembroModal";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
 
 export default function EquipePage() {
@@ -33,16 +34,16 @@ export default function EquipePage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedMembro, setSelectedMembro] = useState<Usuario | null>(null);
 
-    const loadData = useCallback(async () => {
+    const loadData = useCallback(async (background = false) => {
         if (!profile?.empresa_id) return;
         try {
-            setLoading(true);
+            if (!background) setLoading(true);
             const data = await getMembrosEquipe(profile.empresa_id);
             setMembros(data);
         } catch (error) {
             toast.error("Erro ao carregar equipe");
         } finally {
-            setLoading(false);
+            if (!background) setLoading(false);
         }
     }, [profile?.empresa_id]);
 
@@ -50,6 +51,12 @@ export default function EquipePage() {
         if (!profile?.empresa_id) return;
         loadData();
     }, [loadData, profile?.empresa_id]);
+
+    useRealtimeSubscription({
+        table: "usuarios",
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: () => loadData(true)
+    });
 
     const filteredMembros = membros.filter(m => {
         const matchesSearch = m.nome.toLowerCase().includes(search.toLowerCase()) ||

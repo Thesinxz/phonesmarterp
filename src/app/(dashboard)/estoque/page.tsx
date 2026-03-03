@@ -46,8 +46,8 @@ export default function EstoquePage() {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [historicoProdutoId, setHistoricoProdutoId] = useState<string | null>(null);
 
-    const loadProdutos = async () => {
-        setLoading(true);
+    const loadProdutos = async (background = false) => {
+        if (!background) setLoading(true);
         try {
             const response = await getProdutos(currentPage, 50, filters);
             setProdutos(response.data);
@@ -56,7 +56,7 @@ export default function EstoquePage() {
         } catch (error) {
             console.error("Erro ao carregar estoque:", error);
         } finally {
-            setLoading(false);
+            if (!background) setLoading(false);
         }
     };
 
@@ -70,13 +70,12 @@ export default function EstoquePage() {
         table: "produtos",
         filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
         callback: (payload: any) => {
-            console.log("Realtime Estoque:", payload.eventType, payload);
             if (payload.eventType === 'UPDATE') {
                 setProdutos(current => current.map(p =>
                     p.id === payload.new.id ? { ...p, ...payload.new } : p
                 ));
             } else {
-                loadProdutos();
+                loadProdutos(true);
             }
         }
     });

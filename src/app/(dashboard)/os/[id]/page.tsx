@@ -78,22 +78,21 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
     useRealtimeSubscription({
         table: "ordens_servico",
         filter: `id=eq.${params.id}`,
-        callback: (payload: any) => {
-            console.log("Realtime OS Detail:", payload.eventType);
-            loadOS();
+        callback: () => {
+            loadOS(true);
         }
     });
 
     useRealtimeSubscription({
         table: "os_timeline",
         filter: `os_id=eq.${params.id}`,
-        callback: (payload: any) => {
-            console.log("Realtime Timeline Detail:", payload.eventType);
-            loadOS();
+        callback: () => {
+            loadOS(true);
         }
     });
 
-    async function loadOS() {
+    async function loadOS(background = false) {
+        if (!background) setLoading(true);
         try {
             const data = await getOrdemServicoById(params.id);
             setOs(data);
@@ -109,7 +108,7 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
         } catch (error) {
             console.error("Erro ao carregar OS:", error);
         } finally {
-            setLoading(false);
+            if (!background) setLoading(false);
         }
     }
 

@@ -183,7 +183,7 @@ export function OSWizard() {
     };
 
     return (
-        <div className="max-w-5xl mx-auto pb-28">
+        <div className="max-w-full mx-auto pb-28 px-2">
             {/* Header / Stepper */}
             <div className="mb-8 overflow-x-auto scrollbar-none py-4 bg-slate-50/50 rounded-3xl border border-white/50 px-2 sticky top-[72px] z-30 backdrop-blur-sm">
                 <div className="flex items-center justify-between min-w-max px-4 gap-4">
@@ -364,7 +364,7 @@ export function OSWizard() {
 
             {/* Bottom Navigation */}
             <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-100 p-4 z-40">
-                <div className="max-w-5xl mx-auto flex items-center justify-between">
+                <div className="max-w-full mx-auto flex items-center justify-between px-6">
                     <button
                         type="button"
                         onClick={() => {

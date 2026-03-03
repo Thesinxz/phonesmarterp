@@ -75,14 +75,13 @@ export function useDashboardMetrics() {
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
 
-    const fetchMetrics = async () => {
-        // Guard: verificar se a sessão está pronta antes de executar queries
-        // Sem sessão, auth.uid() retorna NULL → get_my_empresa_id() = NULL → dados vazios
+    const fetchMetrics = async (background = false) => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
             console.warn("[Dashboard] Sessão não pronta, adiando fetch...");
             return;
         }
+        if (!background) setLoading(true);
         try {
             // ──── Métricas Top Cards ────────────────────────────────
 
@@ -343,7 +342,7 @@ export function useDashboardMetrics() {
         } catch (error) {
             console.error("Error fetching metrics:", error);
         } finally {
-            setLoading(false);
+            if (!background) setLoading(false);
         }
     };
 
@@ -353,25 +352,25 @@ export function useDashboardMetrics() {
     useRealtimeSubscription({
         table: "ordens_servico",
         filter,
-        callback: () => fetchMetrics()
+        callback: () => fetchMetrics(true)
     });
 
     useRealtimeSubscription({
         table: "clientes",
         filter,
-        callback: () => fetchMetrics()
+        callback: () => fetchMetrics(true)
     });
 
     useRealtimeSubscription({
         table: "financeiro",
         filter,
-        callback: () => fetchMetrics()
+        callback: () => fetchMetrics(true)
     });
 
     useRealtimeSubscription({
         table: "vendas",
         filter,
-        callback: () => fetchMetrics()
+        callback: () => fetchMetrics(true)
     });
 
     useEffect(() => {

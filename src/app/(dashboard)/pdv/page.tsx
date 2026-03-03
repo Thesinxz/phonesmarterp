@@ -92,15 +92,12 @@ export default function PDVPage() {
         table: "produtos",
         filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
         callback: (payload: any) => {
-            console.log("Realtime PDV:", payload.eventType, payload);
             if (payload.eventType === 'UPDATE') {
-                // Atualiza instantaneamente o estoque disponível na tela do PDV
                 setProducts(current => current.map(p =>
                     p.id === payload.new.id ? { ...p, ...payload.new } : p
                 ));
             } else {
-                // Para novos itens, recarregamos
-                loadProducts(searchTerm);
+                loadProducts(searchTerm, true);
             }
         }
     });
@@ -173,15 +170,15 @@ export default function PDVPage() {
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
-    async function loadProducts(search?: string) {
-        setLoading(true);
+    async function loadProducts(search?: string, background = false) {
+        if (!background) setLoading(true);
         try {
             const response = await getProdutos(1, 50, { search });
             setProducts(response.data);
         } catch (error) {
             console.error("Erro ao carregar produtos:", error);
         } finally {
-            setLoading(false);
+            if (!background) setLoading(false);
         }
     }
 
@@ -423,7 +420,7 @@ export default function PDVPage() {
             {/* Passo 1: Informar Cliente */}
             {step === 1 && (
                 <div className="flex-1 flex flex-col items-center justify-center">
-                    <GlassCard className="w-full max-w-2xl p-8 flex flex-col gap-6">
+                    <GlassCard className="w-full max-w-4xl p-8 flex flex-col gap-6">
                         <div className="text-center">
                             <div className="w-16 h-16 bg-brand-100 text-brand-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
                                 <User size={32} />
@@ -735,7 +732,7 @@ export default function PDVPage() {
                     <h2 className="text-3xl font-black text-slate-800 mb-2">Venda Concluída!</h2>
                     <p className="text-slate-500 mb-8 max-w-sm text-center">Tudo certo com o pedido. O que você deseja fazer agora?</p>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-6xl">
                         <button className="glass-card flex flex-col items-center justify-center p-6 gap-3 hover:border-brand-500 hover:text-brand-600 transition-all group">
                             <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-brand-50 transition-colors">
                                 <Receipt size={24} />
