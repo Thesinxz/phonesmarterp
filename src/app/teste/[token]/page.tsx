@@ -8,6 +8,10 @@ import { TesteTela } from "@/components/teste/TesteTela";
 import { TesteCamera } from "@/components/teste/TesteCamera";
 import { TesteMicrofone } from "@/components/teste/TesteMicrofone";
 import { TesteConectividade } from "@/components/teste/TesteConectividade";
+import { TesteVibracao } from "@/components/teste/TesteVibracao";
+import { TesteLanterna } from "@/components/teste/TesteLanterna";
+import { TesteCarregamento } from "@/components/teste/TesteCarregamento";
+import { TesteBotoes } from "@/components/teste/TesteBotoes";
 
 interface OSInfo {
     numero: number;
@@ -31,6 +35,10 @@ const TESTES: TesteStep[] = [
     { id: "camera_traseira", label: "Câmera Traseira", emoji: "📸" },
     { id: "camera_frontal", label: "Câmera Frontal", emoji: "🤳" },
     { id: "microfone", label: "Microfone", emoji: "🎤" },
+    { id: "vibracao", label: "Vibração", emoji: "📳" },
+    { id: "lanterna", label: "Luz / Lanterna", emoji: "🔦" },
+    { id: "botoes", label: "Botões Físicos", emoji: "🔘" },
+    { id: "carregamento", label: "Carga / USB", emoji: "⚡" },
     { id: "wifi", label: "Wi-Fi / Internet", emoji: "📶" },
 ];
 
@@ -193,12 +201,12 @@ export default function TestePage({ params }: { params: { token: string } }) {
                         </button>
                     </div>
 
-                    <div className="mt-8 bg-white/5 rounded-2xl p-4 border border-white/10 text-left">
-                        <div className="flex justify-between items-center mb-4">
+                    <div className="mt-8 bg-white/5 rounded-2xl p-4 border border-white/10 text-left overflow-hidden">
+                        <div className="flex justify-between items-center mb-4 p-1">
                             <p className="text-white/60 text-xs font-bold uppercase tracking-wider">Bateria de Testes ({TESTES.length})</p>
                             <span className="text-indigo-400 text-[10px] font-bold">{totalTestados}/{TESTES.length} concluídos</span>
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin">
                             {TESTES.map((t, index) => (
                                 <button
                                     key={t.id}
@@ -240,10 +248,6 @@ export default function TestePage({ params }: { params: { token: string } }) {
                             </button>
                         )}
                     </div>
-
-                    <p className="mt-4 text-[10px] text-white/30 uppercase font-bold tracking-widest text-center">
-                        Toque em um teste para realizar individualmente
-                    </p>
                 </div>
             </div>
         );
@@ -312,6 +316,10 @@ export default function TestePage({ params }: { params: { token: string } }) {
                     {testeAtual.id === "camera_traseira" && <TesteCamera tipo="traseira" onResult={(ok) => handleResult(testeAtual.id, ok)} />}
                     {testeAtual.id === "camera_frontal" && <TesteCamera tipo="frontal" onResult={(ok) => handleResult(testeAtual.id, ok)} />}
                     {testeAtual.id === "microfone" && <TesteMicrofone onResult={(ok) => handleResult(testeAtual.id, ok)} />}
+                    {testeAtual.id === "vibracao" && <TesteVibracao onResult={(ok) => handleResult(testeAtual.id, ok)} />}
+                    {testeAtual.id === "lanterna" && <TesteLanterna onResult={(ok) => handleResult(testeAtual.id, ok)} />}
+                    {testeAtual.id === "carregamento" && <TesteCarregamento onResult={(ok) => handleResult(testeAtual.id, ok)} />}
+                    {testeAtual.id === "botoes" && <TesteBotoes onResult={(ok) => handleResult(testeAtual.id, ok)} />}
                     {testeAtual.id === "wifi" && <TesteConectividade onResult={(ok) => handleResult(testeAtual.id, ok)} />}
                 </div>
             </div>
