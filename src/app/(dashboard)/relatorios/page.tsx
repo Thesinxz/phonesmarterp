@@ -42,7 +42,7 @@ export default function RelatoriosPage() {
         },
         {
             label: "Ticket Médio",
-            value: formatCurrency(metrics.ticketMedio),
+            value: formatCurrency(metrics.ticketMedioGeral),
             // change: "-2.4%", // Removido fake change
             type: "neutral",
             icon: BarChart3,

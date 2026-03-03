@@ -7,9 +7,10 @@ import { formatDate } from "@/utils/formatDate";
 
 interface OSStep6ResumoProps {
     data: any;
+    onChange: (data: any) => void;
 }
 
-export function OSStep6Resumo({ data }: OSStep6ResumoProps) {
+export function OSStep6Resumo({ data, onChange }: OSStep6ResumoProps) {
     const totalPecas = (data.pecas || []).reduce((acc: number, p: any) => acc + (p.preco * p.qtd), 0);
     const totalServicos = (data.servicos || []).reduce((acc: number, s: any) => acc + s.valor, 0);
     const totalGeral = totalPecas + totalServicos - (data.desconto || 0);
@@ -116,6 +117,29 @@ export function OSStep6Resumo({ data }: OSStep6ResumoProps) {
                         <p className="font-bold text-slate-700 text-sm">{data.financas.garantia} dias</p>
                     </GlassCard>
                 </div>
+            </div>
+
+
+            <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl flex items-center justify-between gap-3">
+                <div className="flex flex-col">
+                    <span className="text-sm font-bold text-emerald-800 flex items-center gap-2">
+                        💰 Orçamento Já Aprovado?
+                    </span>
+                    <span className="text-xs text-emerald-600/80">Marque se o cliente já autorizou a execução do serviço com este valor.</span>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => onChange({ ...data, orcamentoAprovado: !data.orcamentoAprovado })}
+                    className={cn(
+                        "relative w-14 h-7 rounded-full transition-colors flex-shrink-0",
+                        data.orcamentoAprovado ? "bg-emerald-500" : "bg-white border-2 border-emerald-200"
+                    )}
+                >
+                    <span className={cn(
+                        "absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm",
+                        data.orcamentoAprovado ? "translate-x-7 bg-white" : "translate-x-0 bg-emerald-200"
+                    )} />
+                </button>
             </div>
 
             <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex items-start gap-3">

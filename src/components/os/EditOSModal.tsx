@@ -27,7 +27,9 @@ export function EditOSModal({ os, onClose, onSuccess }: EditOSModalProps) {
         senha_dispositivo: os.senha_dispositivo || "",
         valor_total_centavos: os.valor_total_centavos || 0,
         garantia_dias: os.garantia_dias || 90,
-        unidade_garantia: "dias"
+        status: (os.status as string) || "aberta",
+        unidade_garantia: "dias",
+        orcamento_aprovado: os.orcamento_aprovado || false,
     });
 
     const handleSave = async () => {
@@ -43,7 +45,8 @@ export function EditOSModal({ os, onClose, onSuccess }: EditOSModalProps) {
                 imei_equipamento: formData.imei_equipamento,
                 senha_dispositivo: formData.senha_dispositivo,
                 valor_total_centavos: Number(formData.valor_total_centavos),
-                garantia_dias: Number(formData.garantia_dias)
+                garantia_dias: Number(formData.garantia_dias),
+                status: formData.status
             });
             toast.success("Ordem de Serviço atualizada com sucesso!");
             onSuccess();
@@ -126,6 +129,54 @@ export function EditOSModal({ os, onClose, onSuccess }: EditOSModalProps) {
                                     className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:border-slate-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all uppercase placeholder:normal-case"
                                     placeholder="PIN ou Senha"
                                 />
+                            </div>
+
+                            <div className="pt-4 border-t border-slate-100">
+                                <label className="text-[10px] uppercase font-bold text-slate-400 mb-2 flex items-center gap-1">
+                                    <RefreshCw size={10} /> Status do Processo
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {[
+                                        { id: 'aberta', label: 'Aberta', color: 'bg-slate-100 text-slate-700' },
+                                        { id: 'em_analise', label: 'Análise', color: 'bg-blue-100 text-blue-700' },
+                                        { id: 'aguardando_peca', label: 'Peça', color: 'bg-amber-100 text-amber-700' },
+                                        { id: 'em_execucao', label: 'Execução', color: 'bg-purple-100 text-purple-700' },
+                                        { id: 'finalizada', label: 'Finalizada', color: 'bg-emerald-100 text-emerald-700' },
+                                        { id: 'entregue', label: 'Entregue', color: 'bg-indigo-100 text-indigo-700' },
+                                        { id: 'cancelada', label: 'Cancelada', color: 'bg-red-100 text-red-700' },
+                                    ].map((s) => (
+                                        <button
+                                            key={s.id}
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, status: s.id })}
+                                            className={cn(
+                                                "px-3 py-2 rounded-xl text-[10px] font-bold transition-all border-2",
+                                                formData.status === s.id
+                                                    ? "border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50 text-indigo-700"
+                                                    : "border-transparent " + s.color + " opacity-60 hover:opacity-100"
+                                            )}
+                                        >
+                                            {s.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+                                <label className="text-xs font-bold text-slate-700">Orçamento Aprovado?</label>
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, orcamento_aprovado: !formData.orcamento_aprovado })}
+                                    className={cn(
+                                        "relative w-11 h-6 rounded-full transition-colors",
+                                        formData.orcamento_aprovado ? "bg-emerald-500" : "bg-slate-200"
+                                    )}
+                                >
+                                    <span className={cn(
+                                        "absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform",
+                                        formData.orcamento_aprovado ? "translate-x-5" : "translate-x-0"
+                                    )} />
+                                </button>
                             </div>
                         </div>
                     </div>

@@ -46,15 +46,16 @@ export default function PrintOSPage({ params }: { params: { id: string } }) {
     const tituloDoc = isEntrada ? "Comprovante de Entrada" : "Certificado de Entrega / Saída";
 
     const containerClass = isA4
-        ? "max-w-4xl mx-auto bg-white min-h-screen text-slate-900 font-sans text-sm leading-relaxed p-8 pb-32 print:p-0 print:m-0 print:w-full print:shadow-none"
+        ? "max-w-4xl mx-auto bg-white min-h-screen text-slate-900 font-sans text-sm leading-relaxed p-8 print:p-0 print:m-0 print:w-full print:shadow-none"
         : "max-w-[290px] mx-auto bg-white min-h-screen text-slate-900 font-sans text-[9px] leading-[1.1] pt-2 pb-20 print:w-full print:p-0";
 
     const pecas = Array.isArray(os.pecas_json) ? os.pecas_json : [];
     const servicos = Array.isArray(os.mao_obra_json) ? os.mao_obra_json : [];
     const checklist = os.checklist_entrada_json || os.checklist_json || {};
 
-    return (
-        <div className={containerClass}>
+    const renderOSContent = (via?: string) => (
+        <div className={isA4 ? "w-full max-w-4xl mx-auto bg-white mb-2" : "w-full"}>
+            {via && <div className="text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{via}</div>}
             {/* Header */}
             <div className={`text-center border-b border-black pb-1 mb-2 ${isA4 ? 'border-solid' : 'border-dashed'}`}>
                 <h1 className="font-bold uppercase" style={{ fontSize: isA4 ? '1.8rem' : '1.1rem' }}>{empresa?.nome_fantasia || "SmartOS ERP"}</h1>
@@ -79,8 +80,16 @@ export default function PrintOSPage({ params }: { params: { id: string } }) {
                         <h3 className={`font-black ${isA4 ? 'text-3xl' : 'text-lg'}`}>OS #{String(os.numero).padStart(4, '0')}</h3>
                         <p className={`${isA4 ? 'text-sm' : 'text-[8px]'} font-bold text-slate-500 italic`}>Aberto em: {formatDate(os.created_at)}</p>
                     </div>
-                    <div className="text-right">
-                        <p className="font-black uppercase text-indigo-600 tracking-tighter" style={{ fontSize: isA4 ? '0.9rem' : '0.6rem' }}>{os.status.replace(/_/g, " ")}</p>
+                    <div className="flex items-center gap-3 text-right">
+                        <div className="flex flex-col items-end">
+                            <p className="font-black uppercase text-indigo-600 tracking-tighter" style={{ fontSize: isA4 ? '0.9rem' : '0.6rem' }}>{os.status.replace(/_/g, " ")}</p>
+                            <span className={`text-slate-400 font-bold uppercase mt-0.5 ${isA4 ? 'text-[8px]' : 'text-[5px]'}`}>Acesse rapidamente</span>
+                        </div>
+                        <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=${isA4 ? '150x150' : '100x100'}&data=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin + '/os/' + os.id : '')}`}
+                            alt="QR Link da OS"
+                            className={`rounded-sm ${isA4 ? 'w-14 h-14' : 'w-8 h-8'}`}
+                        />
                     </div>
                 </div>
             </div>
@@ -165,8 +174,13 @@ export default function PrintOSPage({ params }: { params: { id: string } }) {
                     </table>
 
                     <div className={`mt-2 flex flex-col items-end`}>
-                        <div className={`flex justify-between p-2 bg-slate-900 text-white rounded-lg w-full ${isA4 ? 'w-64 text-xl mt-4 py-3' : 'text-[11px]'}`}>
-                            <span className="uppercase font-bold text-[8px] self-center opacity-70">Subtotal:</span>
+                        <div className={`flex justify-between items-center p-2 bg-slate-900 text-white rounded-lg w-full ${isA4 ? 'w-64 text-xl mt-4 py-3' : 'text-[11px]'}`}>
+                            <div className="flex flex-col gap-0.5 items-start">
+                                <span className="uppercase font-bold text-[8px] opacity-70">Subtotal:</span>
+                                {os.orcamento_aprovado && (
+                                    <span className="text-[8px] font-black tracking-widest bg-emerald-500/30 text-emerald-300 px-1 py-0.5 rounded uppercase">APROVADO ✓</span>
+                                )}
+                            </div>
                             <span className="font-black">{formatCurrency(os.valor_total_centavos)}</span>
                         </div>
                     </div>
@@ -202,6 +216,27 @@ export default function PrintOSPage({ params }: { params: { id: string } }) {
             <div className={`mt-4 pt-2 border-t border-slate-100 text-center text-slate-400 font-bold uppercase ${isA4 ? 'text-xs' : 'text-[7px]'}`}>
                 <p>SmartOS - {new Date().toLocaleString('pt-BR')}</p>
             </div>
+        </div>
+    );
+
+    return (
+        <div className={containerClass}>
+            {isA4 ? (
+                <div className="w-full h-full min-h-[297mm]">
+                    <div>
+                        {renderOSContent("Via do Cliente")}
+                        <div className="w-full flex items-center justify-center my-6 opacity-30 relative print:my-0 print:py-6">
+                            <div className="absolute w-full h-[1px] border-b-[2px] border-dashed border-black"></div>
+                            <span className="bg-white px-4 text-slate-500 relative z-10 font-bold tracking-widest text-xs flex items-center gap-2">
+                                ✂️ CORTAR AQUI ✂️
+                            </span>
+                        </div>
+                        {renderOSContent("Via da Assistência")}
+                    </div>
+                </div>
+            ) : (
+                renderOSContent()
+            )}
 
             {/* Controls */}
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 print:hidden z-[100] w-full max-w-lg px-4">

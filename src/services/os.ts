@@ -106,9 +106,28 @@ export async function updateOSStatus(
 
     // 3. Processar baixa de estoque se necessário
     if (deveBaixarEstoque && currentOS.pecas_json && Array.isArray(currentOS.pecas_json)) {
+        // Validação prévia: Garantir que todas as peças têm estoque suficiente
         for (const peca of currentOS.pecas_json) {
             if (peca.produto_id) {
-                // Buscar quantidade atual
+                const { data: prod } = await (supabase as any)
+                    .from("produtos")
+                    .select("estoque_qtd, nome")
+                    .eq("id", peca.produto_id)
+                    .single();
+
+                const qtAtual = prod?.estoque_qtd || 0;
+                const qtNecessaria = peca.qtd || 1;
+
+                if (qtAtual < qtNecessaria) {
+                    throw new Error(`Estoque insuficiente para a peça '${peca.nome || prod?.nome || 'Desconhecida'}'. Necessário: ${qtNecessaria}, Disponível: ${qtAtual}.`);
+                }
+            }
+        }
+
+        // Se passou da validação prévia, efetua a baixa
+        for (const peca of currentOS.pecas_json) {
+            if (peca.produto_id) {
+                // Buscar quantidade atual novamente (caso tenha mudado no meio tempo)
                 const { data: prod } = await (supabase as any)
                     .from("produtos")
                     .select("estoque_qtd, nome")
@@ -163,64 +182,71 @@ export async function updateOSStatus(
     // 5. Registrar no financeiro se estiver sendo entregue
     // Lançaremos um Título "A Receber" para que o caixa/frente possa dar a baixa oficial
     if (status === "entregue" && currentOS.valor_total_centavos > 0) {
-        // Verificar se já não existe um título para esta OS
-        const { count } = await supabase
-            .from("financeiro_titulos")
-            .select("*", { count: 'exact', head: true })
-            .eq("origem_tipo", "os")
-            .eq("origem_id", id);
 
-        if (count === 0) {
-            const formaPagamento = extraFields?.forma_pagamento || 'dinheiro';
-            const isPrazo =
-                formaPagamento.startsWith('credito_') ||
-                formaPagamento.startsWith('boleto_') ||
-                formaPagamento.startsWith('crediario_');
+        const adiantamento = currentOS.valor_adiantado_centavos || 0;
+        const valorRestante = currentOS.valor_total_centavos - adiantamento;
 
-            if (isPrazo) {
-                // Instalar Parcelas
-                let qtdParcelas = 1;
-                const parts = formaPagamento.split('_');
-                if (parts.length > 1) {
-                    qtdParcelas = parseInt(parts[1].replace('x', '')) || 1;
-                }
-                const baseType = parts[0];
+        // Se o valor já foi totalmente pago adiantado, não gera título pendente
+        if (valorRestante > 0) {
+            // Verificar se já não existe um título para esta OS
+            const { count } = await supabase
+                .from("financeiro_titulos")
+                .select("*", { count: 'exact', head: true })
+                .eq("origem_tipo", "os")
+                .eq("origem_id", id);
 
-                const valorParcela = Math.round(currentOS.valor_total_centavos / qtdParcelas);
-                const titulos = [];
+            if (count === 0) {
+                const formaPagamento = extraFields?.forma_pagamento || 'dinheiro';
+                const isPrazo =
+                    formaPagamento.startsWith('credito_') ||
+                    formaPagamento.startsWith('boleto_') ||
+                    formaPagamento.startsWith('crediario_');
 
-                for (let i = 1; i <= qtdParcelas; i++) {
-                    const vto = new Date();
-                    vto.setDate(vto.getDate() + (30 * i)); // Vencimentos a cada 30 dias
+                if (isPrazo) {
+                    // Instalar Parcelas
+                    let qtdParcelas = 1;
+                    const parts = formaPagamento.split('_');
+                    if (parts.length > 1) {
+                        qtdParcelas = parseInt(parts[1].replace('x', '')) || 1;
+                    }
+                    const baseType = parts[0];
 
-                    titulos.push({
+                    const valorParcela = Math.round(valorRestante / qtdParcelas);
+                    const titulos = [];
+
+                    for (let i = 1; i <= qtdParcelas; i++) {
+                        const vto = new Date();
+                        vto.setDate(vto.getDate() + (30 * i)); // Vencimentos a cada 30 dias
+
+                        titulos.push({
+                            empresa_id: empresaId,
+                            tipo: "receber",
+                            status: "pendente",
+                            valor_total_centavos: (i === qtdParcelas) ? valorRestante - (valorParcela * (qtdParcelas - 1)) : valorParcela,
+                            valor_pago_centavos: 0,
+                            categoria: "Serviços de Manutenção",
+                            descricao: `Parcela ${i}/${qtdParcelas} (${baseType}) - OS #${String(currentOS.numero).padStart(4, "0")}`,
+                            data_vencimento: vto.toISOString().split('T')[0],
+                            origem_tipo: "os",
+                            origem_id: id,
+                        });
+                    }
+                    await (supabase as any).from("financeiro_titulos").insert(titulos);
+                } else {
+                    // Pagamento a vista (Pix, Dinheiro, Débito, Boleto a vista etc)
+                    await (supabase as any).from("financeiro_titulos").insert({
                         empresa_id: empresaId,
                         tipo: "receber",
                         status: "pendente",
-                        valor_total_centavos: (i === qtdParcelas) ? currentOS.valor_total_centavos - (valorParcela * (qtdParcelas - 1)) : valorParcela,
+                        valor_total_centavos: valorRestante,
                         valor_pago_centavos: 0,
                         categoria: "Serviços de Manutenção",
-                        descricao: `Parcela ${i}/${qtdParcelas} (${baseType}) - OS #${String(currentOS.numero).padStart(4, "0")}`,
-                        data_vencimento: vto.toISOString().split('T')[0],
+                        descricao: `Recebimento OS #${String(currentOS.numero).padStart(4, "0")}`,
+                        data_vencimento: new Date().toISOString().split('T')[0],
                         origem_tipo: "os",
                         origem_id: id,
                     });
                 }
-                await (supabase as any).from("financeiro_titulos").insert(titulos);
-            } else {
-                // Pagamento a vista (Pix, Dinheiro, Débito, Boleto a vista etc)
-                await (supabase as any).from("financeiro_titulos").insert({
-                    empresa_id: empresaId,
-                    tipo: "receber",
-                    status: "pendente",
-                    valor_total_centavos: currentOS.valor_total_centavos,
-                    valor_pago_centavos: 0,
-                    categoria: "Serviços de Manutenção",
-                    descricao: `Recebimento OS #${String(currentOS.numero).padStart(4, "0")}`,
-                    data_vencimento: new Date().toISOString().split('T')[0],
-                    origem_tipo: "os",
-                    origem_id: id,
-                });
             }
         }
     }
@@ -232,7 +258,7 @@ export async function updateOSStatus(
             ...extraFields,
             status,
             updated_at: new Date().toISOString(),
-            estoque_baixado: currentOS.estoque_baixado || deveBaixarEstoque
+            estoque_baixado: (status as string === "cancelada") ? false : (currentOS.estoque_baixado || deveBaixarEstoque)
         })
         .eq("id", id)
         .select()
@@ -372,3 +398,44 @@ export const getOrdensServicoFinalizadas = async (empresaId: string) => {
         throw error;
     }
 };
+
+export async function getTecnicoComMenosOS(empresaId: string) {
+    try {
+        // 1. Buscamos técnicos (e admins, que também podem atuar)
+        const { data: equipe, error: errEquipe } = await supabase
+            .from("usuarios")
+            .select("id, nome, papel")
+            .eq("empresa_id", empresaId)
+            .in("papel", ["tecnico", "admin"])
+            .eq("status", "ativo");
+
+        if (errEquipe) throw errEquipe;
+        if (!equipe || equipe.length === 0) return null;
+
+        // 2. Para cada técnico, contar quantas OS ativas (aberta, em_analise, em_execucao) ele possui
+        const promessasContagem = equipe.map(async (membro: any) => {
+            const { count, error } = await supabase
+                .from("ordens_servico")
+                .select("id", { count: "exact", head: true })
+                .eq("empresa_id", empresaId)
+                .eq("tecnico_id", membro.id)
+                .in("status", ["aberta", "em_analise", "em_execucao"]);
+
+            if (error) {
+                console.error(`Erro ao contar OS de ${membro.nome}:`, error);
+                return { ...membro, count: 0 };
+            }
+            return { ...membro, count: count || 0 };
+        });
+
+        const membrosComContagem = await Promise.all(promessasContagem);
+
+        // 3. Ordenamos do menor count para o maior e pegamos o primeiro
+        membrosComContagem.sort((a: any, b: any) => a.count - b.count);
+
+        return membrosComContagem[0];
+    } catch (err) {
+        console.error("Erro em getTecnicoComMenosOS:", err);
+        return null;
+    }
+}

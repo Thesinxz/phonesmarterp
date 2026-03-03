@@ -14,7 +14,8 @@ import {
     Calendar,
     ClipboardCheck,
     History as HistoryIcon,
-    Inbox
+    Inbox,
+    BarChart3
 } from "lucide-react";
 import Link from "next/link";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -174,6 +175,39 @@ export default function DashboardPage() {
                         </div>
                     )}
                 </GlassCard>
+
+                {/* Ticket Médio */}
+                <div className="col-span-1">
+                    <GlassCard title="Ticket Médio (Mês)" icon={BarChart3}>
+                        <div className="space-y-4 pt-1">
+                            <div className="p-4 bg-brand-50 border border-brand-100 rounded-2xl relative overflow-hidden transition-transform hover:scale-[1.02]">
+                                <div className="relative z-10">
+                                    <p className="text-[10px] text-brand-600 font-bold uppercase tracking-widest mb-0.5 opacity-80">Geral Consolidado</p>
+                                    <p className="text-3xl font-black text-brand-700 tracking-tight">{formatCurrency(metrics.ticketMedioGeral)}</p>
+                                </div>
+                                <BarChart3 className="absolute right-[-10px] bottom-[-10px] w-20 h-20 text-brand-500/10" />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="p-3 bg-blue-50 border border-blue-100/50 rounded-xl transition-colors hover:bg-blue-100/50">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <p className="text-[9px] text-blue-600 font-bold uppercase tracking-widest opacity-80">Serviços</p>
+                                        <Wrench className="w-3.5 h-3.5 text-blue-400" />
+                                    </div>
+                                    <p className="text-xl font-black text-blue-700 tracking-tight">{formatCurrency(metrics.ticketMedioOS)}</p>
+                                </div>
+
+                                <div className="p-3 bg-emerald-50 border border-emerald-100/50 rounded-xl transition-colors hover:bg-emerald-100/50">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <p className="text-[9px] text-emerald-600 font-bold uppercase tracking-widest opacity-80">Vendas</p>
+                                        <ShoppingBag className="w-3.5 h-3.5 text-emerald-400" />
+                                    </div>
+                                    <p className="text-xl font-black text-emerald-700 tracking-tight">{formatCurrency(metrics.ticketMedioVendas)}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </GlassCard>
+                </div>
 
                 {/* Atividades Recentes */}
                 <div className="col-span-1">

@@ -131,7 +131,14 @@ export function OSKanbanCard({ os, onClick, onMoveStatus, onDelete, onEdit }: OS
 
                 {os.valor_total_centavos > 0 && (
                     <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Orçamento</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">
+                            Orçamento
+                            {(os as any).orcamento_aprovado ? (
+                                <span className="bg-emerald-100 text-emerald-600 px-1 py-0.5 rounded text-[8px] font-bold tracking-widest" title="Aprovado">APR✓</span>
+                            ) : (
+                                <span className="bg-amber-100 text-amber-600 px-1 py-0.5 rounded text-[8px] font-bold tracking-widest" title="Pendente">PEND ⌛</span>
+                            )}
+                        </span>
                         <span className="text-xs font-black text-brand-600">
                             R$ {(os.valor_total_centavos / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </span>

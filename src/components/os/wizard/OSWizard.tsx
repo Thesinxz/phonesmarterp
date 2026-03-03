@@ -74,6 +74,7 @@ export function OSWizard() {
         tecnicoId: "",
         prazo: "",
         prioridade: "normal",
+        orcamentoAprovado: false,
         financas: {
             formaPagamento: "pix",
             parcelas: 1,
@@ -164,7 +165,10 @@ export function OSWizard() {
                 garantia_dias: parseInt(formData.financas.garantia),
                 forma_pagamento: formData.financas.formaPagamento,
                 prazo_estimado: formData.prazo || null,
-                prioridade: formData.prioridade
+                prioridade: formData.prioridade,
+                orcamento_aprovado: formData.orcamentoAprovado,
+                orcamento_aprovado_em: formData.orcamentoAprovado ? new Date().toISOString() : null,
+                orcamento_aprovado_por: formData.orcamentoAprovado ? profile.nome : null
             };
 
             const os = await createDetailedOS(payload, profile.id);
@@ -308,7 +312,7 @@ export function OSWizard() {
                             <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm">6</div>
                             Confira os dados da Ordem de Serviço
                         </h2>
-                        <OSStep6Resumo data={formData} />
+                        <OSStep6Resumo data={formData} onChange={(d) => setFormData(d)} />
                     </div>
                 )}
 

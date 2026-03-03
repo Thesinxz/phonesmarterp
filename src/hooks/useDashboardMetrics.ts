@@ -55,7 +55,9 @@ export function useDashboardMetrics() {
         osAbertas: 0,
         clientesAtivos: 0,
         receitaMensal: 0,
-        ticketMedio: 0,
+        ticketMedioGeral: 0,
+        ticketMedioOS: 0,
+        ticketMedioVendas: 0,
         tempoMedio: 0,
         pedidosPendentes: 0,
         vendasPDVHoje: 0,
@@ -127,7 +129,34 @@ export function useDashboardMetrics() {
                 .gte("created_at", startOfMonth.toISOString());
 
             const receita = (financeiroData as { valor_centavos: number }[] | null)?.reduce((acc, curr) => acc + curr.valor_centavos, 0) || 0;
-            const ticket = clientesCount ? Math.round(receita / (clientesCount || 1)) : 0;
+
+            // ──── Ticket Médio Real (Mês Atual) ────────────────────
+
+            // 1. Ticket Médio OS (Finalizadas/Entregues)
+            const { data: dataOSRealizadas } = await supabase
+                .from("ordens_servico")
+                .select("valor_total_centavos")
+                .in("status", ["finalizada", "entregue"])
+                .gte("created_at", startOfMonth.toISOString());
+
+            const totalOSValor = (dataOSRealizadas || []).reduce((acc: number, curr: any) => acc + (curr.valor_total_centavos || 0), 0);
+            const qtdOS = (dataOSRealizadas || []).length;
+            const ticketMedioOS = qtdOS > 0 ? Math.round(totalOSValor / qtdOS) : 0;
+
+            // 2. Ticket Médio Vendas (Comcluídas)
+            const { data: dataVendasRealizadas } = await supabase
+                .from("vendas")
+                .select("total_centavos")
+                .not("status_pedido", "in", '("cancelado")')
+                .gte("created_at", startOfMonth.toISOString());
+
+            const totalVendasValor = (dataVendasRealizadas || []).reduce((acc: number, curr: any) => acc + (curr.total_centavos || 0), 0);
+            const qtdVendas = (dataVendasRealizadas || []).length;
+            const ticketMedioVendas = qtdVendas > 0 ? Math.round(totalVendasValor / qtdVendas) : 0;
+
+            // 3. Ticket Médio Geral (Vendas + Serviços Consolidado)
+            const qtdGeral = qtdOS + qtdVendas;
+            const ticketMedioGeral = qtdGeral > 0 ? Math.round((totalOSValor + totalVendasValor) / qtdGeral) : 0;
 
             // ──── Comparação temporal para trends ────────────────────
 
@@ -330,7 +359,9 @@ export function useDashboardMetrics() {
                 osAbertas: osCount || 0,
                 clientesAtivos: clientesCount || 0,
                 receitaMensal: receita,
-                ticketMedio: ticket,
+                ticketMedioGeral,
+                ticketMedioOS,
+                ticketMedioVendas,
                 tempoMedio: 0,
                 pedidosPendentes: pedidosCount || 0,
                 vendasPDVHoje: pdvTotal,

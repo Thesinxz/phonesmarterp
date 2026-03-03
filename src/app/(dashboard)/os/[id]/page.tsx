@@ -21,9 +21,10 @@ import {
     LogOut,
     QrCode,
     Edit3,
-    Trash2
+    Trash2,
+    DollarSign
 } from "lucide-react";
-import { getOrdemServicoById, updateOSStatus, gerarTokenTeste, deleteOS } from "@/services/os";
+import { getOrdemServicoById, updateOSStatus, gerarTokenTeste, deleteOS, getTecnicoComMenosOS, updateOS } from "@/services/os";
 import { type OsStatus } from "@/types/database";
 import { useAuth } from "@/context/AuthContext";
 import { createClient } from "@/lib/supabase/client";
@@ -68,6 +69,42 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
     // Billing States
     const [paymentMethod, setPaymentMethod] = useState("dinheiro");
     const [parcelas, setParcelas] = useState(1);
+
+    // Adiantamento
+    const [showAdiantamentoModal, setShowAdiantamentoModal] = useState(false);
+    const [valorAdiantarRaw, setValorAdiantarRaw] = useState("");
+    const [formaPgtoAdiantamento, setFormaPgtoAdiantamento] = useState("dinheiro");
+
+    const [isAutoAssigning, setIsAutoAssigning] = useState(false);
+
+    const handleAutoAssign = async () => {
+        if (!profile?.empresa_id || !os) return;
+        setIsAutoAssigning(true);
+        try {
+            const tecnico = await getTecnicoComMenosOS(profile.empresa_id);
+            if (tecnico) {
+                await updateOS(os.id, { tecnico_id: tecnico.id });
+                // registrar na timeline
+                const supabase = createClient();
+                await (supabase.from("os_timeline") as any).insert({
+                    os_id: os.id,
+                    empresa_id: profile.empresa_id,
+                    usuario_id: profile.id,
+                    evento: `Técnico ${tecnico.nome} atribuído automaticamente`,
+                    dados_json: { tecnico_id: tecnico.id }
+                });
+                toast.success(`Técnico ${tecnico.nome} atribuído automaticamente!`);
+                loadOS(false);
+            } else {
+                toast.error("Nenhum técnico disponível para auto-atribuição.");
+            }
+        } catch (error) {
+            console.error("Erro ao auto-atribuir técnico:", error);
+            toast.error("Erro ao auto-atribuir técnico.");
+        } finally {
+            setIsAutoAssigning(false);
+        }
+    };
 
     useEffect(() => {
         if (params.id) {
@@ -204,6 +241,79 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
             setSaving(false);
         }
     }
+
+    const handleLancarAdiantamento = async () => {
+        if (!os || !profile?.empresa_id) return;
+
+        let normalizedValue = valorAdiantarRaw.replace(/\./g, '').replace(',', '.');
+        const valorDigitado = parseFloat(normalizedValue) || 0;
+        const valorCentavos = Math.round(valorDigitado * 100);
+
+        if (valorCentavos <= 0) {
+            toast.error("Informe um valor válido.");
+            return;
+        }
+
+        const adiantamentoAtual = os.valor_adiantado_centavos || 0;
+        const total = os.valor_total_centavos || 0;
+
+        if (adiantamentoAtual + valorCentavos > total) {
+            toast.error("O valor adiantado não pode ser maior que o total da OS.");
+            return;
+        }
+
+        setSaving(true);
+        try {
+            const supabase = createClient();
+
+            // 1. Inserir no Financeiro direto como pago
+            await (supabase.from("financeiro") as any).insert({
+                empresa_id: profile.empresa_id,
+                tipo: "entrada",
+                categoria: "Serviços de Manutenção",
+                descricao: `Adiantamento OS #${String(os.numero).padStart(4, "0")} (${formaPgtoAdiantamento})`,
+                valor_centavos: valorCentavos,
+                pago: true,
+                vencimento: new Date().toISOString(),
+            });
+
+            // Registrar também no Caixa pra fechamento 
+            const caixaId = localStorage.getItem("@smartos_caixa_id");
+            if (caixaId) {
+                await (supabase.from("caixa_movimentacoes") as any).insert({
+                    empresa_id: profile.empresa_id,
+                    caixa_id: caixaId,
+                    usuario_id: profile.id,
+                    tipo: "recebimento_os",
+                    forma_pagamento: formaPgtoAdiantamento,
+                    valor_centavos: valorCentavos,
+                    observacao: `Adiantamento OS #${String(os.numero).padStart(4, "0")}`,
+                    origem_id: os.id
+                });
+            }
+
+            // 2. Atualizar a OS
+            await updateOS(os.id, { valor_adiantado_centavos: adiantamentoAtual + valorCentavos });
+
+            // 3. Timeline
+            await (supabase.from("os_timeline") as any).insert({
+                os_id: os.id,
+                empresa_id: profile.empresa_id,
+                usuario_id: profile.id,
+                evento: `Adiantamento recebido em ${formaPgtoAdiantamento.toUpperCase()}: R$ ${(valorCentavos / 100).toFixed(2).replace('.', ',')}`,
+            });
+
+            toast.success("Adiantamento registrado!");
+            setShowAdiantamentoModal(false);
+            setValorAdiantarRaw("");
+            loadOS();
+        } catch (error) {
+            console.error("Erro adiantamento", error);
+            toast.error("Falha ao registrar adiantamento.");
+        } finally {
+            setSaving(false);
+        }
+    };
 
     if (loading) {
         return <div className="p-12 flex justify-center"><div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>;
@@ -428,8 +538,9 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                     {/* Ações Rápidas */}
                     <GlassCard title="Ações" icon={ArrowRight}>
                         <div className="space-y-2">
-                            {os.status !== "finalizada" && os.status !== "entregue" && os.status !== "cancelada" && (
+                            {os.status !== "entregue" && os.status !== "cancelada" && (
                                 <>
+                                    {/* Forward Actions */}
                                     {os.status === "aberta" && (
                                         <button onClick={() => handleMoveStatus("em_analise")} disabled={saving} className="w-full text-left px-4 py-3 rounded-xl border border-blue-100 bg-blue-50/50 text-blue-700 text-sm font-bold hover:bg-blue-100 transition-all flex items-center gap-2">
                                             <ArrowRight size={14} /> Enviar para Análise
@@ -437,8 +548,17 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                                     )}
                                     {os.status === "em_analise" && (
                                         <>
-                                            <button onClick={() => handleMoveStatus("em_execucao")} disabled={saving} className="w-full text-left px-4 py-3 rounded-xl border border-purple-100 bg-purple-50/50 text-purple-700 text-sm font-bold hover:bg-purple-100 transition-all flex items-center gap-2">
+                                            <button
+                                                onClick={() => handleMoveStatus("em_execucao")}
+                                                disabled={saving || !os.orcamento_aprovado}
+                                                className="w-full text-left px-4 py-3 rounded-xl border border-purple-100 bg-purple-50/50 text-purple-700 text-sm font-bold hover:bg-purple-100 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group relative"
+                                            >
                                                 <ArrowRight size={14} /> Iniciar Execução
+                                                {!os.orcamento_aprovado && (
+                                                    <span className="absolute hidden group-hover:block bottom-full mb-2 left-1/2 -translate-x-1/2 w-48 bg-slate-800 text-white text-[10px] py-1 px-2 rounded font-normal text-center z-10">
+                                                        Aprove o orçamento primeiro
+                                                    </span>
+                                                )}
                                             </button>
                                             <button onClick={() => handleMoveStatus("aguardando_peca")} disabled={saving} className="w-full text-left px-4 py-3 rounded-xl border border-amber-100 bg-amber-50/50 text-amber-700 text-sm font-bold hover:bg-amber-100 transition-all flex items-center gap-2">
                                                 <AlertTriangle size={14} /> Aguardar Peça
@@ -450,6 +570,26 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                                             <CheckCircle2 size={14} /> Marcar como Finalizada
                                         </button>
                                     )}
+
+                                    {/* Backward Actions */}
+                                    <div className="pt-2 mt-2 border-t border-slate-100">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Retroceder Status</p>
+                                        {os.status === "em_analise" && (
+                                            <button onClick={() => handleMoveStatus("aberta")} disabled={saving} className="w-full text-left px-4 py-2 rounded-lg text-slate-500 text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2">
+                                                <ArrowLeft size={12} /> Voltar para Aberta
+                                            </button>
+                                        )}
+                                        {(os.status === "em_execucao" || os.status === "aguardando_peca") && (
+                                            <button onClick={() => handleMoveStatus("em_analise")} disabled={saving} className="w-full text-left px-4 py-2 rounded-lg text-slate-500 text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2">
+                                                <ArrowLeft size={12} /> Voltar para Análise
+                                            </button>
+                                        )}
+                                        {os.status === "finalizada" && (
+                                            <button onClick={() => handleMoveStatus("em_execucao")} disabled={saving} className="w-full text-left px-4 py-2 rounded-lg text-slate-500 text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2">
+                                                <ArrowLeft size={12} /> Voltar para Execução
+                                            </button>
+                                        )}
+                                    </div>
                                 </>
                             )}
                             {os.status !== "cancelada" && os.status !== "entregue" && (
@@ -466,8 +606,75 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                             <div className="flex justify-between items-center">
                                 <span className="text-sm text-slate-500">Valor Total</span>
                                 <span className="text-lg font-black text-slate-800">
-                                    R$ {(os.valor_total_centavos / 100).toFixed(2)}
+                                    R$ {(os.valor_total_centavos / 100).toFixed(2).replace('.', ',')}
                                 </span>
+                            </div>
+                            {(os.valor_adiantado_centavos || 0) > 0 && (
+                                <div className="flex justify-between items-center pt-2">
+                                    <span className="text-sm text-emerald-600">Total Adiantado</span>
+                                    <span className="text-sm font-bold text-emerald-600">
+                                        - R$ {((os.valor_adiantado_centavos || 0) / 100).toFixed(2).replace('.', ',')}
+                                    </span>
+                                </div>
+                            )}
+                            {(os.valor_adiantado_centavos || 0) > 0 && (
+                                <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                                    <span className="text-sm font-bold text-slate-600">Restante a Pagar</span>
+                                    <span className="text-base font-black text-brand-600">
+                                        R$ {((os.valor_total_centavos - os.valor_adiantado_centavos) / 100).toFixed(2).replace('.', ',')}
+                                    </span>
+                                </div>
+                            )}
+
+                            {os.status !== "entregue" && os.status !== "cancelada" && (os.valor_adiantado_centavos || 0) < os.valor_total_centavos && os.valor_total_centavos > 0 && (
+                                <div className="pt-3">
+                                    <button
+                                        onClick={() => setShowAdiantamentoModal(true)}
+                                        className="w-full h-9 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors"
+                                    >
+                                        <DollarSign size={14} /> Registrar Adiantamento
+                                    </button>
+                                </div>
+                            )}
+
+                            <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+                                <span className="text-sm text-slate-500">Orçamento</span>
+                                {os.orcamento_aprovado ? (
+                                    <div className="flex flex-col items-end">
+                                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">Aprovado ✓</span>
+                                        {os.orcamento_aprovado_por && (
+                                            <span className="text-[9px] text-slate-400 mt-1">por {os.orcamento_aprovado_por}</span>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-end gap-1">
+                                        <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-md">Pendente ⌛</span>
+                                        {os.status === 'em_analise' && (
+                                            <button
+                                                onClick={async () => {
+                                                    await updateOS(os.id, {
+                                                        orcamento_aprovado: true,
+                                                        orcamento_aprovado_em: new Date().toISOString(),
+                                                        orcamento_aprovado_por: profile?.nome
+                                                    });
+
+                                                    const supabase = createClient();
+                                                    await (supabase.from("os_timeline") as any).insert({
+                                                        os_id: os.id,
+                                                        empresa_id: os.empresa_id,
+                                                        usuario_id: profile?.id,
+                                                        evento: `Orçamento aprovado por ${profile?.nome}`
+                                                    });
+
+                                                    toast.success("Orçamento aprovado com sucesso!");
+                                                }}
+                                                className="text-[10px] uppercase font-bold text-indigo-600 hover:text-indigo-800"
+                                            >
+                                                Aprovar Agora
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             {os.garantia_dias != null && os.garantia_dias > 0 && (
                                 <div className="flex justify-between items-center pt-3 border-t border-slate-100">
@@ -481,10 +688,21 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                                     <span className="text-xs font-bold text-slate-600">{formatDate(os.garantia_ate)}</span>
                                 </div>
                             )}
-                            {os.tecnico && (
+                            {os.tecnico ? (
                                 <div className="flex justify-between items-center pt-3 border-t border-slate-100">
                                     <span className="text-sm text-slate-500">Técnico</span>
                                     <span className="text-sm font-bold text-slate-700">{os.tecnico.nome}</span>
+                                </div>
+                            ) : (
+                                <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+                                    <span className="text-sm text-slate-500">Técnico</span>
+                                    <button
+                                        onClick={handleAutoAssign}
+                                        disabled={isAutoAssigning}
+                                        className="text-xs font-bold bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors disabled:opacity-50 flex items-center gap-1"
+                                    >
+                                        Auto-atribuir
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -633,16 +851,73 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                 </div>
             )}
 
-            {/* Modal de Edição */}
-            {showEditModal && (
-                <EditOSModal
-                    os={os}
-                    onClose={() => setShowEditModal(false)}
-                    onSuccess={() => {
-                        setShowEditModal(false);
-                        loadOS();
-                    }}
-                />
+            {/* Modal de Adiantamento */}
+            {showAdiantamentoModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-in zoom-in-95">
+                        <h2 className="text-lg font-bold text-emerald-700 mb-2 flex items-center gap-2">
+                            <DollarSign size={20} />
+                            Registrar Adiantamento
+                        </h2>
+                        <p className="text-xs text-slate-500 mb-4">
+                            Este valor será contabilizado no <b>Financeiro</b> imediatamente e descontado na entrega da OS.
+                        </p>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Valor a Adiantar</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">R$</span>
+                                    <input
+                                        type="text"
+                                        value={valorAdiantarRaw}
+                                        onChange={(e) => setValorAdiantarRaw(e.target.value)}
+                                        placeholder="0,00"
+                                        className="w-full h-11 pl-10 pr-3 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-700 text-lg focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                    />
+                                </div>
+                                <div className="text-right mt-1">
+                                    <span className="text-[10px] text-slate-400">
+                                        Restante Max: R$ {((os.valor_total_centavos - (os.valor_adiantado_centavos || 0)) / 100).toFixed(2).replace('.', ',')}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                                    Forma de Pagamento
+                                </label>
+                                <select
+                                    value={formaPgtoAdiantamento}
+                                    onChange={(e) => setFormaPgtoAdiantamento(e.target.value)}
+                                    className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-700"
+                                >
+                                    <option value="dinheiro">Dinheiro</option>
+                                    <option value="pix">Pix</option>
+                                    <option value="debito">Cartão de Débito</option>
+                                    <option value="credito">Cartão de Crédito</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-slate-100">
+                            <button
+                                onClick={() => { setShowAdiantamentoModal(false); setValorAdiantarRaw(""); }}
+                                className="h-10 px-4 rounded-xl text-slate-500 text-sm font-bold hover:bg-slate-50 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleLancarAdiantamento}
+                                disabled={saving || !valorAdiantarRaw}
+                                className="h-10 px-6 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {saving ? <RefreshCw className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
+                                Confirmar Pagamento
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

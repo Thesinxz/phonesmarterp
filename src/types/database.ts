@@ -102,6 +102,7 @@ export interface Database {
                     checklist_entrada_json: Json | null;
                     checklist_saida_json: Json | null;
                     valor_total_centavos: number;
+                    valor_adiantado_centavos: number;
                     forma_pagamento: string | null;
                     garantia_ate: string | null;
                     garantia_dias: number | null;

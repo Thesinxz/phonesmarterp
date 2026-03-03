@@ -197,9 +197,18 @@ export default function PDVPage() {
     }
 
     const addToCart = (product: Produto) => {
+        if (product.estoque_qtd <= 0) {
+            toast.error(`"${product.nome}" não possui estoque disponível.`);
+            return;
+        }
+
         setCart(prev => {
             const existing = prev.find(item => item.id === product.id);
             if (existing) {
+                if (existing.quantity >= product.estoque_qtd) {
+                    toast.error(`Apenas ${product.estoque_qtd} unidades de "${product.nome}" disponíveis em estoque.`);
+                    return prev;
+                }
                 return prev.map(item =>
                     item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
                 );
@@ -215,7 +224,14 @@ export default function PDVPage() {
     const updateQuantity = (productId: string, delta: number) => {
         setCart(prev => prev.map(item => {
             if (item.id === productId) {
+                const maxStock = item.estoque_qtd;
                 const newQtd = Math.max(1, item.quantity + delta);
+
+                if (newQtd > maxStock) {
+                    toast.error(`Apenas ${maxStock} unidades disponíveis em estoque.`);
+                    return item; // não atualiza a quantidade
+                }
+
                 return { ...item, quantity: newQtd };
             }
             return item;

@@ -5,6 +5,9 @@ import { Calendar, User, CreditCard, Shield, Clock, AlertCircle } from "lucide-r
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/utils/cn";
 import { useAuth } from "@/context/AuthContext";
+import { getTecnicoComMenosOS } from "@/services/os";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 interface OSStep5AgendaPagamentoProps {
     data: any;
@@ -14,6 +17,26 @@ interface OSStep5AgendaPagamentoProps {
 export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagamentoProps) {
     const { profile } = useAuth();
     const [tecnicos, setTecnicos] = useState<any[]>([]);
+    const [isAutoAssigning, setIsAutoAssigning] = useState(false);
+
+    const handleAutoAssign = async () => {
+        if (!profile?.empresa_id) return;
+        setIsAutoAssigning(true);
+        try {
+            const tecnico = await getTecnicoComMenosOS(profile.empresa_id);
+            if (tecnico) {
+                onChange({ ...data, tecnicoId: tecnico.id });
+                toast.success(`Técnico ${tecnico.nome} atribuído automaticamente!`);
+            } else {
+                toast.error("Nenhum técnico disponível para auto-atribuição.");
+            }
+        } catch (error) {
+            console.error("Erro ao auto-atribuir técnico:", error);
+            toast.error("Erro ao auto-atribuir técnico.");
+        } finally {
+            setIsAutoAssigning(false);
+        }
+    };
 
     useEffect(() => {
         const loadTecnicos = async () => {
@@ -62,7 +85,18 @@ export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagament
 
                     <div className="space-y-4">
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Técnico Responsável *</label>
+                            <div className="flex justify-between items-end">
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Técnico Responsável *</label>
+                                <button
+                                    type="button"
+                                    onClick={handleAutoAssign}
+                                    disabled={isAutoAssigning}
+                                    className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1 disabled:opacity-50"
+                                >
+                                    {isAutoAssigning && <Loader2 size={12} className="animate-spin" />}
+                                    Auto-atribuir
+                                </button>
+                            </div>
                             <select
                                 className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-white shadow-sm outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
                                 value={data.tecnicoId}

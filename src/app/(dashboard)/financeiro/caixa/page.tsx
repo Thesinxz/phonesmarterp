@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { formatDate } from "@/utils/formatDate";
 import { cn } from "@/utils/cn";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 
 const supabase = createClient();
 
@@ -57,11 +58,28 @@ export default function CaixaPage() {
     const [tab, setTab] = useState<"atual" | "historico">("atual");
 
     useEffect(() => {
-        if (profile?.empresa_id) loadData();
+        if (profile?.empresa_id) loadData(false);
     }, [profile?.empresa_id]);
 
-    const loadData = async () => {
-        setLoading(true);
+
+    useRealtimeSubscription({
+        table: 'caixas',
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: () => {
+            loadData(true);
+        }
+    });
+
+    useRealtimeSubscription({
+        table: 'caixa_movimentacoes',
+        filter: caixaAberto?.id ? `caixa_id=eq.${caixaAberto.id}` : undefined,
+        callback: () => {
+            loadData(true);
+        }
+    });
+
+    const loadData = async (background = false) => {
+        if (!background) setLoading(true);
         try {
             const caixa = await getCaixaAberto(profile!.empresa_id);
             setCaixaAberto(caixa);
