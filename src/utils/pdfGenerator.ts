@@ -146,11 +146,25 @@ export const generateSOPDF = async (os: any, branding?: PDFBranding) => {
 
     // --- Summary ---
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    const totalLabel = "TOTAL ESTIMADO:";
-    const totalValue = formatCurrency(os.valor_total_centavos);
-    doc.text(totalLabel, pageWidth - margin - 50, currentY, { align: "right" });
-    doc.text(totalValue, pageWidth - margin, currentY, { align: "right" });
+    doc.setFontSize(10);
+
+    if (os.valor_adiantado_centavos > 0) {
+        doc.text("SUBTOTAL:", pageWidth - margin - 50, currentY, { align: "right" });
+        doc.text(formatCurrency(os.valor_total_centavos), pageWidth - margin, currentY, { align: "right" });
+        currentY += 6;
+
+        doc.text("ADIANTAMENTO:", pageWidth - margin - 50, currentY, { align: "right" });
+        doc.text(`- ${formatCurrency(os.valor_adiantado_centavos)}`, pageWidth - margin, currentY, { align: "right" });
+        currentY += 7;
+
+        doc.setFontSize(14);
+        doc.text("SALDO A PAGAR:", pageWidth - margin - 50, currentY, { align: "right" });
+        doc.text(formatCurrency(os.valor_total_centavos - (os.valor_adiantado_centavos || 0)), pageWidth - margin, currentY, { align: "right" });
+    } else {
+        doc.setFontSize(14);
+        doc.text("TOTAL ESTIMADO:", pageWidth - margin - 50, currentY, { align: "right" });
+        doc.text(formatCurrency(os.valor_total_centavos), pageWidth - margin, currentY, { align: "right" });
+    }
 
     // --- Footer Terms ---
     const footerY = doc.internal.pageSize.getHeight() - 60;

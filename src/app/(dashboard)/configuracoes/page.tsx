@@ -190,6 +190,11 @@ export default function ConfiguracoesPage() {
         enabled: false
     });
 
+    const [osTerms, setOsTerms] = useState<string>(`1. Garantia Legal: Conforme CDC, garantia de 90 dias nas peças substituídas e serviços executados.
+2. Prazo de Retirada: O equipamento deve ser retirado em até 30 dias após aviso de conclusão.
+3. Abandono: Itens não retirados após 90 dias serão alienados para custeio.
+4. Dados: A loja não se responsabiliza por perda de dados. Recomendamos backup prévio.`);
+
     const [syncingAll, setSyncingAll] = useState(false);
 
     // CNPJ Busca State
@@ -238,6 +243,7 @@ export default function ConfiguracoesPage() {
                 if (chave === "vitrine") setVitrineConfig((prev: any) => ({ ...prev, ...valor as any }));
                 if (chave === "contador") setContadorConfig(valor as any);
                 if (chave === "efibank_credentials") setCrediarioConfig(valor as any);
+                if (chave === "termos_os") setOsTerms(valor as string);
             });
 
             // Configurações fiscais
@@ -305,6 +311,7 @@ export default function ConfiguracoesPage() {
                 if (chave === "vitrine") setVitrineConfig((prev: any) => ({ ...prev, ...valor as any }));
                 if (chave === "contador") setContadorConfig(valor as any);
                 if (chave === "efibank_credentials") setCrediarioConfig(valor as any);
+                if (chave === "termos_os") setOsTerms(valor as string);
 
                 toast.info(`Configuração "${chave}" atualizada.`);
             }
@@ -529,6 +536,7 @@ export default function ConfiguracoesPage() {
         { id: "vitrine", label: "Vitrine Online", icon: ShoppingBag, desc: "Catálogo público + TV" },
         { id: "crediario", label: "Crediário & Efíbank", icon: CreditCard, desc: "Fiado e Boletos" },
         { id: "etiquetas", label: "Etiquetas", icon: Scan, desc: "Modelos Térmicos e A4" },
+        { id: "termos_os", label: "Termos da OS", icon: ShieldCheck, desc: "Garantias e Condições" },
         { id: "contador", label: "Contabilidade", icon: FileText, desc: "Fechamento e XML Automático" },
         { id: "auditoria", label: "Auditoria", icon: HistoryIcon, desc: "Log de alterações e segurança" },
     ];
@@ -1944,6 +1952,47 @@ export default function ConfiguracoesPage() {
                                             <Link href="/configuracoes/etiquetas/a4" className="btn-primary">
                                                 Configurar Folha A4 (Pimaco)
                                             </Link>
+                                        </div>
+                                    </div>
+                                </GlassCard>
+                            </div>
+                        )}
+
+                        {/* ── TAB: Termos da OS ── */}
+                        {activeTab === "termos_os" && (
+                            <div className="space-y-6">
+                                <GlassCard title="Termos e Condições da Ordem de Serviço" icon={ShieldCheck}>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="label-sm mb-2 block">Texto de Garantia e Condições Legais</label>
+                                            <p className="text-[10px] text-slate-400 mb-3 italic">
+                                                Este texto aparecerá no rodapé do comprovante de entrada e certificado de saída da OS.
+                                                Dica: Use parágrafos curtos ou numeração.
+                                            </p>
+                                            <textarea
+                                                className="input-glass mt-1 min-h-[300px] font-medium text-slate-700 leading-relaxed py-4"
+                                                value={osTerms}
+                                                onChange={e => setOsTerms(e.target.value)}
+                                                placeholder="Digite aqui os termos de garantia, prazos e condições..."
+                                            />
+                                        </div>
+                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-start gap-3">
+                                            <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                                                <AlertTriangle size={18} />
+                                            </div>
+                                            <p className="text-xs text-slate-500 leading-relaxed">
+                                                <strong>Dica Jurídica:</strong> Lembre-se que de acordo com o CDC (Código de Defesa do Consumidor), a garantia legal para serviços é de 90 dias. Evite colocar cláusulas que anulem direitos básicos do consumidor para manter a validade do seu termo.
+                                            </p>
+                                        </div>
+                                        <div className="flex justify-end pt-4">
+                                            <button
+                                                onClick={() => saveConfig("termos_os", osTerms)}
+                                                disabled={saving}
+                                                className="btn-primary"
+                                            >
+                                                {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                                                Salvar Termos da OS
+                                            </button>
                                         </div>
                                     </div>
                                 </GlassCard>

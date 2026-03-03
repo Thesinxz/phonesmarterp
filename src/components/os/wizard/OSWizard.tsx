@@ -80,7 +80,8 @@ export function OSWizard() {
             parcelas: 1,
             entrada: 0,
             garantia: "90"
-        }
+        },
+        valorAdiantado: 0
     });
 
     useEffect(() => {
@@ -161,6 +162,7 @@ export function OSWizard() {
                 pecas_json: formData.pecas,
                 mao_obra_json: formData.servicos,
                 valor_total_centavos: valorTotalCentavos,
+                valor_adiantado_centavos: formData.valorAdiantado || 0,
                 desconto_centavos: formData.desconto,
                 garantia_dias: parseInt(formData.financas.garantia),
                 forma_pagamento: formData.financas.formaPagamento,
@@ -168,7 +170,8 @@ export function OSWizard() {
                 prioridade: formData.prioridade,
                 orcamento_aprovado: formData.orcamentoAprovado,
                 orcamento_aprovado_em: formData.orcamentoAprovado ? new Date().toISOString() : null,
-                orcamento_aprovado_por: formData.orcamentoAprovado ? profile.nome : null
+                orcamento_aprovado_por: formData.orcamentoAprovado ? profile.nome : null,
+                _caixa_id: localStorage.getItem("@smartos_caixa_id") // Extra field
             };
 
             const os = await createDetailedOS(payload, profile.id);

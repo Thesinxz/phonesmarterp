@@ -22,7 +22,8 @@ import {
     QrCode,
     Edit3,
     Trash2,
-    DollarSign
+    DollarSign,
+    MapPin
 } from "lucide-react";
 import { getOrdemServicoById, updateOSStatus, gerarTokenTeste, deleteOS, getTecnicoComMenosOS, updateOS } from "@/services/os";
 import { type OsStatus } from "@/types/database";
@@ -484,56 +485,61 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
 
                 {/* Coluna Direita: Timeline & Ações */}
                 <div className="space-y-6">
-                    {/* QR Code para Teste */}
-                    {(os.status === "finalizada" || os.status === "em_execucao") && (
-                        <GlassCard title="Teste no Aparelho" icon={QrCode}>
-                            {os.teste_saida_concluido ? (
-                                <div className="text-center py-4">
-                                    <CheckCircle2 size={40} className="text-emerald-500 mx-auto mb-2" />
-                                    <p className="font-bold text-emerald-700 text-sm">Teste Concluído!</p>
-                                    <p className="text-slate-400 text-xs mt-1">O diagnóstico de saída foi realizado no aparelho.</p>
-                                </div>
-                            ) : tokenTeste ? (
-                                <div className="text-center">
-                                    <p className="text-xs text-slate-500 mb-3">Escaneie com o aparelho do cliente:</p>
-                                    <img
-                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(window.location.origin + '/teste/' + tokenTeste)}`}
-                                        alt="QR Code Teste"
-                                        className="w-48 h-48 mx-auto rounded-xl border-4 border-white shadow-lg"
-                                    />
-                                    <p className="text-[10px] text-slate-400 mt-3 break-all">{window.location.origin}/teste/{tokenTeste}</p>
+                    {/* QR Code para Rastreamento do Cliente */}
+                    <GlassCard title="Acompanhamento do Cliente" icon={MapPin}>
+                        {tokenTeste ? (
+                            <div className="text-center">
+                                <p className="text-xs text-slate-500 mb-3">Link público gerado. Mostre o QR ou envie o link:</p>
+                                <img
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(window.location.origin + '/rastreio/' + tokenTeste)}`}
+                                    alt="QR Code Rastreio"
+                                    className="w-48 h-48 mx-auto rounded-xl border-4 border-white shadow-lg"
+                                />
+                                <div className="mt-4 bg-slate-50 p-2 rounded-xl flex items-center justify-between border border-slate-100">
+                                    <p className="text-[10px] text-slate-500 truncate mr-2 font-mono">
+                                        {window.location.origin}/rastreio/{tokenTeste}
+                                    </p>
                                     <button
-                                        onClick={() => loadOS()}
-                                        className="mt-3 text-xs text-indigo-600 font-bold flex items-center gap-1 mx-auto hover:underline"
-                                    >
-                                        <RefreshCw size={12} /> Atualizar Status
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="text-center">
-                                    <p className="text-xs text-slate-500 mb-3">Gere um QR Code para rodar testes de hardware diretamente no aparelho do cliente.</p>
-                                    <button
-                                        onClick={async () => {
-                                            setGerandoQR(true);
-                                            try {
-                                                const token = await gerarTokenTeste(os.id);
-                                                setTokenTeste(token);
-                                            } catch (err) {
-                                                console.error(err);
-                                            } finally {
-                                                setGerandoQR(false);
-                                            }
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(`${window.location.origin}/rastreio/${tokenTeste}`);
+                                            toast.success("Link copiado para a área de transferência!");
                                         }}
-                                        disabled={gerandoQR}
-                                        className="w-full py-3 rounded-xl bg-indigo-600 text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20"
+                                        className="p-1.5 shrink-0 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
                                     >
-                                        {gerandoQR ? <RefreshCw className="animate-spin" size={14} /> : <QrCode size={16} />}
-                                        Gerar QR Code de Teste
+                                        <FileText size={14} />
                                     </button>
                                 </div>
-                            )}
-                        </GlassCard>
-                    )}
+                                <button
+                                    onClick={() => window.open(`/rastreio/${tokenTeste}`, '_blank')}
+                                    className="mt-3 w-full py-2.5 rounded-xl border border-indigo-200 text-indigo-700 bg-indigo-50/50 font-bold text-xs flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all"
+                                >
+                                    Abrir Página do Cliente
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="text-center">
+                                <p className="text-xs text-slate-500 mb-3">Gere um link público e seguro para o cliente acompanhar o serviço de casa.</p>
+                                <button
+                                    onClick={async () => {
+                                        setGerandoQR(true);
+                                        try {
+                                            const token = await gerarTokenTeste(os.id);
+                                            setTokenTeste(token);
+                                        } catch (err) {
+                                            console.error(err);
+                                        } finally {
+                                            setGerandoQR(false);
+                                        }
+                                    }}
+                                    disabled={gerandoQR}
+                                    className="w-full py-3 rounded-xl bg-indigo-600 text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20"
+                                >
+                                    {gerandoQR ? <RefreshCw className="animate-spin" size={14} /> : <QrCode size={16} />}
+                                    Gerar Link de Rastreio
+                                </button>
+                            </div>
+                        )}
+                    </GlassCard>
 
                     {/* Ações Rápidas */}
                     <GlassCard title="Ações" icon={ArrowRight}>

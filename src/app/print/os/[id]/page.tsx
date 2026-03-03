@@ -5,13 +5,20 @@ import { getOrdemServicoById } from "@/services/os";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { formatDate } from "@/utils/formatDate";
+import { Printer, Shield } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 export default function PrintOSPage({ params }: { params: { id: string } }) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [os, setOs] = useState<any>(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [empresa, setEmpresa] = useState<any>(null);
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
     const [formato, setFormato] = useState<"80mm" | "a4">("80mm");
+    const [termos, setTermos] = useState<string>(`1. Garantia Legal: Conforme CDC, garantia de 90 dias nas peças substituídas e serviços executados.
+2. Prazo de Retirada: O equipamento deve ser retirado em até 30 dias após aviso de conclusão.
+3. Abandono: Itens não retirados após 90 dias serão alienados para custeio.
+4. Dados: A loja não se responsabiliza por perda de dados. Recomendamos backup prévio.`);
 
     useEffect(() => {
         async function load() {
@@ -19,16 +26,45 @@ export default function PrintOSPage({ params }: { params: { id: string } }) {
                 const osData = await getOrdemServicoById(params.id);
                 setOs(osData);
 
-                // Buscar dados da empresa (config emitente)
                 const supabase = createClient();
-                const { data } = await supabase
+
+                // 1. Buscar dados do emitente (CNPJ, Endereço etc)
+                const { data: configData } = await supabase
                     .from("configuracoes")
                     .select("valor")
                     .eq("chave", "nfe_emitente")
+                    .eq("empresa_id", osData.empresa_id)
                     .single();
-                setEmpresa((data as any)?.valor);
 
-                // Se a tela for larga, sugere A4
+                if (configData) {
+                    setEmpresa((configData as any).valor);
+                }
+
+                // 2. Buscar Logo da Empresa
+                const { data: empData } = await supabase
+                    .from("empresas")
+                    .select("logo_url")
+                    .eq("id", osData.empresa_id)
+                    .single();
+
+                const empresaRow = empData as any;
+                if (empresaRow?.logo_url) {
+                    setLogoUrl(empresaRow.logo_url);
+                }
+
+                // 3. Buscar Termos da OS
+                const { data: termsData } = await supabase
+                    .from("configuracoes")
+                    .select("valor")
+                    .eq("chave", "termos_os")
+                    .eq("empresa_id", osData.empresa_id)
+                    .single();
+
+                const termsRow = termsData as any;
+                if (termsRow?.valor) {
+                    setTermos(termsRow.valor as string);
+                }
+
                 if (window.innerWidth > 800) {
                     setFormato("a4");
                 }
@@ -39,10 +75,11 @@ export default function PrintOSPage({ params }: { params: { id: string } }) {
         load();
     }, [params.id]);
 
-    if (!os) return <div className="p-8 text-center font-mono text-sm">Carregando documento...</div>;
+    if (!os) return <div className="p-8 text-center font-mono text-sm text-slate-400">Carregando os dados da OS...</div>;
 
     const isA4 = formato === "a4";
-    const isEntrada = os.status === 'aberta' || os.status === 'em_analise' || os.status === 'aguardando_peca';
+    const status = os.status;
+    const isEntrada = status === 'aberta' || status === 'em_analise' || status === 'aguardando_peca';
     const tituloDoc = isEntrada ? "Comprovante de Entrada" : "Certificado de Entrega / Saída";
 
     const containerClass = isA4
@@ -56,165 +93,232 @@ export default function PrintOSPage({ params }: { params: { id: string } }) {
     const renderOSContent = (via?: string) => (
         <div className={isA4 ? "w-full max-w-4xl mx-auto bg-white mb-2" : "w-full"}>
             {via && <div className="text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{via}</div>}
-            {/* Header */}
-            <div className={`text-center border-b border-black pb-1 mb-2 ${isA4 ? 'border-solid' : 'border-dashed'}`}>
-                <h1 className="font-bold uppercase" style={{ fontSize: isA4 ? '1.8rem' : '1.1rem' }}>{empresa?.nome_fantasia || "SmartOS ERP"}</h1>
-                {!isA4 && empresa?.telefone && <p className="font-bold text-[10px]">{empresa.telefone}</p>}
-                {isA4 && (
-                    <>
-                        <p className="font-bold">{empresa?.razao_social}</p>
-                        {empresa?.cnpj && <p>CNPJ: {empresa.cnpj}</p>}
-                        <p>{empresa?.logradouro ? `${empresa.logradouro}, ${empresa.numero} - ${empresa.bairro}` : ""}</p>
-                        <p>{empresa?.cidade} - {empresa?.uf} | {empresa?.telefone}</p>
-                    </>
+
+            {/* Header com Logo */}
+            <div className={`flex items-center gap-6 border-b-2 border-slate-900 pb-4 mb-4 ${isA4 ? "" : "flex-col text-center"}`}>
+                {logoUrl && (
+                    <img
+                        src={logoUrl}
+                        alt="Logo"
+                        className={isA4 ? "h-20 w-auto object-contain" : "h-14 w-auto mb-2"}
+                    />
                 )}
+                <div className="flex-1">
+                    <h1 className="font-black uppercase text-2xl tracking-tighter" style={{ fontSize: isA4 ? '1.8rem' : '1.2rem' }}>
+                        {empresa?.nome_fantasia || "SmartOS ERP"}
+                    </h1>
+                    <div className={cn("grid gap-x-4 gap-y-0.5 mt-1 text-slate-600 font-medium", isA4 ? "grid-cols-2 text-xs" : "text-[8px]")}>
+                        {empresa?.razao_social && <p className="col-span-2 font-bold text-slate-900">{empresa.razao_social}</p>}
+                        {empresa?.cnpj && <p>CNPJ: {empresa.cnpj}</p>}
+                        {empresa?.telefone && <p>TEL: {empresa.telefone}</p>}
+                        <p className="col-span-2">{empresa?.logradouro ? `${empresa.logradouro}, ${empresa.numero} - ${empresa.bairro}` : ""}</p>
+                        <p className="col-span-2">{empresa?.cidade} - {empresa?.uf}</p>
+                    </div>
+                </div>
             </div>
 
-            {/* Title / Info Bloc */}
-            <div className={`flex flex-col items-center ${isA4 ? 'mb-6' : 'mb-2'}`}>
-                <h2 className={`font-bold uppercase border border-black px-2 py-0.5 rounded-sm ${isA4 ? 'text-xl mb-4 py-1 px-4 border-2' : 'text-[10px] mb-1'}`}>
-                    {tituloDoc}
-                </h2>
-                <div className={`w-full flex justify-between items-end border-b-2 border-slate-100 ${isA4 ? 'pb-2' : 'pb-1'}`}>
-                    <div>
-                        <h3 className={`font-black ${isA4 ? 'text-3xl' : 'text-lg'}`}>OS #{String(os.numero).padStart(4, '0')}</h3>
-                        <p className={`${isA4 ? 'text-sm' : 'text-[8px]'} font-bold text-slate-500 italic`}>Aberto em: {formatDate(os.created_at)}</p>
+            {/* Title / Badge Section */}
+            <div className="flex justify-between items-start mb-6">
+                <div className="flex flex-col gap-1">
+                    <span className="bg-slate-900 text-white px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest inline-block w-fit">
+                        {tituloDoc}
+                    </span>
+                    <h2 className={isA4 ? "text-4xl font-black tracking-tighter text-slate-900" : "text-xl font-black"}>
+                        OS #{String(os.numero).padStart(4, '0')}
+                    </h2>
+                    <p className="text-xs font-bold text-slate-400 italic text-nowrap">
+                        Abertura: {formatDate(os.created_at)}
+                    </p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                    <div className="text-right">
+                        <span className={cn(
+                            "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider text-nowrap",
+                            status === 'entregue' ? "bg-indigo-100 text-indigo-700" :
+                                status === 'finalizada' ? "bg-emerald-100 text-emerald-700" :
+                                    "bg-amber-100 text-amber-700"
+                        )}>
+                            {status.replace(/_/g, " ")}
+                        </span>
                     </div>
-                    <div className="flex items-center gap-3 text-right">
-                        <div className="flex flex-col items-end">
-                            <p className="font-black uppercase text-indigo-600 tracking-tighter" style={{ fontSize: isA4 ? '0.9rem' : '0.6rem' }}>{os.status.replace(/_/g, " ")}</p>
-                            <span className={`text-slate-400 font-bold uppercase mt-0.5 ${isA4 ? 'text-[8px]' : 'text-[5px]'}`}>Acesse rapidamente</span>
+                    <div className="flex items-center gap-2">
+                        <div className="text-right hidden sm:block">
+                            <p className="text-[8px] font-bold text-slate-400 uppercase leading-none">Acompanhe pelo celular</p>
+                            <p className="text-[7px] text-slate-300 break-all max-w-[80px]">smartos.app/r/{os.token_teste}</p>
                         </div>
                         <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=${isA4 ? '150x150' : '100x100'}&data=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin + '/os/' + os.id : '')}`}
-                            alt="QR Link da OS"
-                            className={`rounded-sm ${isA4 ? 'w-14 h-14' : 'w-8 h-8'}`}
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin + '/rastreio/' + (os.token_teste || os.id) : '')}`}
+                            alt="QR OS"
+                            className="w-12 h-12 rounded-lg border border-slate-100 shadow-sm"
                         />
                     </div>
                 </div>
             </div>
 
-            {/* Customer Section */}
-            <div className={`${isA4 ? 'mb-6 p-2 rounded-lg bg-slate-50 border border-slate-200' : 'mb-3'}`}>
-                <p className={`font-bold uppercase border-b border-black/10 ${isA4 ? 'mb-1 text-xs text-slate-400' : 'text-[8px] mb-0.5'}`}>Dados do Cliente</p>
-                <div className={`${isA4 ? 'grid grid-cols-2 gap-4' : 'flex justify-between'}`}>
-                    <div>
-                        <p className={`font-black ${isA4 ? 'text-lg' : 'text-xs'}`}>{os.cliente?.nome}</p>
-                    </div>
-                    <div className="text-right">
-                        <p className="font-bold">{os.cliente?.telefone || "N/I"}</p>
-                    </div>
-                </div>
-            </div>
+            {/* Grid Principal */}
+            <div className={isA4 ? "grid grid-cols-2 gap-6 mb-8" : "space-y-4"}>
 
-            {/* Device Section */}
-            <div className={`${isA4 ? 'mb-6' : 'mb-3'}`}>
-                <p className={`font-bold uppercase pb-0.5 border-b ${isA4 ? 'mb-2 text-sm border-slate-300' : 'text-[8px] mb-1 border-dashed border-black'}`}>Aparelho & Senha</p>
-
-                <div className={`grid ${isA4 ? 'grid-cols-2 gap-x-8 gap-y-2' : 'grid-cols-1 gap-y-0.5'}`}>
-                    <div className="flex justify-between items-center group">
-                        <p className={`${isA4 ? 'text-base' : 'text-[10px] font-bold'}`}>{os.marca_equipamento || os.equipamento?.marca} {os.modelo_equipamento || os.equipamento?.modelo}</p>
-                        {!isA4 && <p className="text-[8px] text-slate-500">{os.cor_equipamento || os.equipamento?.cor || ""}</p>}
-                    </div>
-                    <div className="flex justify-between text-[9px]">
-                        <p><span className="font-bold">IMEI:</span> {os.imei_equipamento || os.equipamento?.imei || os.numero_serie || "N/A"}</p>
-                        <p className="bg-slate-100 px-1 rounded-sm"><span className="font-bold">SENHA:</span> <span className="font-black text-indigo-800 uppercase">{os.senha_dispositivo || "N/I"}</span></p>
-                    </div>
-                </div>
-
-                <div className={`mt-2 ${isA4 ? 'bg-slate-50 p-3 rounded-xl border border-slate-200' : 'bg-slate-50 p-1 border-l-2 border-indigo-200'}`}>
-                    <p className={`font-bold uppercase text-slate-500 mb-0.5 ${isA4 ? 'text-xs' : 'text-[7px]'}`}>Defeito Relatado:</p>
-                    <p className={`italic whitespace-pre-wrap ${isA4 ? 'text-base' : 'text-[9px] leading-tight text-slate-700'}`}>
-                        {os.problema_relatado || "Nenhuma descrição."}
-                    </p>
-                </div>
-
-                {/* Checklist - Compacted for 80mm */}
-                {Object.keys(checklist).length > 0 && (
-                    <div className="mt-2">
-                        <p className={`font-bold uppercase text-slate-500 mb-1 ${isA4 ? 'text-[10px]' : 'text-[7px]'}`}>Checklist:</p>
-                        <div className={`grid ${isA4 ? 'grid-cols-4' : 'grid-cols-3'} gap-1`}>
-                            {Object.entries(checklist).filter(([_, v]) => v).map(([key]) => (
-                                <div key={key} className="flex items-center gap-1 border border-slate-100 p-0.5 rounded bg-slate-50/30">
-                                    <span className="text-emerald-600 font-bold text-[7px]">✓</span>
-                                    <span className={`capitalize text-slate-600 font-semibold truncate ${isA4 ? 'text-xs' : 'text-[7px]'}`}>{key}</span>
-                                </div>
-                            ))}
+                {/* Cliente & Equipamento */}
+                <div className="space-y-4">
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-2 opacity-5">
+                            <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
+                        </div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Cliente</p>
+                        <h3 className="text-lg font-black text-slate-800 leading-tight">{os.cliente?.nome}</h3>
+                        <div className="mt-2 space-y-1">
+                            <p className="text-sm font-bold text-slate-600 flex items-center gap-2">
+                                <span className="text-[10px] text-slate-400">TEL:</span> {os.cliente?.telefone || "Sem telefone"}
+                            </p>
+                            <p className="text-[11px] font-semibold text-slate-500 flex items-center gap-2">
+                                <span className="text-[9px] text-slate-400">CPF/CNPJ:</span> {os.cliente?.cpf_cnpj || "N/I"}
+                            </p>
+                            <p className="text-[10px] font-medium text-slate-400 flex items-start gap-1 leading-tight mt-1">
+                                <span>End:</span>
+                                <span>
+                                    {os.cliente?.endereco_json?.logradouro ?
+                                        `${os.cliente.endereco_json.logradouro}, ${os.cliente.endereco_json.numero} - ${os.cliente.endereco_json.bairro}` :
+                                        "Endereço não informado"}
+                                </span>
+                            </p>
                         </div>
                     </div>
-                )}
-            </div>
 
-            {/* Financial / Items Section */}
-            {(pecas.length > 0 || servicos.length > 0) && (
-                <div className={`${isA4 ? 'mb-6' : 'mb-3'}`}>
-                    <p className={`font-bold uppercase pb-0.5 border-b ${isA4 ? 'mb-2 text-sm border-slate-300' : 'text-[8px] mb-1 border-dashed border-black'}`}>Itens & Orçamento</p>
-
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className={`border-b border-slate-900 ${isA4 ? 'text-xs mb-1' : 'text-[7px]'} uppercase font-black`}>
-                                <th className="py-0.5">Descrição</th>
-                                <th className="py-0.5 text-right w-16">Valor</th>
-                            </tr>
-                        </thead>
-                        <tbody className={isA4 ? 'text-sm' : 'text-[8px]'}>
-                            {pecas.map((p: any, i: number) => (
-                                <tr key={p.id || i} className="border-b border-slate-50">
-                                    <td className="py-0.5">{p.nome} {p.qtd > 1 && `(${p.qtd}x)`}</td>
-                                    <td className="py-0.5 text-right font-bold">{formatCurrency((p.preco || p.valor) * (p.qtd || 1))}</td>
-                                </tr>
-                            ))}
-                            {servicos.map((s: any, i: number) => (
-                                <tr key={i} className="border-b border-slate-50">
-                                    <td className="py-0.5">{s.descricao}</td>
-                                    <td className="py-0.5 text-right font-bold">{formatCurrency(s.valor)}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-
-                    <div className={`mt-2 flex flex-col items-end`}>
-                        <div className={`flex justify-between items-center p-2 bg-slate-900 text-white rounded-lg w-full ${isA4 ? 'w-64 text-xl mt-4 py-3' : 'text-[11px]'}`}>
-                            <div className="flex flex-col gap-0.5 items-start">
-                                <span className="uppercase font-bold text-[8px] opacity-70">Subtotal:</span>
-                                {os.orcamento_aprovado && (
-                                    <span className="text-[8px] font-black tracking-widest bg-emerald-500/30 text-emerald-300 px-1 py-0.5 rounded uppercase">APROVADO ✓</span>
-                                )}
+                    <div className="p-4 rounded-2xl border-2 border-slate-100">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Equipamento / Aparelho</p>
+                        <h3 className="text-base font-black text-slate-800">
+                            {os.marca_equipamento || os.equipamento?.marca} {os.modelo_equipamento || os.equipamento?.modelo}
+                        </h3>
+                        <div className="grid grid-cols-2 gap-2 mt-4">
+                            <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 overflow-hidden">
+                                <p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">IMEI / SÉRIE</p>
+                                <p className="text-xs font-bold text-slate-700 truncate">{os.imei_equipamento || os.equipamento?.imei || "N/A"}</p>
                             </div>
-                            <span className="font-black">{formatCurrency(os.valor_total_centavos)}</span>
+                            <div className="bg-indigo-50 p-2 rounded-xl border border-indigo-100 overflow-hidden">
+                                <p className="text-[8px] font-black text-indigo-400 uppercase mb-0.5">SENHA / PIN</p>
+                                <p className="text-xs font-black text-indigo-700 truncate">{os.senha_dispositivo || "N/I"}</p>
+                            </div>
                         </div>
                     </div>
                 </div>
-            )}
 
-            {/* Observations */}
-            {os.observacoes_internas && (
-                <div className={`${isA4 ? 'mb-6 p-3 bg-indigo-50 border border-indigo-100 rounded-xl' : 'mb-2 p-1 bg-indigo-50/50 rounded'}`}>
-                    <p className={`font-bold uppercase text-indigo-400 ${isA4 ? 'text-[10px] mb-1' : 'text-[6px]'}`}>Obs:</p>
-                    <p className={`whitespace-pre-wrap leading-tight font-medium text-indigo-900 ${isA4 ? 'text-sm' : 'text-[8px]'}`}>{os.observacoes_internas}</p>
-                </div>
-            )}
-
-            {/* Terms and Signatures */}
-            <div className={`mt-4 text-center pb-4`}>
-                <div className={`text-slate-500 text-justify mb-4 flex flex-col gap-1 bg-slate-50 border border-slate-100 rounded-lg ${isA4 ? 'text-xs leading-relaxed p-4 px-6 mx-12 mb-8' : 'text-[7px] leading-[1.1] p-1.5'}`}>
-                    <p><b>1. Garantia:</b> 90 dias limitada às peças/serviço realizados. Mau uso anula.</p>
-                    <p><b>2. Prazo:</b> 30 dias para retirar após aviso. Após 90 dias, o item poderá se alienado p/ custeio, conforme CDC.</p>
-                </div>
-
-                <div className={`grid grid-cols-2 gap-4 w-full mx-auto ${isA4 ? 'mt-12 gap-12 max-w-2xl' : 'mt-6'}`}>
-                    <div className="border-t border-black pt-1">
-                        <p className="font-bold uppercase tracking-tighter" style={{ fontSize: isA4 ? '0.7rem' : '7px' }}>Cliente</p>
+                {/* Relato e Checklist */}
+                <div className="space-y-4">
+                    <div className="p-4 rounded-2xl bg-amber-50/30 border border-amber-100/50">
+                        <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1 leading-none">Defeito Relatado</p>
+                        <p className="text-sm font-medium text-slate-700 italic leading-relaxed">
+                            "{os.problema_relatado || "Sem descrição detalhada."}"
+                        </p>
                     </div>
-                    <div className="border-t border-black pt-1">
-                        <p className="font-bold uppercase tracking-tighter" style={{ fontSize: isA4 ? '0.7rem' : '7px' }}>Técnico/Responsável</p>
+
+                    {Object.keys(checklist).length > 0 && (
+                        <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 leading-none">Checklist de Entrada</p>
+                            <div className="grid grid-cols-3 gap-1">
+                                {Object.entries(checklist).filter(([_, v]) => v).map(([key]) => (
+                                    <div key={key} className="flex items-center gap-1.5 p-1 px-2 rounded-lg bg-emerald-50 border border-emerald-100 overflow-hidden">
+                                        <span className="text-emerald-500 text-[10px] font-bold">✓</span>
+                                        <span className="capitalize text-emerald-800 font-bold text-[9px] truncate">{key}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Financial Summary */}
+            <div className="mb-8">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-100 pb-2">Resumo Financeiro e Itens</p>
+
+                <table className="w-full text-left mb-6">
+                    <thead>
+                        <tr className="text-[10px] font-black text-slate-400 uppercase border-b border-slate-200">
+                            <th className="py-2">Descrição do Serviço / Peça</th>
+                            <th className="py-2 text-right">Qtd</th>
+                            <th className="py-2 text-right px-4">Valor Un.</th>
+                            <th className="py-2 text-right">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody className="text-xs">
+                        {pecas.map((p: any, i: number) => (
+                            <tr key={i} className="border-b border-slate-50">
+                                <td className="py-3 font-semibold text-slate-700">{p.nome}</td>
+                                <td className="py-3 text-right text-slate-500">{p.qtd || 1}</td>
+                                <td className="py-3 text-right px-4 text-slate-500">{formatCurrency(p.preco || p.valor)}</td>
+                                <td className="py-3 text-right font-bold">{formatCurrency((p.preco || p.valor) * (p.qtd || 1))}</td>
+                            </tr>
+                        ))}
+                        {servicos.map((s: any, i: number) => (
+                            <tr key={i} className="border-b border-slate-50 text-slate-700">
+                                <td className="py-3 font-semibold">{s.descricao}</td>
+                                <td className="py-3 text-right text-slate-500">1</td>
+                                <td className="py-3 text-right px-4 text-slate-500">{formatCurrency(s.valor)}</td>
+                                <td className="py-3 text-right font-bold text-slate-900">{formatCurrency(s.valor)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+
+                <div className="flex justify-end">
+                    <div className="w-full max-w-xs space-y-2">
+                        <div className="flex justify-between items-center text-slate-500 text-xs px-2">
+                            <span>Subtotal Bruto:</span>
+                            <span className="font-bold">{formatCurrency(os.valor_total_centavos)}</span>
+                        </div>
+
+                        {os.valor_adiantado_centavos > 0 && (
+                            <div className="flex justify-between items-center text-emerald-600 text-xs px-2 bg-emerald-50 py-1 rounded-lg border border-emerald-100">
+                                <span className="font-bold">Adiantamento / Sinal:</span>
+                                <span className="font-black">- {formatCurrency(os.valor_adiantado_centavos)}</span>
+                            </div>
+                        )}
+
+                        <div className="flex justify-between items-center p-4 bg-slate-900 text-white rounded-2xl shadow-xl shadow-slate-200">
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Total a Pagar</p>
+                                <h4 className="text-sm font-bold opacity-80 leading-none mt-1">
+                                    {os.valor_adiantado_centavos > 0 ? "Saldo Restante" : "Valor do Orçamento"}
+                                </h4>
+                            </div>
+                            <div className="text-right">
+                                {os.orcamento_aprovado && <span className="text-[8px] bg-emerald-500 text-white px-1.5 py-0.5 rounded-full font-black uppercase mb-1 inline-block">Aprovado</span>}
+                                <p className="text-2xl font-black tracking-tighter leading-none">
+                                    {formatCurrency(os.valor_total_centavos - (os.valor_adiantado_centavos || 0))}
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Footer */}
-            <div className={`mt-4 pt-2 border-t border-slate-100 text-center text-slate-400 font-bold uppercase ${isA4 ? 'text-xs' : 'text-[7px]'}`}>
-                <p>SmartOS - {new Date().toLocaleString('pt-BR')}</p>
+            {/* Termos Legais */}
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 mb-8 mt-12">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Shield size={12} className="text-indigo-400" /> Termos e Condições
+                </p>
+                <div className="text-[10px] text-slate-500 leading-relaxed font-medium whitespace-pre-wrap">
+                    {termos}
+                </div>
+            </div>
+
+            {/* Assinaturas */}
+            <div className="grid grid-cols-2 gap-12 pt-8 border-t border-slate-100">
+                <div className="text-center">
+                    <div className="border-b-2 border-slate-900 h-12 mb-2"></div>
+                    <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest leading-none mb-1">{os.cliente?.nome}</p>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase leading-none">Assinatura do Cliente</p>
+                </div>
+                <div className="text-center">
+                    <div className="border-b-2 border-slate-900 h-12 mb-2 flex items-center justify-center">
+                    </div>
+                    <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest leading-none mb-1">{empresa?.nome_fantasia || "Responsável Técnico"}</p>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase leading-none">Assinatura / Carimbo</p>
+                </div>
+            </div>
+
+            <div className="mt-8 text-center text-slate-400">
+                <p className="text-[9px] font-black uppercase tracking-[0.2em]">SmartOS - Impresso em {new Date().toLocaleString('pt-BR')}</p>
             </div>
         </div>
     );
@@ -222,13 +326,13 @@ export default function PrintOSPage({ params }: { params: { id: string } }) {
     return (
         <div className={containerClass}>
             {isA4 ? (
-                <div className="w-full h-full min-h-[297mm]">
-                    <div>
+                <div className="w-full relative">
+                    <div className="print:block">
                         {renderOSContent("Via do Cliente")}
-                        <div className="w-full flex items-center justify-center my-6 opacity-30 relative print:my-0 print:py-6">
-                            <div className="absolute w-full h-[1px] border-b-[2px] border-dashed border-black"></div>
-                            <span className="bg-white px-4 text-slate-500 relative z-10 font-bold tracking-widest text-xs flex items-center gap-2">
-                                ✂️ CORTAR AQUI ✂️
+                        <div className="w-full flex items-center justify-center my-8 opacity-20 relative print:my-0 print:py-8">
+                            <div className="absolute w-full h-0 border-b-2 border-dashed border-slate-900"></div>
+                            <span className="bg-white px-6 text-slate-900 relative z-10 font-black tracking-[0.3em] text-[10px] flex items-center gap-3">
+                                <span className="text-lg">✂️</span> RECORTE AQUI
                             </span>
                         </div>
                         {renderOSContent("Via da Assistência")}
@@ -238,53 +342,52 @@ export default function PrintOSPage({ params }: { params: { id: string } }) {
                 renderOSContent()
             )}
 
-            {/* Controls */}
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 print:hidden z-[100] w-full max-w-lg px-4">
-                <div className="bg-white/90 backdrop-blur-xl border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.2)] rounded-2xl p-3 flex gap-4 w-full justify-between items-center animate-in slide-in-from-bottom-5 duration-500">
-                    <div className="flex bg-slate-100 p-1 rounded-xl">
-                        <button
-                            onClick={() => setFormato('80mm')}
-                            className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${formato === '80mm' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                            Termo 80mm
-                        </button>
-                        <button
-                            onClick={() => setFormato('a4')}
-                            className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${formato === 'a4' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                            Folha A4
-                        </button>
-                    </div>
-
+            {/* Botões Flutuantes (Não Saem na Impressão) */}
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 print:hidden z-[100] bg-white/80 backdrop-blur-2xl p-2 rounded-3xl shadow-2xl border border-white/20 scale-110">
+                <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
                     <button
-                        onClick={() => window.print()}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-500/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-3"
+                        onClick={() => setFormato('80mm')}
+                        className={cn(
+                            "px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                            formato === '80mm' ? "bg-white text-indigo-600 shadow-xl" : "text-slate-500 hover:text-slate-800"
+                        )}
                     >
-                        <span>Imprimir</span>
-                        <div className="w-1 h-4 bg-white/20 rounded-full" />
-                        <span className="opacity-70">PDF</span>
+                        Bobina 80mm
+                    </button>
+                    <button
+                        onClick={() => setFormato('a4')}
+                        className={cn(
+                            "px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                            formato === 'a4' ? "bg-white text-indigo-600 shadow-xl" : "text-slate-500 hover:text-slate-800"
+                        )}
+                    >
+                        Folha A4
                     </button>
                 </div>
+
+                <button
+                    onClick={() => window.print()}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.1em] shadow-2xl shadow-indigo-500/40 transition-all hover:scale-105 active:scale-95 flex items-center gap-4"
+                >
+                    <Printer size={18} />
+                    <span>Imprimir Agora</span>
+                </button>
             </div>
 
             <style jsx global>{`
                 @media print {
                     @page { 
-                        margin: 0; 
+                        margin: 1.5cm; 
                         size: ${isA4 ? 'A4' : 'auto'}; 
                     }
                     body { 
                         -webkit-print-color-adjust: exact; 
+                        print-color-adjust: exact;
                         background: white !important; 
                         padding: 0 !important;
                         margin: 0 !important;
                     }
                     .print\\:hidden { display: none !important; }
-                    .print\\:p-0 { padding: 0 !important; }
-                    .print\\:m-0 { margin: 0 !important; }
-                    .print\\:w-full { width: 100% !important; }
-                    .print\\:max-w-none { max-width: none !important; }
-                    .print\\:shadow-none { shadow: none !important; }
                 }
             `}</style>
         </div>

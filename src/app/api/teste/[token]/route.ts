@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 // Use service role to bypass RLS (public endpoint)
 const supabase = createClient(
@@ -24,7 +26,7 @@ export async function GET(
             teste_saida_concluido, garantia_dias,
             equipamento:equipamentos(marca, modelo, imei, cor)
         `)
-        .eq("token_teste", token)
+        .or(`token_teste.eq.${token},id.eq.${token}`)
         .single();
 
     if (error || !data) {
@@ -65,7 +67,7 @@ export async function POST(
     const { data: os, error: findErr } = await supabase
         .from("ordens_servico")
         .select("id, status, teste_saida_concluido, empresa_id")
-        .eq("token_teste", token)
+        .or(`token_teste.eq.${token},id.eq.${token}`)
         .single();
 
     if (findErr || !os) {

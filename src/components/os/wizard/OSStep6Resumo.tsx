@@ -142,6 +142,31 @@ export function OSStep6Resumo({ data, onChange }: OSStep6ResumoProps) {
                 </button>
             </div>
 
+            <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex items-center justify-between gap-3">
+                <div className="flex flex-col">
+                    <span className="text-sm font-bold text-indigo-800 flex items-center gap-2">
+                        💵 Valor Recebido Antecipadamente (Sinal)
+                    </span>
+                    <span className="text-xs text-indigo-600/80">Informe se o cliente já pagou algum valor adiantado.</span>
+                </div>
+                <div className="relative w-32 shrink-0">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] uppercase font-bold text-slate-400">R$</span>
+                    <input
+                        type="text"
+                        placeholder="0,00"
+                        className="w-full h-10 pl-8 pr-3 rounded-xl border border-indigo-200 bg-white text-sm font-bold text-indigo-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all text-right shadow-sm"
+                        value={((data.valorAdiantado || 0) / 100).toFixed(2).replace('.', ',')}
+                        onChange={e => {
+                            const val = Math.round(parseFloat(e.target.value.replace(/\./g, '').replace(",", ".")) * 100) || 0;
+                            // Ensure adiantamento is not greater than totalGeral
+                            if (val <= totalGeral) {
+                                onChange({ ...data, valorAdiantado: val });
+                            }
+                        }}
+                    />
+                </div>
+            </div>
+
             <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex items-start gap-3">
                 <input type="checkbox" className="mt-1 h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500" />
                 <p className="text-xs text-indigo-600 leading-relaxed">

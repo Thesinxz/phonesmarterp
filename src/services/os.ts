@@ -322,6 +322,10 @@ export async function createOS(os: Database["public"]["Tables"]["ordens_servico"
 }
 
 export async function createDetailedOS(osData: any, usuarioId: string) {
+    // Extract _caixa_id before inserting to not break the schema
+    const caixaId = osData._caixa_id;
+    delete osData._caixa_id;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase.from("ordens_servico") as any)
         .insert(osData)
@@ -346,6 +350,45 @@ export async function createDetailedOS(osData: any, usuarioId: string) {
         notifyOSStatusChange(data.id, data.status).catch(e => console.error("[WhatsApp Auto] Error:", e));
     } catch (e) {
         console.error("[WhatsApp Auto] Failed to import notifyOSStatusChange:", e);
+    }
+
+    // Process adiantamento financially at creation time
+    if (osData.valor_adiantado_centavos > 0) {
+        try {
+            // Register payment in "financeiro" table directly
+            await (supabase.from("financeiro") as any).insert({
+                empresa_id: osData.empresa_id,
+                tipo: "entrada",
+                categoria: "Serviços de Manutenção",
+                descricao: `Adiantamento Inicial OS #${String(data.numero).padStart(4, "0")} (${osData.forma_pagamento})`,
+                valor_centavos: osData.valor_adiantado_centavos,
+                pago: true,
+                vencimento: new Date().toISOString(),
+            });
+
+            if (caixaId) {
+                await (supabase.from("caixa_movimentacoes") as any).insert({
+                    empresa_id: osData.empresa_id,
+                    caixa_id: caixaId,
+                    usuario_id: usuarioId,
+                    tipo: "recebimento_os",
+                    forma_pagamento: osData.forma_pagamento,
+                    valor_centavos: osData.valor_adiantado_centavos,
+                    observacao: `Adiantamento Inicial OS #${String(data.numero).padStart(4, "0")}`,
+                    origem_id: data.id
+                });
+            }
+
+            await (supabase.from("os_timeline") as any).insert({
+                os_id: data.id,
+                empresa_id: osData.empresa_id,
+                usuario_id: usuarioId,
+                evento: "Lançado Adiantamento / Sinal inicial",
+                dados_json: { valor: osData.valor_adiantado_centavos, forma: osData.forma_pagamento }
+            });
+        } catch (fErr) {
+            console.error("Falha ao registrar financeiro do adiantamento na criação:", fErr);
+        }
     }
 
     return data;
