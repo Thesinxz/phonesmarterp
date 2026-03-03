@@ -44,7 +44,7 @@ import { cn } from "@/utils/cn";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
 import { syncConfigToAll } from "@/services/configuracoes";
 
-type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "ai_config" | "vitrine" | "etiquetas" | "auditoria" | "contador" | "crediario";
+type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "ai_config" | "vitrine" | "etiquetas" | "auditoria" | "contador" | "crediario" | "termos_os";
 
 import { type WhatsappConfig, type FinanceiroConfig } from "@/types/configuracoes";
 import { getFiscalConfig, upsertFiscalConfig, ConfiguracaoFiscal } from "@/services/fiscal";
