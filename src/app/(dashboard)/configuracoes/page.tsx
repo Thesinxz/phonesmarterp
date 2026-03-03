@@ -536,7 +536,7 @@ export default function ConfiguracoesPage() {
         { id: "vitrine", label: "Vitrine Online", icon: ShoppingBag, desc: "Catálogo público + TV" },
         { id: "crediario", label: "Crediário & Efíbank", icon: CreditCard, desc: "Fiado e Boletos" },
         { id: "etiquetas", label: "Etiquetas", icon: Scan, desc: "Modelos Térmicos e A4" },
-        { id: "termos_os", label: "Termos da OS", icon: ShieldCheck, desc: "Garantias e Condições" },
+        { id: "termos_os", label: "Termos da OS", icon: Shield, desc: "Garantias e Condições" },
         { id: "contador", label: "Contabilidade", icon: FileText, desc: "Fechamento e XML Automático" },
         { id: "auditoria", label: "Auditoria", icon: HistoryIcon, desc: "Log de alterações e segurança" },
     ];
@@ -1961,7 +1961,7 @@ export default function ConfiguracoesPage() {
                         {/* ── TAB: Termos da OS ── */}
                         {activeTab === "termos_os" && (
                             <div className="space-y-6">
-                                <GlassCard title="Termos e Condições da Ordem de Serviço" icon={ShieldCheck}>
+                                <GlassCard title="Termos e Condições da Ordem de Serviço" icon={Shield}>
                                     <div className="space-y-4">
                                         <div>
                                             <label className="label-sm mb-2 block">Texto de Garantia e Condições Legais</label>
