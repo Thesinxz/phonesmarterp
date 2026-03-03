@@ -12,17 +12,22 @@ import {
     ArrowRight,
     Calendar,
     User as UserIcon,
-    DollarSign
+    DollarSign,
+    Edit3,
+    Trash2
 } from "lucide-react";
 import Link from "next/link";
-import { getOrdensServico, updateOSStatus } from "@/services/os";
+import { getOrdensServico, updateOSStatus, deleteOS } from "@/services/os";
 import { createClient } from "@/lib/supabase/client";
 import { type OrdemServico, type OsStatus } from "@/types/database";
 import { OSKanbanCard } from "@/components/os/OSKanbanCard";
+import { EditOSModal } from "@/components/os/EditOSModal";
 import { notifyOSStatusChange } from "@/actions/notifications";
 import { useAuth } from "@/context/AuthContext";
 import { useRealtimeSubscription } from "@/hooks/useRealtime";
 import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
+import { toast } from "sonner";
+import { cn } from "@/utils/cn";
 
 const STAGES: { label: string; status: OsStatus; color: string }[] = [
     { label: "Abertas", status: "aberta", color: "bg-slate-500" },
@@ -38,6 +43,8 @@ export default function OSPage() {
     const { profile } = useAuth();
     const [orders, setOrders] = useState<any[]>([]);
     const [tecnicos, setTecnicos] = useState<any[]>([]);
+    const [selectedOS, setSelectedOS] = useState<any>(null);
+    const [showEditModal, setShowEditModal] = useState(false);
 
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
@@ -84,42 +91,7 @@ export default function OSPage() {
         filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
         callback: (payload: any) => {
             console.log("Realtime OS:", payload.eventType, payload);
-            const supabase = createClient();
-
-            if (payload.eventType === 'INSERT') {
-                supabase
-                    .from('ordens_servico')
-                    .select('*, cliente:clientes(nome), equipamento:equipamentos(marca, modelo), tecnico:usuarios(nome)')
-                    .eq('id', payload.new.id)
-                    .single()
-                    .then(({ data }) => {
-                        if (data) {
-                            setOrders(current => {
-                                if (current.some(o => o.id === (data as any).id)) return current;
-                                return [data, ...current];
-                            });
-                        }
-                    });
-            } else if (payload.eventType === 'UPDATE') {
-                setOrders(current => current.map(os =>
-                    os.id === payload.new.id ? { ...os, ...payload.new } : os
-                ));
-
-                supabase
-                    .from('ordens_servico')
-                    .select('*, cliente:clientes(nome), equipamento:equipamentos(marca, modelo), tecnico:usuarios(nome)')
-                    .eq('id', payload.new.id)
-                    .single()
-                    .then(({ data }) => {
-                        if (data) {
-                            setOrders(current => current.map(os =>
-                                os.id === (data as any).id ? data : os
-                            ));
-                        }
-                    });
-            } else if (payload.eventType === 'DELETE') {
-                setOrders(current => current.filter(os => os.id !== payload.old.id));
-            }
+            loadOS();
         }
     });
 
@@ -144,273 +116,271 @@ export default function OSPage() {
         }
     }
 
+    async function handleDeleteOS(id: string) {
+        try {
+            await deleteOS(id);
+            toast.success("OS excluída com sucesso.");
+            loadOS();
+        } catch (error) {
+            console.error(error);
+            toast.error("Erro ao excluir OS.");
+        }
+    }
+
+    const handleEditOS = (os: any) => {
+        setSelectedOS(os);
+        setShowEditModal(true);
+    };
+
     async function handleMoveStatus(osId: string, nextStatus: OsStatus) {
         if (!profile) return;
         try {
             await updateOSStatus(osId, nextStatus, profile.id, profile.empresa_id);
-
-            // Enviar notificação em background
-            notifyOSStatusChange(osId, nextStatus).catch((err: any) => console.error("Falha notificação:", err));
-
+            notifyOSStatusChange(osId, nextStatus).catch(e => console.error("WhatsApp error:", e));
             loadOS();
+            toast.success("Status atualizado!");
         } catch (error) {
-            console.error("Erro ao mover OS:", error);
+            console.error(error);
+            toast.error("Erro ao atualizar status.");
         }
     }
 
     return (
-        <div className="space-y-6 page-enter h-full flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between">
+        <div className="space-y-6 page-enter pb-10">
+            {/* Header com ações */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Ordens de Serviço</h1>
-                    <p className="text-slate-500 text-sm mt-0.5">Gerencie o fluxo de manutenção</p>
+                    <h1 className="text-2xl font-black text-slate-800 tracking-tight">Ordens de Serviço</h1>
+                    <p className="text-slate-500 text-sm">Gerencie todos os consertos e manutenções.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <div className="bg-white/60 p-1 rounded-xl border border-white/60 flex h-10 shadow-sm">
-                        <button
-                            onClick={() => setViewMode("kanban")}
-                            className={`px-3 rounded-lg flex items-center gap-2 text-sm font-medium transition-all ${viewMode === 'kanban' ? 'bg-white shadow-sm text-brand-600' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            <LayoutGrid size={16} />
-                            Kanban
-                        </button>
-                        <button
-                            onClick={() => setViewMode("list")}
-                            className={`px-3 rounded-lg flex items-center gap-2 text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-brand-600' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            <List size={16} />
-                            Lista
-                        </button>
-                    </div>
-                    <Link href="/os/nova" className="btn-primary">
-                        <Plus size={18} />
-                        Nova OS
-                    </Link>
-                </div>
+                <Link
+                    href="/os/novo"
+                    className="h-12 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+                >
+                    <Plus size={20} />
+                    Nova OS
+                </Link>
             </div>
 
-            {/* Filters bar */}
-            <div className="flex flex-wrap items-center gap-4 bg-white/40 p-3 rounded-2xl border border-white/60 shadow-sm">
-                <div className="relative flex-1 min-w-[240px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            {/* Filtros e Busca */}
+            <div className="flex flex-col lg:flex-row gap-4">
+                <div className="flex-1 relative group">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
                     <input
-                        className="w-full bg-white/60 border border-slate-200/60 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
-                        placeholder="Buscar por cliente, equipamento, IMEI..."
+                        type="text"
+                        placeholder="Buscar por cliente, equipamento, IMEI ou problema..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
+                        className="w-full h-12 pl-12 pr-4 bg-white rounded-2xl border border-slate-100 shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
                     />
                 </div>
 
                 <div className="flex items-center gap-2">
                     <div className="relative">
-                        <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                         <select
                             value={filterTecnico}
                             onChange={(e) => setFilterTecnico(e.target.value)}
-                            className="bg-white/60 border border-slate-200/60 rounded-xl pl-9 pr-3 py-2 text-[11px] font-bold uppercase tracking-tight text-slate-600 focus:outline-none appearance-none cursor-pointer hover:bg-white transition-all"
+                            className="h-12 pl-10 pr-8 bg-white rounded-2xl border border-slate-100 shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold text-slate-600 appearance-none"
                         >
                             <option value="">Todos Técnicos</option>
-                            {tecnicos.map(t => (
-                                <option key={t.id} value={t.id}>{t.nome}</option>
-                            ))}
+                            {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
                         </select>
                     </div>
 
                     <DateRangeFilter
-                        defaultPreset="tudo"
                         onChange={(start, end) => {
                             setFilterStart(start || "");
                             setFilterEnd(end || "");
                         }}
                     />
-                </div>
 
-                <button
-                    onClick={() => {
-                        setSearch("");
-                        setFilterTecnico("");
-                        setFilterStart("");
-                        setFilterEnd("");
-                    }}
-                    className="text-[10px] font-black uppercase text-slate-400 hover:text-rose-500 transition-colors px-2"
-                >
-                    Limpar
-                </button>
+                    <div className="flex h-12 bg-slate-100 p-1 rounded-2xl border border-slate-200 shadow-inner">
+                        <button
+                            onClick={() => setViewMode("kanban")}
+                            className={cn(
+                                "flex-1 flex items-center justify-center gap-2 px-4 rounded-xl text-xs font-bold transition-all",
+                                viewMode === "kanban" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                            )}
+                        >
+                            <LayoutGrid size={16} /> Kanban
+                        </button>
+                        <button
+                            onClick={() => setViewMode("list")}
+                            className={cn(
+                                "flex-1 flex items-center justify-center gap-2 px-4 rounded-xl text-xs font-bold transition-all",
+                                viewMode === "list" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                            )}
+                        >
+                            <List size={16} /> Lista
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            {/* Kanban Content */}
-            {/* Kanban Content */}
-            {viewMode === "kanban" ? (
-                <div className="flex-1 overflow-x-auto pb-6 scrollbar-thin">
-                    <div className="flex gap-6 min-w-max h-full">
-                        {STAGES.map((stage) => (
+            {/* Conteúdo Principal */}
+            {loading ? (
+                <div className="h-96 flex items-center justify-center">
+                    <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+            ) : viewMode === "kanban" ? (
+                <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-thin">
+                    {STAGES.map((stage) => (
+                        <div key={stage.status} className="flex-shrink-0 w-80 flex flex-col gap-4">
+                            <div className="flex items-center justify-between px-2">
+                                <div className="flex items-center gap-2">
+                                    <div className={cn("w-2 h-6 rounded-full", stage.color)} />
+                                    <h3 className="font-black text-slate-700 text-sm uppercase tracking-tighter">{stage.label}</h3>
+                                    <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-lg border border-slate-200">
+                                        {orders.filter(o => o.status === stage.status).length}
+                                    </span>
+                                </div>
+                            </div>
+
                             <div
-                                key={stage.status}
-                                className="w-72 flex flex-col h-full group"
-                                onDragOver={(e) => {
-                                    e.preventDefault(); // Necessário para permitir o drop
-                                    e.currentTarget.querySelector('.drop-zone')?.classList.add('bg-slate-200/50');
-                                }}
-                                onDragLeave={(e) => {
-                                    e.currentTarget.querySelector('.drop-zone')?.classList.remove('bg-slate-200/50');
-                                }}
+                                className="flex-1 bg-slate-50/50 rounded-3xl p-3 border border-dashed border-slate-200 min-h-[500px]"
+                                onDragOver={(e) => e.preventDefault()}
                                 onDrop={(e) => {
                                     e.preventDefault();
-                                    e.currentTarget.querySelector('.drop-zone')?.classList.remove('bg-slate-200/50');
                                     const osId = e.dataTransfer.getData("text/plain");
-                                    if (osId) {
-                                        handleMoveStatus(osId, stage.status);
-                                        // Update UI optimistically
-                                        setOrders(prev => prev.map(o => o.id === osId ? { ...o, status: stage.status } : o));
-                                    }
+                                    if (osId) handleMoveStatus(osId, stage.status);
                                 }}
                             >
-                                <div className="flex items-center justify-between mb-4 px-2">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-2 h-2 rounded-full ${stage.color}`} />
-                                        <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
-                                            {stage.label}
-                                        </h3>
-                                        <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                                            {orders.filter(o => o.status === stage.status).length}
-                                        </span>
+                                {orders
+                                    .filter(o => o.status === stage.status)
+                                    .map(os => (
+                                        <OSKanbanCard
+                                            key={os.id}
+                                            os={os}
+                                            onClick={() => router.push(`/os/${os.id}`)}
+                                            onMoveStatus={(id, status) => handleMoveStatus(id, status as OsStatus)}
+                                            onDelete={handleDeleteOS}
+                                            onEdit={() => handleEditOS(os)}
+                                        />
+                                    ))
+                                }
+                                {orders.filter(o => o.status === stage.status).length === 0 && (
+                                    <div className="h-full flex items-center justify-center py-10 opacity-40">
+                                        <p className="text-[10px] uppercase font-black text-slate-400">Vazio</p>
                                     </div>
-                                    <div className="flex flex-col items-end">
-                                        <span className="text-[10px] font-black text-brand-600 flex items-center gap-1">
-                                            <DollarSign size={10} />
-                                            {(orders.filter(o => o.status === stage.status).reduce((acc, curr) => acc + (curr.valor_total_centavos || 0), 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                        </span>
-                                    </div>
-                                    <button className="text-slate-400 hover:text-slate-600 transition-colors">
-                                        <MoreHorizontal size={16} />
-                                    </button>
-                                </div>
-
-                                <div className="drop-zone flex-1 bg-slate-100/50 rounded-2xl p-2 border-2 border-dashed border-transparent group-hover:border-slate-200 transition-all overflow-y-auto scrollbar-none min-h-[150px]">
-                                    {orders
-                                        .filter(o => o.status === stage.status)
-                                        .map(os => (
-                                            <OSKanbanCard
-                                                key={os.id}
-                                                os={os}
-                                                onClick={() => router.push(`/os/${os.id}`)}
-                                                onMoveStatus={(id, status) => handleMoveStatus(id, status as OsStatus)}
-                                            />
-                                        ))
-                                    }
-
-                                    {orders.filter(o => o.status === stage.status).length === 0 && (
-                                        <div className="h-32 flex flex-col items-center justify-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
-                                            Nenhuma OS aqui
-                                        </div>
-                                    )}
-                                </div>
+                                )}
                             </div>
-                        ))}
-                    </div>
+                        </div>
+                    ))}
                 </div>
             ) : (
-                <div className="glass-card overflow-hidden p-0 flex flex-col h-full">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-[10px] text-slate-400 uppercase tracking-widest bg-slate-50/50 border-b border-slate-100">
-                                <tr>
-                                    <th className="px-6 py-4 font-bold">OS / Data</th>
-                                    <th className="px-6 py-4 font-bold">Cliente</th>
-                                    <th className="px-6 py-4 font-bold">Aparelho</th>
-                                    <th className="px-6 py-4 font-bold">Status</th>
-                                    <th className="px-6 py-4 font-bold text-right">Valor</th>
-                                    <th className="px-6 py-4 font-bold text-center">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {loading && orders.length === 0 ? (
-                                    <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400">Carregando...</td></tr>
-                                ) : orders.length === 0 ? (
-                                    <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400">Nenhuma OS encontrada.</td></tr>
-                                ) : (
-                                    orders.map((os) => (
-                                        <tr key={os.id} className="hover:bg-slate-50/50 transition-colors cursor-pointer group">
-                                            <td className="px-6 py-4" onClick={() => router.push(`/os/${os.id}`)}>
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-slate-800 flex items-center gap-2">#{os.numero ? String(os.numero).padStart(5, '0') : os.id.substring(0, 6)}</span>
-                                                    <span className="text-[10px] text-slate-400">{new Date(os.created_at).toLocaleDateString('pt-BR')}</span>
+                <div className="bg-white rounded-3xl border border-slate-100 shadow-xl overflow-hidden">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Número</th>
+                                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Cliente</th>
+                                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Equipamento</th>
+                                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Status</th>
+                                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Criada em</th>
+                                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Valor</th>
+                                <th className="px-6 py-4"></th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {orders.map(os => {
+                                const stage = STAGES.find(s => s.status === os.status);
+                                return (
+                                    <tr
+                                        key={os.id}
+                                        onClick={() => router.push(`/os/${os.id}`)}
+                                        className="hover:bg-slate-50/80 cursor-pointer transition-all group"
+                                    >
+                                        <td className="px-6 py-4">
+                                            <span className="text-xs font-bold text-slate-400 group-hover:text-indigo-600">#{String(os.numero).padStart(4, '0')}</span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-bold text-slate-700 leading-none mb-1">{os.cliente?.nome}</span>
+                                                <span className="text-[10px] text-slate-400">{os.cliente?.telefone || "Sem telefone"}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-bold text-slate-700 leading-none mb-1">{os.equipamento?.marca} {os.equipamento?.modelo}</span>
+                                                <span className="text-[10px] text-slate-400">{os.problema_relatado?.substring(0, 30)}...</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={cn("px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter", stage ? stage.color.replace('bg-', 'text-').replace('500', '700') + " " + stage.color.replace('500', '100') : "bg-slate-100 text-slate-700")}>
+                                                {stage?.label || os.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                                <Calendar size={12} className="text-slate-300" />
+                                                {new Date(os.created_at).toLocaleDateString()}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-1 text-sm font-black text-slate-800">
+                                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">R$</span>
+                                                {(os.valor_total_centavos / 100).toFixed(2)}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleEditOS(os);
+                                                    }}
+                                                    className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100"
+                                                >
+                                                    <Edit3 size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (window.confirm("Deseja excluir permanentemente esta OS?")) {
+                                                            handleDeleteOS(os.id);
+                                                        }
+                                                    }}
+                                                    className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                                <div className="p-2 text-slate-300 group-hover:text-indigo-500 transition-all">
+                                                    <ArrowRight size={18} />
                                                 </div>
-                                            </td>
-                                            <td className="px-6 py-4 font-medium text-slate-700" onClick={() => router.push(`/os/${os.id}`)}>{os.cliente?.nome || "-"}</td>
-                                            <td className="px-6 py-4 text-slate-600" onClick={() => router.push(`/os/${os.id}`)}>{os.equipamento?.marca} {os.equipamento?.modelo}</td>
-                                            <td className="px-6 py-4" onClick={() => router.push(`/os/${os.id}`)}>
-                                                <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-white ${STAGES.find(s => s.status === os.status)?.color || 'bg-slate-500'}`}>
-                                                    {STAGES.find(s => s.status === os.status)?.label || os.status}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-right font-bold text-slate-700" onClick={() => router.push(`/os/${os.id}`)}>
-                                                {(os.valor_total_centavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <div className="flex items-center justify-center gap-2">
-                                                    {os.status === 'aberta' && (
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleMoveStatus(os.id, 'em_analise'); }}
-                                                            className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-                                                            title="Iniciar Análise"
-                                                        >
-                                                            <ArrowRight size={14} />
-                                                        </button>
-                                                    )}
-                                                    {os.status === 'em_analise' && (
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleMoveStatus(os.id, 'em_execucao'); }}
-                                                            className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors"
-                                                            title="Iniciar Execução"
-                                                        >
-                                                            <ArrowRight size={14} />
-                                                        </button>
-                                                    )}
-                                                    {(os.status === 'em_execucao' || os.status === 'aguardando_peca') && (
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleMoveStatus(os.id, 'finalizada'); }}
-                                                            className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
-                                                            title="Finalizar"
-                                                        >
-                                                            <Plus size={14} />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* Pagination Controls */}
-                    {!loading && totalPages > 1 && (
-                        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 mt-auto bg-slate-50/30">
-                            <span className="text-sm text-slate-500">
-                                Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong> (Total de {totalItems} OS)
-                            </span>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                    disabled={currentPage === 1}
-                                    className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    Anterior
-                                </button>
-                                <button
-                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                    disabled={currentPage === totalPages}
-                                    className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    Próxima
-                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
+                        </tbody>
+                    </table>
+                    {orders.length === 0 && (
+                        <div className="py-20 text-center flex flex-col items-center justify-center bg-slate-50/20">
+                            <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4">
+                                <Search className="text-slate-200" size={32} />
                             </div>
+                            <h3 className="text-slate-800 font-bold">Nenhuma OS encontrada</h3>
+                            <p className="text-slate-400 text-sm">Tente ajustar sua busca ou filtros.</p>
                         </div>
                     )}
                 </div>
+            )}
+
+            {/* Modal de Edição */}
+            {showEditModal && selectedOS && (
+                <EditOSModal
+                    os={selectedOS}
+                    onClose={() => {
+                        setShowEditModal(false);
+                        setSelectedOS(null);
+                    }}
+                    onSuccess={() => {
+                        setShowEditModal(false);
+                        setSelectedOS(null);
+                        loadOS();
+                    }}
+                />
             )}
         </div>
     );

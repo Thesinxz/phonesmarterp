@@ -336,6 +336,26 @@ export async function gerarTokenTeste(osId: string): Promise<string> {
     return token;
 }
 
+export async function updateOS(osId: string, osData: any) {
+    const { data, error } = await (supabase.from("ordens_servico") as any)
+        .update(osData)
+        .eq("id", osId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function deleteOS(osId: string) {
+    const { error } = await (supabase.from("ordens_servico") as any)
+        .delete()
+        .eq("id", osId);
+
+    if (error) throw error;
+    return true;
+}
+
 // Buscar OS prontas (para a Prateleira de Abandono)
 export const getOrdensServicoFinalizadas = async (empresaId: string) => {
     try {

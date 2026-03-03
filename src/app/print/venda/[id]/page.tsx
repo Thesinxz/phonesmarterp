@@ -123,18 +123,17 @@ export default function VendaPrintPage() {
             </div>
 
             {/* Receipt Paper */}
-            <div className={`bg-white shadow-xl print:shadow-none print:m-0 mx-auto ${formatConfig === "80mm" ? "w-[300px] p-4 text-[11px] leading-snug font-mono" : "w-full max-w-3xl p-10 text-sm font-sans"}`}>
+            <div className={`bg-white shadow-xl print:shadow-none print:m-0 mx-auto ${formatConfig === "80mm" ? "w-[290px] p-2 text-[9px] leading-[1.1] font-sans" : "w-full max-w-3xl p-10 text-sm font-sans"}`}>
 
                 {/* Header ======================================================= */}
                 {formatConfig === "80mm" ? (
-                    <div className="text-center mb-4 border-b border-dashed border-slate-300 pb-3">
-                        <h2 className="font-bold text-sm uppercase">{empresa?.razao_social || empresa?.nome || "MINHA EMPRESA"}</h2>
-                        {empresa?.cnpj && <p>CNPJ: {empresa.cnpj}</p>}
-                        {empresa?.telefone && <p>Tel: {empresa.telefone}</p>}
-                        {empresa?.logradouro && <p>{empresa.logradouro}, {empresa.numero}</p>}
-                        <br />
-                        <h3 className="font-bold text-sm uppercase tracking-wider">RECIBO DE VENDA</h3>
-                        <p>#{venda.id.split('-')[0].toUpperCase()} • {format(new Date(venda.created_at), "dd/MM/yyyy HH:mm")}</p>
+                    <div className="text-center mb-2 border-b border-dashed border-slate-300 pb-2">
+                        <h2 className="font-bold text-[11px] uppercase">{empresa?.razao_social || empresa?.nome || "MINHA EMPRESA"}</h2>
+                        {empresa?.telefone && <p className="font-bold text-[10px]">{empresa.telefone}</p>}
+                        <div className="mt-1">
+                            <h3 className="font-black text-[10px] uppercase border border-black inline-block px-1 rounded-sm">Venda #{venda.id.split('-')[0].toUpperCase()}</h3>
+                            <p className="text-[7px] italic mt-0.5">{format(new Date(venda.created_at), "dd/MM/yyyy HH:mm")}</p>
+                        </div>
                     </div>
                 ) : (
                     <div className="flex justify-between items-start border-b border-slate-200 pb-6 mb-6">
@@ -180,42 +179,41 @@ export default function VendaPrintPage() {
                 )}
 
                 {/* Items ======================================================= */}
-                <div className="mb-4">
+                <div className="mb-2">
                     {formatConfig === "80mm" ? (
                         <div className="w-full">
-                            <div className="flex border-b border-slate-900 pb-1 mb-2 font-bold uppercase">
+                            <div className="flex border-b border-slate-900 pb-0.5 mb-1 font-bold uppercase text-[7px] tracking-wider opacity-60">
                                 <div className="flex-1">DESCRIÇÃO</div>
-                                <div className="w-12 text-center">QTD</div>
-                                <div className="w-16 text-right">TOTAL</div>
+                                <div className="w-16 text-right">VALOR</div>
                             </div>
                             {itens.map((item, i) => (
-                                <div key={i} className="mb-2">
-                                    <div className="uppercase line-clamp-2">{item.produtos?.nome || "Item Não Encontrado"}</div>
-                                    <div className="flex justify-between text-slate-500 mt-1">
-                                        <span>
+                                <div key={i} className="mb-1">
+                                    <div className="uppercase font-bold text-[10px] truncate">{item.produtos?.nome || "Item Não Encontrado"}</div>
+                                    <div className="flex justify-between items-center text-slate-600">
+                                        <span className="text-[8px]">
                                             {item.quantidade}x {(item.preco_unitario_centavos / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </span>
-                                        <span className="text-black font-bold">
+                                        <span className="text-black font-black text-[10px]">
                                             {(item.total_centavos / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </span>
                                     </div>
-                                    {item.produtos?.imei && <div>IMEI: {item.produtos.imei}</div>}
+                                    {item.produtos?.imei && <div className="text-[7px] text-indigo-600 bg-indigo-50 inline-block px-1 rounded-sm mt-0.5">IMEI: {item.produtos.imei}</div>}
                                 </div>
                             ))}
-                            <div className="border-t border-dashed border-slate-300 mt-3 pt-3">
+                            <div className="border-t border-dashed border-slate-300 mt-2 pt-2">
                                 {venda.desconto_centavos > 0 && (
-                                    <div className="flex justify-between mb-1">
-                                        <span>Desconto</span>
+                                    <div className="flex justify-between text-rose-600 font-bold mb-0.5">
+                                        <span className="uppercase text-[8px]">Desconto</span>
                                         <span>- {(venda.desconto_centavos / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                     </div>
                                 )}
-                                <div className="flex justify-between font-bold text-sm mt-1">
-                                    <span>TOTAL</span>
+                                <div className="flex justify-between font-black text-[12px] bg-slate-900 text-white p-2 rounded-lg mt-1">
+                                    <span className="uppercase text-[8px] self-center">TOTAL</span>
                                     <span>R$ {(venda.total_centavos / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                 </div>
-                                <div className="flex justify-between mt-1">
-                                    <span>Pagamento</span>
-                                    <span className="uppercase">{venda.forma_pagamento.replace('_', ' ')}</span>
+                                <div className="flex justify-between mt-1 text-[8px] font-bold text-slate-500 uppercase italic">
+                                    <span>Forma de Pagto:</span>
+                                    <span>{venda.forma_pagamento.replace('_', ' ')}</span>
                                 </div>
                             </div>
                         </div>

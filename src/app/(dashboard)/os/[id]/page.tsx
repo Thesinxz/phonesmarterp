@@ -19,15 +19,18 @@ import {
     RefreshCw,
     ArrowRight,
     LogOut,
-    QrCode
+    QrCode,
+    Edit3,
+    Trash2
 } from "lucide-react";
-import { getOrdemServicoById, updateOSStatus, gerarTokenTeste } from "@/services/os";
+import { getOrdemServicoById, updateOSStatus, gerarTokenTeste, deleteOS } from "@/services/os";
 import { type OsStatus } from "@/types/database";
 import { useAuth } from "@/context/AuthContext";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { ChecklistInspecao, type ChecklistData } from "@/components/os/ChecklistInspecao";
 import { AssinaturaPad } from "@/components/os/AssinaturaPad";
+import { EditOSModal } from "@/components/os/EditOSModal";
 import { cn } from "@/utils/cn";
 import { formatDate } from "@/utils/formatDate";
 import { notifyOSStatusChange } from "@/actions/notifications";
@@ -57,6 +60,7 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
     const [checklistSaida, setChecklistSaida] = useState<ChecklistData>({});
     const [assinatura, setAssinatura] = useState<string | null>(null);
     const [showEntrega, setShowEntrega] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
     const [tokenTeste, setTokenTeste] = useState<string | null>(null);
     const [gerandoQR, setGerandoQR] = useState(false);
     const [gerandoPDF, setGerandoPDF] = useState(false);
@@ -118,6 +122,21 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
             loadOS();
         } catch (error) {
             console.error("Erro ao atualizar status:", error);
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function handleDelete() {
+        if (!window.confirm("Tem certeza que deseja excluir permanentemente esta Ordem de Serviço? Esta ação não pode ser desfeita.")) return;
+        setSaving(true);
+        try {
+            await deleteOS(os.id);
+            toast.success("Ordem de Serviço excluída.");
+            router.push("/os");
+        } catch (error) {
+            console.error(error);
+            toast.error("Erro ao excluir OS.");
         } finally {
             setSaving(false);
         }
@@ -222,6 +241,21 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                 </div>
 
                 <div className="flex gap-2">
+                    <button
+                        onClick={() => setShowEditModal(true)}
+                        className="h-10 px-4 rounded-xl border border-slate-200 text-slate-600 flex items-center gap-2 text-sm font-bold hover:bg-slate-50 transition-all font-sans"
+                    >
+                        <Edit3 size={16} /> Editar
+                    </button>
+
+                    <button
+                        onClick={handleDelete}
+                        disabled={saving}
+                        className="h-10 px-4 rounded-xl border border-red-100 text-red-500 flex items-center gap-2 text-sm font-bold hover:bg-red-50 transition-all disabled:opacity-50 font-sans"
+                    >
+                        <Trash2 size={16} /> Excluir
+                    </button>
+
                     <button
                         onClick={handleExportPDF}
                         disabled={gerandoPDF}
@@ -598,6 +632,18 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Modal de Edição */}
+            {showEditModal && (
+                <EditOSModal
+                    os={os}
+                    onClose={() => setShowEditModal(false)}
+                    onSuccess={() => {
+                        setShowEditModal(false);
+                        loadOS();
+                    }}
+                />
             )}
         </div>
     );

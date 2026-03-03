@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Camera } from "lucide-react";
+import { Camera, RefreshCcw } from "lucide-react";
 
 interface TesteCameraProps {
     tipo: "traseira" | "frontal";
@@ -22,31 +22,49 @@ export function TesteCamera({ tipo, onResult }: TesteCameraProps) {
     useEffect(() => {
         async function getCameras() {
             try {
+                // Pedir permissão primeiro para ver os nomes das câmeras
+                await navigator.mediaDevices.getUserMedia({ video: true });
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const videoDevices = devices.filter(d => d.kind === "videoinput");
 
-                // Filtro heurístico baseado nas labels dos dispositivos (se conseguir)
-                // Se label for vazio ou não der pra distinguir, tentaremos abrir na hora usando o facingMode.
-                // Idealmente em mobile, getUserMedia já lida melhor. Mas vamos salvar todos e permitir o usuário alternar.
-
+                // Em iPhones, as labels são genéricas. 
+                // Vamos tentar filtrar o que parece ser traseira/frontal se possível, 
+                // mas a melhor forma é o facingMode no iniciar().
                 setCameras(videoDevices);
-            } catch {
-                setErro("Erro ao listar as câmeras disponíveis.");
+            } catch (err: any) {
+                console.error("Enum devices error:", err);
+                // Se falhar o enum, não bloqueamos, o iniciar() tentará o default
             }
         }
         getCameras();
     }, []);
 
+    useEffect(() => {
+        iniciar();
+        return () => {
+            stopStream();
+        };
+    }, []);
+
+    const stopStream = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(t => t.stop());
+            streamRef.current = null;
+        }
+    };
+
     const iniciar = async (deviceId?: string) => {
         try {
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach(t => t.stop());
-            }
+            stopStream();
 
             const constraints: MediaStreamConstraints = {
                 video: deviceId
                     ? { deviceId: { exact: deviceId } }
-                    : { facingMode: tipo === "traseira" ? "environment" : "user", width: { ideal: 1280 } }
+                    : {
+                        facingMode: { ideal: tipo === "traseira" ? "environment" : "user" },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
             };
 
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -54,31 +72,31 @@ export function TesteCamera({ tipo, onResult }: TesteCameraProps) {
 
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
-                videoRef.current.play();
+                // Forçar o play
+                try {
+                    await videoRef.current.play();
+                } catch (e) {
+                    console.log("Auto-play blocked, waiting for interaction");
+                }
             }
             setStreaming(true);
             setErro(null);
-        } catch (err) {
-            setErro("Falha ao abrir câmera. Verifique permissões.");
+        } catch (err: any) {
+            console.error("Camera error:", err);
+            setErro(`Não foi possível abrir a câmera ${tipo}. Erro: ${err.name}`);
             setStreaming(false);
         }
     };
 
     const nextCamera = () => {
-        if (cameras.length === 0) return;
-        const nextIndex = (cameraIndex + 1) % cameras.length;
-        setCameraIndex(nextIndex);
-        iniciar(cameras[nextIndex].deviceId);
+        if (cameras.length < 2) return;
+        const nextIdx = (cameraIndex + 1) % cameras.length;
+        setCameraIndex(nextIdx);
+        iniciar(cameras[nextIdx].deviceId);
     };
 
-    useEffect(() => {
-        return () => {
-            streamRef.current?.getTracks().forEach(t => t.stop());
-        };
-    }, []);
-
     const finish = (result: boolean) => {
-        streamRef.current?.getTracks().forEach(t => t.stop());
+        stopStream();
         onResult(result);
     };
 
@@ -90,23 +108,39 @@ export function TesteCamera({ tipo, onResult }: TesteCameraProps) {
                 </h3>
                 <p className="text-white/60 text-sm">
                     {streaming
-                        ? cameras.length > 1 ? "Verifique todas as lentes traseiras do aparelho caso existam várias." : "Verifique se a imagem está limpa e sem manchas."
+                        ? "Verifique se a imagem está limpa. Se houver várias lentes traseiras, alterne abaixo se necessário."
                         : "Toque abaixo para abrir e testar."}
                 </p>
                 {streaming && cameras.length > 1 && (
-                    <p className="text-indigo-400 text-xs font-bold mt-2">
-                        Câmera {cameraIndex + 1} de {cameras.length}
+                    <p className="text-indigo-400 text-[10px] font-black uppercase tracking-widest mt-2">
+                        Sensor {cameraIndex + 1} de {cameras.length}
                     </p>
                 )}
             </div>
 
-            <div className="w-full aspect-[4/3] bg-black rounded-3xl overflow-hidden border-4 border-white/10 relative shadow-xl">
+            <div className="w-full aspect-square md:aspect-video bg-black rounded-3xl overflow-hidden border-4 border-white/10 relative shadow-2xl">
                 {streaming ? (
-                    <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
+                    <video
+                        ref={videoRef}
+                        className="w-full h-full object-cover"
+                        autoPlay
+                        playsInline
+                        muted
+                    />
                 ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-                        <Camera size={48} className="text-white/30" />
-                        {erro && <p className="text-red-400 text-xs px-4 text-center bg-red-500/10 py-2 rounded-xl border border-red-500/20">{erro}</p>}
+                        <Camera size={48} className="text-white/20" />
+                        {erro && (
+                            <div className="px-6 text-center">
+                                <p className="text-red-400 text-xs mb-4">{erro}</p>
+                                <button
+                                    onClick={() => iniciar()}
+                                    className="px-4 py-2 bg-white/10 rounded-full text-white text-xs font-bold"
+                                >
+                                    Tentar Novamente
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -114,34 +148,35 @@ export function TesteCamera({ tipo, onResult }: TesteCameraProps) {
             {streaming && cameras.length > 1 && (
                 <button
                     onClick={nextCamera}
-                    className="w-full py-3 rounded-2xl bg-white/10 border border-white/20 text-white font-bold text-sm active:scale-95 transition-transform"
+                    className="w-full py-4 rounded-2xl bg-white/10 border border-white/20 text-white font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"
                 >
-                    🔄 Testar Próxima Lente ({cameraIndex + 1}/{cameras.length})
+                    <RefreshCcw size={16} />
+                    Mudar Lente / Sensor ({cameraIndex + 1}/{cameras.length})
                 </button>
             )}
 
             {!streaming && !erro && (
                 <button
                     onClick={() => iniciar()}
-                    className="w-full py-4 rounded-2xl bg-indigo-600 text-white font-bold text-lg active:scale-95 transition-transform shadow-lg shadow-indigo-500/30"
+                    className="w-full py-5 rounded-2xl bg-indigo-600 text-white font-bold text-lg active:scale-95 transition-transform shadow-xl shadow-indigo-500/30"
                 >
-                    📸 Ativar Câmera
+                    📸 Abrir Câmera
                 </button>
             )}
 
             {streaming && (
-                <div className="flex gap-3 w-full animate-in slide-in-from-bottom-4 fade-in">
-                    <button onClick={() => finish(true)} className="flex-1 py-4 rounded-2xl bg-emerald-600 text-white font-bold text-lg active:scale-95 transition-transform shadow-lg shadow-emerald-500/30">
-                        ✅ OK
+                <div className="grid grid-cols-2 gap-3 w-full animate-in slide-in-from-bottom-4 fade-in duration-500">
+                    <button onClick={() => finish(true)} className="py-5 rounded-2xl bg-emerald-600 text-white font-black text-xl active:scale-95 transition-transform shadow-lg shadow-emerald-500/30">
+                        OK
                     </button>
-                    <button onClick={() => finish(false)} className="flex-1 py-4 rounded-2xl bg-red-600 text-white font-bold text-lg active:scale-95 transition-transform shadow-lg shadow-red-500/30">
-                        ❌ Defeito
+                    <button onClick={() => finish(false)} className="py-5 rounded-2xl bg-red-600 text-white font-black text-xl active:scale-95 transition-transform shadow-lg shadow-red-500/30">
+                        FALHA
                     </button>
                 </div>
             )}
 
-            {erro && (
-                <button onClick={() => finish(false)} className="text-white/40 text-xs underline mt-4 bg-black/20 px-4 py-2 rounded-full">
+            {(erro || !streaming) && (
+                <button onClick={() => finish(false)} className="text-white/30 text-[10px] font-bold uppercase tracking-widest mt-2 hover:text-white/50 transition-colors">
                     Pular e Marcar como Defeito
                 </button>
             )}

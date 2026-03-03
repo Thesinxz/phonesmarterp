@@ -5,7 +5,7 @@ export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     // Rotas públicas: não precisam de verificação de auth
-    const publicPaths = ["/", "/login", "/cadastro", "/recuperar-senha", "/nova-senha", "/verificar-email", "/landing", "/auth/callback"];
+    const publicPaths = ["/", "/login", "/cadastro", "/recuperar-senha", "/nova-senha", "/verificar-email", "/landing", "/auth/callback", "/teste"];
     const isPublicPath = publicPaths.includes(pathname) || publicPaths.some((p) => p !== "/" && pathname.startsWith(p));
     const isApiPath = pathname.startsWith("/api");
 

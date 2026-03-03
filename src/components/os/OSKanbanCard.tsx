@@ -1,6 +1,6 @@
 "use client";
 
-import { Smartphone, User, Clock, AlertCircle, MoreHorizontal, ArrowRight } from "lucide-react";
+import { Smartphone, User, Clock, AlertCircle, MoreHorizontal, ArrowRight, Edit3, Trash2 } from "lucide-react";
 import { type OrdemServico } from "@/types/database";
 import { cn } from "@/utils/cn";
 import { formatDate, formatRelative } from "@/utils/formatDate";
@@ -17,9 +17,11 @@ interface OSKanbanCardProps {
     };
     onClick?: () => void;
     onMoveStatus?: (osId: string, status: string) => void;
+    onDelete?: (osId: string) => void;
+    onEdit?: (osId: string) => void;
 }
 
-export function OSKanbanCard({ os, onClick, onMoveStatus }: OSKanbanCardProps) {
+export function OSKanbanCard({ os, onClick, onMoveStatus, onDelete, onEdit }: OSKanbanCardProps) {
     const priorityColors: any = {
         baixa: "border-l-slate-300",
         media: "border-l-blue-400",
@@ -58,6 +60,32 @@ export function OSKanbanCard({ os, onClick, onMoveStatus }: OSKanbanCardProps) {
                     </button>
                     {/* Simple CSS Dropdown */}
                     <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-xl border border-slate-100 p-1 z-10 hidden group-hover/menu:block">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onEdit?.(os.id);
+                            }}
+                            className="w-full text-left px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-lg transition-colors flex items-center gap-2"
+                        >
+                            <Edit3 size={12} className="opacity-50" />
+                            Editar OS
+                        </button>
+
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm("Deseja excluir permanentemente esta OS?")) {
+                                    onDelete?.(os.id);
+                                }
+                            }}
+                            className="w-full text-left px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2"
+                        >
+                            <Trash2 size={12} className="opacity-50" />
+                            Excluir OS
+                        </button>
+
+                        <div className="h-px bg-slate-100 my-1" />
+
                         <p className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mover para...</p>
                         {[
                             { label: "Em Análise", value: "em_analise" },

@@ -9,6 +9,7 @@ import { TesteCamera } from "@/components/teste/TesteCamera";
 import { TesteMicrofone } from "@/components/teste/TesteMicrofone";
 import { TesteVibracao } from "@/components/teste/TesteVibracao";
 import { TesteConectividade } from "@/components/teste/TesteConectividade";
+import { TesteBluetooth } from "@/components/teste/TesteBluetooth";
 
 interface OSInfo {
     numero: number;
@@ -34,6 +35,7 @@ const TESTES: TesteStep[] = [
     { id: "camera_frontal", label: "Câmera Frontal", emoji: "🤳" },
     { id: "microfone", label: "Microfone", emoji: "🎤" },
     { id: "wifi", label: "Wi-Fi / Internet", emoji: "📶" },
+    { id: "bluetooth", label: "Bluetooth", emoji: "🔹" },
 ];
 
 export default function TestePage({ params }: { params: { token: string } }) {
@@ -47,6 +49,19 @@ export default function TestePage({ params }: { params: { token: string } }) {
     useEffect(() => {
         carregarOS();
     }, []);
+
+    const toggleFullscreen = () => {
+        const doc = document.documentElement;
+        if (!document.fullscreenElement) {
+            if (doc.requestFullscreen) {
+                doc.requestFullscreen().catch(err => console.log(err));
+            } else if ((doc as any).webkitRequestFullscreen) { /* Safari */
+                (doc as any).webkitRequestFullscreen();
+            } else if ((doc as any).msRequestFullscreen) { /* IE11 */
+                (doc as any).msRequestFullscreen();
+            }
+        }
+    };
 
     async function carregarOS() {
         try {
@@ -89,6 +104,8 @@ export default function TestePage({ params }: { params: { token: string } }) {
             if (!res.ok) {
                 const data = await res.json();
                 alert(data.error || "Erro ao enviar");
+            } else {
+                setEstado("done");
             }
         } catch {
             alert("Erro de conexão");
@@ -102,7 +119,7 @@ export default function TestePage({ params }: { params: { token: string } }) {
     // === TELA DE LOADING ===
     if (estado === "loading") {
         return (
-            <div className="min-h-screen flex items-center justify-center">
+            <div className="min-h-screen flex items-center justify-center bg-slate-950">
                 <div className="text-center">
                     <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                     <p className="text-white/60">Carregando teste...</p>
@@ -114,7 +131,7 @@ export default function TestePage({ params }: { params: { token: string } }) {
     // === TELA DE ERRO ===
     if (estado === "error") {
         return (
-            <div className="min-h-screen flex items-center justify-center p-6">
+            <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950">
                 <div className="text-center max-w-sm">
                     <XCircle size={64} className="text-red-500 mx-auto mb-4" />
                     <h1 className="text-xl font-bold text-white mb-2">Teste Indisponível</h1>
@@ -127,7 +144,7 @@ export default function TestePage({ params }: { params: { token: string } }) {
     // === TELA INICIAL ===
     if (estado === "ready") {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center p-6">
+            <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-950">
                 <div className="text-center max-w-sm">
                     <div className="w-20 h-20 rounded-full bg-indigo-500/20 flex items-center justify-center mx-auto mb-6">
                         <Smartphone size={40} className="text-indigo-400" />
@@ -156,11 +173,17 @@ export default function TestePage({ params }: { params: { token: string } }) {
                     </div>
 
                     <button
-                        onClick={() => setEstado("testing")}
+                        onClick={() => {
+                            setEstado("testing");
+                            toggleFullscreen();
+                        }}
                         className="w-full mt-8 py-5 rounded-2xl bg-indigo-600 text-white font-bold text-xl active:scale-95 transition-transform shadow-xl shadow-indigo-500/30"
                     >
                         ▶ Iniciar Diagnóstico
                     </button>
+                    <p className="mt-4 text-[10px] text-white/30 uppercase font-bold tracking-widest">
+                        Recomendado: Usar em tela cheia
+                    </p>
                 </div>
             </div>
         );
@@ -171,7 +194,7 @@ export default function TestePage({ params }: { params: { token: string } }) {
         const testeAtual = TESTES[stepAtual];
 
         return (
-            <div className="min-h-screen flex flex-col">
+            <div className="min-h-screen flex flex-col bg-slate-950">
                 {/* Barra de progresso */}
                 <div className="sticky top-0 z-50 bg-slate-900/80 backdrop-blur-md border-b border-white/5 p-4 safe-area-top">
                     <div className="flex items-center justify-between mb-2">
@@ -209,6 +232,7 @@ export default function TestePage({ params }: { params: { token: string } }) {
                     {testeAtual.id === "camera_traseira" && <TesteCamera tipo="traseira" onResult={(ok) => handleResult(testeAtual.id, ok)} />}
                     {testeAtual.id === "camera_frontal" && <TesteCamera tipo="frontal" onResult={(ok) => handleResult(testeAtual.id, ok)} />}
                     {testeAtual.id === "microfone" && <TesteMicrofone onResult={(ok) => handleResult(testeAtual.id, ok)} />}
+                    {testeAtual.id === "bluetooth" && <TesteBluetooth onResult={(ok) => handleResult(testeAtual.id, ok)} />}
                     {testeAtual.id === "wifi" && <TesteConectividade onResult={(ok) => handleResult(testeAtual.id, ok)} />}
                 </div>
             </div>
@@ -222,7 +246,7 @@ export default function TestePage({ params }: { params: { token: string } }) {
         const tudoOk = totalDefeito === 0;
 
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center p-6">
+            <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-950">
                 <div className="text-center max-w-sm w-full">
                     <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 ${tudoOk ? "bg-emerald-500/20" : "bg-amber-500/20"
                         }`}>
@@ -242,14 +266,13 @@ export default function TestePage({ params }: { params: { token: string } }) {
                         }
                     </p>
 
-                    {/* Resumo */}
-                    <div className="bg-white/5 rounded-2xl border border-white/10 p-4 mb-6 text-left">
+                    <div className="bg-white/5 rounded-2xl border border-white/10 p-4 mb-6 text-left max-h-60 overflow-y-auto scrollbar-thin">
                         <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">Resultado</p>
                         <div className="space-y-2">
                             {TESTES.map(t => {
                                 const r = resultados[t.id];
                                 return (
-                                    <div key={t.id} className="flex items-center justify-between py-1">
+                                    <div key={t.id} className="flex items-center justify-between py-1 border-b border-white/5 last:border-0">
                                         <span className="text-white/80 text-sm flex items-center gap-2">
                                             <span>{t.emoji}</span> {t.label}
                                         </span>
