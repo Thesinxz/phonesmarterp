@@ -15,7 +15,7 @@ export function TesteBluetooth({ onResult }: TesteBluetoothProps) {
         setEstado("scanning");
         setErro("");
 
-        if (!navigator.bluetooth) {
+        if (!(navigator as any).bluetooth) {
             setEstado("erro");
             setErro("Bluetooth não suportado neste navegador ou aparelho.");
             return;
@@ -24,13 +24,13 @@ export function TesteBluetooth({ onResult }: TesteBluetoothProps) {
         try {
             // No Web Bluetooth, para "testar" se funciona, geralmente precisamos pedir um dispositivo.
             // Mas podemos apenas verificar se o adaptador está ligado.
-            const available = await navigator.bluetooth.getAvailability();
+            const available = await (navigator as any).bluetooth.getAvailability();
 
             if (available) {
                 // Tentar uma requisição simples apenas para ver se o browser abre o prompt
                 // O usuário não precisa parear nada, só ver se o sistema de bluetooth responde
                 try {
-                    await navigator.bluetooth.requestDevice({
+                    await (navigator as any).bluetooth.requestDevice({
                         acceptAllDevices: true
                     });
                     setEstado("ok");
@@ -57,8 +57,8 @@ export function TesteBluetooth({ onResult }: TesteBluetoothProps) {
     return (
         <div className="flex flex-col items-center gap-6 p-6">
             <div className={`w-24 h-24 rounded-full flex items-center justify-center transition-all ${estado === "scanning" ? "bg-blue-500/30 animate-pulse" :
-                    estado === "ok" ? "bg-emerald-500/20" :
-                        estado === "erro" ? "bg-red-500/20" : "bg-indigo-500/20"
+                estado === "ok" ? "bg-emerald-500/20" :
+                    estado === "erro" ? "bg-red-500/20" : "bg-indigo-500/20"
                 }`}>
                 <Bluetooth size={48} className={
                     estado === "scanning" ? "text-blue-400" :
