@@ -5,11 +5,12 @@ import { createClient } from "@/lib/supabase/client";
 
 interface RealtimeOptions {
     table: string;
-    filter?: string;
+    filter?: string | null;
     callback: (payload: any) => void;
+    enabled?: boolean;
 }
 
-export function useRealtimeSubscription({ table, filter, callback }: RealtimeOptions) {
+export function useRealtimeSubscription({ table, filter, callback, enabled = true }: RealtimeOptions) {
     const callbackRef = useRef(callback);
 
     // Update ref when callback changes, without triggering useEffect
@@ -18,6 +19,10 @@ export function useRealtimeSubscription({ table, filter, callback }: RealtimeOpt
     }, [callback]);
 
     useEffect(() => {
+        // Se enabled for explicitamente falso, ou se o filter está indefinido (ex: profile carregando)
+        // Obs: Se filter for explicitamente null (sem filtro), nós permitimos. Mas undefined aborta.
+        if (!enabled || filter === undefined) return;
+
         const supabase = createClient();
         const channelId = `realtime-${table}-${filter || 'all'}-${Math.random().toString(36).substring(7)}`;
 
@@ -29,7 +34,7 @@ export function useRealtimeSubscription({ table, filter, callback }: RealtimeOpt
                     event: "*",
                     schema: "public",
                     table: table,
-                    filter: filter
+                    filter: filter === null ? undefined : filter
                 },
                 (payload: any) => {
                     callbackRef.current(payload);
@@ -37,19 +42,19 @@ export function useRealtimeSubscription({ table, filter, callback }: RealtimeOpt
             )
             .subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log(`[Realtime] Subscribed to ${table}${filter ? ` (${filter})` : ''}`);
+                    console.log(`[Realtime] ✅ Subscribed to ${table}${filter ? ` (${filter})` : ''}`);
                 }
                 if (status === 'CHANNEL_ERROR') {
-                    console.error(`[Realtime] Channel error for ${table}`);
+                    console.error(`[Realtime] ❌ Channel error for ${table}`);
                 }
                 if (status === 'TIMED_OUT') {
-                    console.error(`[Realtime] Timeout for ${table}`);
+                    console.error(`[Realtime] ⏰ Timeout for ${table}`);
                 }
             });
 
         return () => {
-            console.log(`[Realtime] Unsubscribing from ${table}`);
+            console.log(`[Realtime] 🔌 Unsubscribing from ${table}`);
             supabase.removeChannel(channel);
         };
-    }, [table, filter]); // Removed callback from dependencies
+    }, [table, filter, enabled]);
 }

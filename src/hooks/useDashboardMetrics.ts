@@ -78,11 +78,6 @@ export function useDashboardMetrics() {
     const supabase = createClient();
 
     const fetchMetrics = async (background = false) => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-            console.warn("[Dashboard] Sessão não pronta, adiando fetch...");
-            return;
-        }
         if (!background) setLoading(true);
         try {
             // ──── Métricas Top Cards ────────────────────────────────
