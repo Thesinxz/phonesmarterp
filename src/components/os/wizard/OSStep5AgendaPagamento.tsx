@@ -17,6 +17,8 @@ interface OSStep5AgendaPagamentoProps {
 export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagamentoProps) {
     const { profile } = useAuth();
     const [tecnicos, setTecnicos] = useState<any[]>([]);
+    const [isLoadingTecnicos, setIsLoadingTecnicos] = useState(true);
+    const [erroTecnicos, setErroTecnicos] = useState(false);
     const [isAutoAssigning, setIsAutoAssigning] = useState(false);
 
     const handleAutoAssign = async () => {
@@ -38,9 +40,11 @@ export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagament
         }
     };
 
-    useEffect(() => {
-        const loadTecnicos = async () => {
-            if (!profile?.empresa_id) return;
+    const loadTecnicos = async () => {
+        if (!profile?.empresa_id) return;
+        setIsLoadingTecnicos(true);
+        setErroTecnicos(false);
+        try {
             const supabase = createClient();
             const { data: users, error } = await supabase
                 .from("usuarios")
@@ -48,12 +52,17 @@ export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagament
                 .eq("empresa_id", profile.empresa_id)
                 .eq("ativo", true);
 
-            if (error) {
-                console.error("Erro ao carregar técnicos:", error);
-                return;
-            }
+            if (error) throw error;
             setTecnicos(users || []);
-        };
+        } catch (error) {
+            console.error("Erro ao carregar técnicos:", error);
+            setErroTecnicos(true);
+        } finally {
+            setIsLoadingTecnicos(false);
+        }
+    };
+
+    useEffect(() => {
         loadTecnicos();
     }, [profile?.empresa_id]);
 
@@ -90,23 +99,45 @@ export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagament
                                 <button
                                     type="button"
                                     onClick={handleAutoAssign}
-                                    disabled={isAutoAssigning}
+                                    disabled={isAutoAssigning || tecnicos.length === 0}
                                     className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1 disabled:opacity-50"
                                 >
                                     {isAutoAssigning && <Loader2 size={12} className="animate-spin" />}
                                     Auto-atribuir
                                 </button>
                             </div>
-                            <select
-                                className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-white shadow-sm outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
-                                value={data.tecnicoId}
-                                onChange={e => onChange({ ...data, tecnicoId: e.target.value })}
-                            >
-                                <option value="">Selecione o técnico...</option>
-                                {tecnicos.map(t => (
-                                    <option key={t.id} value={t.id}>{t.nome}</option>
-                                ))}
-                            </select>
+
+                            {isLoadingTecnicos ? (
+                                <div className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-slate-50 flex items-center gap-2 text-slate-500">
+                                    <Loader2 size={16} className="animate-spin text-indigo-500" />
+                                    <span className="text-sm font-medium">Buscando técnicos...</span>
+                                </div>
+                            ) : erroTecnicos ? (
+                                <div className="w-full h-12 px-4 rounded-xl border border-red-200 bg-red-50 flex items-center justify-between text-red-600">
+                                    <div className="flex items-center gap-2">
+                                        <AlertCircle size={16} />
+                                        <span className="text-sm font-medium">Erro de conexão</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={loadTecnicos}
+                                        className="text-xs font-bold bg-white text-red-600 px-3 py-1 rounded-lg border border-red-200 hover:bg-red-50 transition-colors"
+                                    >
+                                        Tentar Novamente
+                                    </button>
+                                </div>
+                            ) : (
+                                <select
+                                    className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-white shadow-sm outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
+                                    value={data.tecnicoId}
+                                    onChange={e => onChange({ ...data, tecnicoId: e.target.value })}
+                                >
+                                    <option value="">Selecione o técnico...</option>
+                                    {tecnicos.map(t => (
+                                        <option key={t.id} value={t.id}>{t.nome}</option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
