@@ -267,13 +267,21 @@ export async function getCampanhas(page = 1, limit = 20) {
 }
 
 export async function createCampanha(campanha: Omit<MarketingCampanha, "id" | "created_at" | "enviado_em" | "total_enviados" | "total_falhas">) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // Prevent schema cache errors from unused columns in Postgres
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { mensagem_preview, ...safeCampanha } = campanha as any;
+
     const { data, error } = await (supabase.from("marketing_campanhas") as any)
-        .insert(campanha)
+        .insert(safeCampanha)
         .select()
         .single();
 
-    if (error) throw error;
+    if (error) {
+        if (error.code === 'PGRST204' || error.message?.includes('schema cache')) {
+            console.error("Schema cache desatualizado, tentando bypass...", error);
+        }
+        throw error;
+    }
     return data as MarketingCampanha;
 }
 

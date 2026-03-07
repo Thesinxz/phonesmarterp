@@ -963,12 +963,50 @@ export default function ConfiguracoesPage() {
                                 <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl mb-6 flex items-start gap-3">
                                     <MessageSquare size={20} className="text-emerald-600 shrink-0 mt-0.5" />
                                     <div>
-                                        <p className="font-bold text-emerald-800 text-sm">Notificações Automáticas</p>
-                                        <p className="text-xs text-emerald-600 mt-0.5">
-                                            Envie mensagens automáticas quando uma OS mudar de status, quando uma venda for concluída ou quando o estoque estiver baixo.
+                                        <p className="font-bold text-emerald-800 text-sm">Integração Oficial (Meta Cloud API)</p>
+                                        <p className="text-xs text-emerald-600 mt-0.5 leading-relaxed">
+                                            Utilizado para o envio de respostas em fluxos e notificações automáticas via sistema (mudança de OS, estoque baixo e campanhas em massa).
                                         </p>
+                                        <div className="mt-3 p-3 bg-white/60 rounded-lg border border-emerald-200/50">
+                                            <p className="text-xs font-bold text-emerald-800 mb-1 flex items-center gap-1.5 flex-wrap">
+                                                <AlertTriangle size={14} className="text-amber-500" />
+                                                IMPORTANTE: Limitações da API Oficial
+                                            </p>
+                                            <p className="text-xs text-emerald-700">
+                                                A API Oficial da Meta <strong>desconecta o seu número do aplicativo móvel do WhatsApp (ou Web).</strong> <br />
+                                                O número configurado aqui funcionará <strong>exclusivamente via sistema</strong> e você não sentirá as notificações no bolso.
+                                                <br />Recomendamos <strong>configurar um número separado</strong> (um chip secundário só para envios) ou <strong>não utilizar essa função</strong> se a sua loja usar um número principal na mão do atendente.
+                                                <br />O SmartOS não disponibiliza uma interface de "Caixa de Entrada/Bate-Papo" para responder os clientes, sua finalidade atual é estritamente envio de alertas.
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
+
+                                <div className="mb-8 bg-slate-50 border border-slate-100 rounded-2xl p-5">
+                                    <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-black">?</div>
+                                        Mini Tutorial: Como Configurar um Número Dedicado
+                                    </h4>
+                                    <ul className="text-xs text-slate-600 space-y-3">
+                                        <li className="flex gap-2">
+                                            <span className="font-bold text-slate-400">1.</span>
+                                            <span>Acesse <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="text-brand-500 hover:underline font-medium">developers.facebook.com</a>, crie um "App" do tipo "Empresa" e adicione o produto "WhatsApp".</span>
+                                        </li>
+                                        <li className="flex gap-2">
+                                            <span className="font-bold text-slate-400">2.</span>
+                                            <span>Em "Configurações da API", você encontrará um <strong>Token de Acesso</strong> temporário (ou crie um permanente via Usuário de Sistema) e o <strong>Identificador do Número de Telefone</strong> (Phone Number ID).</span>
+                                        </li>
+                                        <li className="flex gap-2">
+                                            <span className="font-bold text-slate-400">3.</span>
+                                            <span>Copie e cole ambos os códigos nos campos abaixo.</span>
+                                        </li>
+                                        <li className="flex gap-2">
+                                            <span className="font-bold text-slate-400">4.</span>
+                                            <span>Em Gerenciador de WhatsApp no painel da Meta, crie os <a href="/marketing/templates" className="text-brand-500 hover:underline">Templates de Mensagem</a> que desejar.</span>
+                                        </li>
+                                    </ul>
+                                </div>
+
                                 <div className="space-y-4">
                                     <div>
                                         <label className="label-sm">Token de Acesso (Meta Business)</label>
@@ -978,9 +1016,6 @@ export default function ConfiguracoesPage() {
                                             value={whatsappConfig.api_token || ""}
                                             onChange={e => setWhatsappConfig(p => ({ ...p, api_token: e.target.value }))}
                                         />
-                                        <p className="text-[10px] text-slate-400 mt-1">
-                                            Obtenha em: <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="text-brand-500 underline">developers.facebook.com</a>
-                                        </p>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
@@ -1000,10 +1035,11 @@ export default function ConfiguracoesPage() {
                                             />
                                         </div>
                                     </div>
-                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+
+                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl mt-6">
                                         <div>
-                                            <p className="font-bold text-slate-700 text-sm">Ativar Notificações</p>
-                                            <p className="text-xs text-slate-400">Enviar mensagens automáticas via WhatsApp</p>
+                                            <p className="font-bold text-slate-700 text-sm">Ativar Integração</p>
+                                            <p className="text-xs text-slate-400">Habilitar envio via WhatsApp Business API</p>
                                         </div>
                                         <button
                                             onClick={() => setWhatsappConfig(p => ({ ...p, enabled: !p.enabled }))}
@@ -1021,7 +1057,7 @@ export default function ConfiguracoesPage() {
                                 </div>
                                 <div className="flex justify-end mt-6">
                                     <button onClick={() => saveConfig("whatsapp", whatsappConfig)} disabled={saving} className="btn-primary">
-                                        <Save size={16} />
+                                        {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                                         Salvar WhatsApp
                                     </button>
                                 </div>

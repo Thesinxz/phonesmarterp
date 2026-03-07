@@ -23,15 +23,17 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { formatDate } from "@/utils/formatDate";
 import {
-    getCampanhas,
-    createCampanha,
-    deleteCampanha,
-    updateCampanha,
     getTemplates,
     getClientesSegmentados,
     type MarketingCampanha,
     type MarketingTemplate
 } from "@/services/marketing";
+import {
+    createCampanhaAdmin,
+    deleteCampanhaAdmin,
+    updateCampanhaAdmin,
+    getCampanhasAdmin
+} from "@/actions/marketing";
 
 const SEGMENTOS = [
     { id: "todos", label: "Todos os Clientes", icon: Users, color: "bg-slate-100 text-slate-600" },
@@ -70,10 +72,11 @@ export default function CampanhasPage() {
     }, [profile?.empresa_id]);
 
     async function loadData() {
+        if (!profile?.empresa_id) return;
         setLoading(true);
         try {
             const [campData, templData] = await Promise.all([
-                getCampanhas(),
+                getCampanhasAdmin(profile.empresa_id),
                 getTemplates()
             ]);
             setCampanhas(campData.data);
@@ -127,7 +130,7 @@ export default function CampanhasPage() {
             return;
         }
         try {
-            await createCampanha({
+            await createCampanhaAdmin({
                 empresa_id: profile.empresa_id,
                 nome: formNome,
                 template_nome: formTemplate,
@@ -149,7 +152,7 @@ export default function CampanhasPage() {
     const handleDelete = async (id: string) => {
         if (!confirm("Excluir esta campanha?")) return;
         try {
-            await deleteCampanha(id);
+            await deleteCampanhaAdmin(id);
             toast.success("Campanha excluída!");
             loadData();
         } catch (error) {
@@ -167,7 +170,7 @@ export default function CampanhasPage() {
             const clientes = await getClientesSegmentados(campanha.segmento?.tipo || "todos");
 
             // Atualiza status para "enviando"
-            await updateCampanha(campanha.id, {
+            await updateCampanhaAdmin(campanha.id, {
                 status: "enviando",
                 total_destinatarios: clientes.length,
                 enviado_em: new Date().toISOString()
@@ -181,7 +184,7 @@ export default function CampanhasPage() {
             toast.info(`Iniciando envio para ${clientes.length} clientes...`);
 
             // Atualiza como concluída
-            await updateCampanha(campanha.id, {
+            await updateCampanhaAdmin(campanha.id, {
                 status: "concluida",
                 total_enviados: clientes.length,
                 total_falhas: 0
@@ -192,7 +195,7 @@ export default function CampanhasPage() {
         } catch (error: any) {
             console.error("Erro ao enviar:", error);
             toast.error(`Erro ao enviar campanha: ${error.message}`);
-            await updateCampanha(campanha.id, { status: "erro" });
+            await updateCampanhaAdmin(campanha.id, { status: "erro" });
             loadData();
         } finally {
             setSending(null);
