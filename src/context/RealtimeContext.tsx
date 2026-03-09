@@ -1,4 +1,5 @@
 "use client";
+import { logger } from "@/lib/logger";
 
 import { createContext, useContext, useEffect, ReactNode } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -19,7 +20,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!profile) return;
 
-        console.log("[RealtimeProvider] Initializing global subscriptions for profile:", profile.id);
+        logger.log("[RealtimeProvider] Initializing global subscriptions for profile:", profile.id);
 
         // Global listeners could be added here
         // For example, if we want to listen for global system alerts or specific company-wide events
@@ -34,13 +35,13 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
                     table: "configuracoes", // Example: listen for setting changes
                 },
                 (payload) => {
-                    console.log("[RealtimeProvider] Settings change detected:", payload);
+                    logger.log("[RealtimeProvider] Settings change detected:", payload);
                     // toast.info("Configurações atualizadas!");
                 }
             )
             .subscribe((status) => {
                 if (status === "SUBSCRIBED") {
-                    console.log("[RealtimeProvider] Subscribed to global events");
+                    logger.log("[RealtimeProvider] Subscribed to global events");
                 }
             });
 

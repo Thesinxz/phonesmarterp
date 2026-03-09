@@ -217,7 +217,7 @@ export function Sidebar() {
     return (
         <aside className="fixed left-0 top-0 h-screen w-[260px] bg-sidebar-gradient flex flex-col z-40 shadow-xl">
             {/* Logo */}
-            <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10 mb-2">
+            <Link href="/dashboard" className="flex items-center gap-3 px-6 py-5 border-b border-white/10 mb-2 hover:bg-white/5 transition-colors cursor-pointer">
                 <div className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center shadow-brand-glow">
                     <Zap className="w-5 h-5 text-white" />
                 </div>
@@ -225,7 +225,7 @@ export function Sidebar() {
                     <p className="text-white font-bold text-sm leading-tight">Phone Smart</p>
                     <p className="text-white/50 text-xs">ERP v2.0</p>
                 </div>
-            </div>
+            </Link>
 
             {/* Navigation */}
             <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-0.5 scrollbar-none">

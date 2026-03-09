@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { X, User, Mail, Shield, CheckCircle2, Loader2, Save, KeyRound, Trash2 } from "lucide-react";
-import { type Usuario, criarMembroEquipe, atualizarMembroEquipe, excluirMembroEquipe, ROLE_PERMISSIONS } from "@/services/equipe";
+import { type Usuario, criarMembroEquipe, ROLE_PERMISSIONS } from "@/services/equipe";
+import { updateMembroEquipeAction, deleteMembroEquipeAction } from "@/actions/equipe";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { cn } from "@/utils/cn";
@@ -73,7 +74,9 @@ export default function MembroModal({ isOpen, onClose, onSuccess, membro }: Memb
             const loadingToast = toast.loading(membro ? "Atualizando..." : "Gerando convite...");
 
             if (membro) {
-                await atualizarMembroEquipe(membro.id, form);
+                const result = await updateMembroEquipeAction(membro.id, form);
+                if (!result.success) throw new Error(result.error);
+
                 toast.success("Membro atualizado com sucesso", { id: loadingToast });
                 onSuccess();
                 onClose();
@@ -113,7 +116,9 @@ export default function MembroModal({ isOpen, onClose, onSuccess, membro }: Memb
 
         try {
             setSubmitting(true);
-            await excluirMembroEquipe(membro.id);
+            const result = await deleteMembroEquipeAction(membro.id);
+            if (!result.success) throw new Error(result.error);
+
             toast.success("Funcionário excluído com sucesso");
             onSuccess();
             onClose();
@@ -122,7 +127,7 @@ export default function MembroModal({ isOpen, onClose, onSuccess, membro }: Memb
             if (error?.message?.includes('foreign key constraint')) {
                 toast.error("Não é possível excluir funcionário que possui histórico no sistema. Experimente inativá-lo mudando o Status.");
             } else {
-                toast.error("Erro ao excluir funcionário");
+                toast.error(error?.message || "Erro ao excluir funcionário");
             }
         } finally {
             setSubmitting(false);

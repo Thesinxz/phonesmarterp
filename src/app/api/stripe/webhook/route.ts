@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
 import { headers } from "next/headers";
 import { stripe } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
 
         if (empresaId) {
             const supabase = await createClient();
-            console.log(`[Stripe Webhook] Payment confirmed for empresa_id: ${empresaId}`);
+            logger.log(`[Stripe Webhook] Payment confirmed for empresa_id: ${empresaId}`);
 
             // Atualizar plano da empresa
             const { error: updateError } = await (supabase.from("empresas") as any)

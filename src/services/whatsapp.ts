@@ -1,4 +1,5 @@
 "use server";
+import { logger } from "@/lib/logger";
 
 import { createClient } from "@/lib/supabase/server";
 import { WhatsappConfig } from "@/types/configuracoes";
@@ -19,7 +20,7 @@ export async function sendWhatsAppTemplate(to: string, templateName: string, com
     try {
         const config = await getConfig();
         if (!config?.api_token || !config?.phone_number_id) {
-            console.warn("[WhatsApp] Configurações ausentes.");
+            logger.warn("[WhatsApp] Configurações ausentes.");
             return { success: false, error: "Configurações ausentes" };
         }
 

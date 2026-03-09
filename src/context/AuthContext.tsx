@@ -1,6 +1,7 @@
 "use client";
+import { logger } from "@/lib/logger";
 
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
 import { type Usuario, type Empresa } from "@/types/database";
@@ -34,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Stable Supabase client instance
     const [supabase] = useState(() => createClient());
+    const isFetchingRef = useRef(false);
 
     const fetchEmpresa = async (empresaId: string) => {
         try {
@@ -47,7 +49,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const fetchProfile = useCallback(async (userId: string, userEmail?: string) => {
+    const fetchProfile = useCallback(async (userId: string, userEmail?: string | null, isTopLevel = true) => {
+        if (isFetchingRef.current && isTopLevel) {
+            logger.log("[AuthContext] fetchProfile already in progress, skipping top-level call.");
+            return;
+        }
+
+        if (isTopLevel) {
+            setIsLoading(true);
+            isFetchingRef.current = true;
+        }
+
         try {
             // 1. Buscar vínculos de empresa
             const companies = await getUsuarioEmpresas(userId);
@@ -60,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 .maybeSingle();
 
             if (data) {
-                console.log("[AuthContext] Profile found by auth_user_id:", userId);
+                logger.log("[AuthContext] Profile found by auth_user_id:", userId);
                 setProfile(data);
 
                 // Determinar qual empresa carregar inicialmente
@@ -69,12 +81,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 if (activeLink) {
                     setEmpresa(activeLink.empresa);
-                    // Se o perfil principal tem um empresa_id fixo, ele deve bater com a ativa em sistemas legados
-                    // mas em multi-company, a ativa pode variar.
                 } else if (data.empresa_id) {
                     await fetchEmpresa(data.empresa_id);
                 }
 
+                // IMPORTANTE: Se achou o perfil, temos que sair do try/finally do fetchProfile aqui
+                // mas deixando o finally original cuidar do setIsLoading.
                 return;
             }
 
@@ -86,8 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     });
 
                     if (!claimError && claimData && claimData.success) {
-                        console.log("[AuthContext] Perfil pendente reivindicado com sucesso!", claimData);
-                        return fetchProfile(userId, userEmail);
+                        logger.log("[AuthContext] Perfil pendente reivindicado com sucesso!", claimData);
+                        return fetchProfile(userId, userEmail, false);
                     }
                 } catch (e) {
                     console.error("[AuthContext] Erro ao tentar reivindicar perfil:", e);
@@ -95,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 // 2. Auto-provisão (Se o usuário não foi vinculado pelo Trigger nem reivindicou perfil)
                 if (companies.length === 0) {
-                    console.log("[AuthContext] Nenhum vínculo encontrado, iniciando auto-provisão de uma NOVA empresa...");
+                    logger.log("[AuthContext] Nenhum vínculo encontrado, iniciando auto-provisão de uma NOVA empresa...");
 
                     let pendingData: any = null;
                     try {
@@ -139,48 +151,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
             }
         } catch (error) {
-            console.error("Error fetching profile:", error);
+            logger.error("[AuthContext] Error fetching profile:", error);
         } finally {
-            setIsLoading(false);
+            if (isTopLevel) {
+                setIsLoading(false);
+                isFetchingRef.current = false;
+                logger.log("[AuthContext] fetchProfile finished. isLoading: false");
+            }
         }
     }, [supabase]);
 
     useEffect(() => {
         let mounted = true;
+        let initialLoadDone = false;
 
-        // ── FIX: Resolver sessão PROATIVAMENTE do storage/cookie ──
-        // getSession() lê instantaneamente do localStorage, enquanto
-        // onAuthStateChange depende de um listener assíncrono que pode
-        // disparar com delay. Isso garante que a sessão esteja pronta
-        // ANTES de qualquer página tentar fazer queries via RLS.
-        supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
-            if (!mounted) return;
-            if (initialSession?.user) {
-                setSession(initialSession);
-                setUser(initialSession.user);
-                fetchProfile(initialSession.user.id, initialSession.user.email);
-            } else {
-                setIsLoading(false);
-            }
-        });
+        logger.log("[AuthContext] Initializing Auth Listener...");
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
             if (!mounted) return;
+
+            logger.log(`[AuthContext] Auth Event: ${event}`, { userId: newSession?.user?.id });
+
             setSession(newSession);
             setUser(newSession?.user ?? null);
+
             if (newSession?.user) {
+                // Se temos usuário, buscamos o perfil. 
+                // fetchProfile já gerencia o isLoading(false) no seu finally.
                 await fetchProfile(newSession.user.id, newSession.user.email);
             } else {
+                // Se não temos usuário (logoff ou sem sessão), limpamos estados.
                 setProfile(null);
                 setEmpresa(null);
                 setUserCompanies([]);
+                setIsLoading(false);
             }
-            setIsLoading(false);
+
+            initialLoadDone = true;
         });
+
+        // Fallback: Se após 5 segundos ainda estiver carregando, forçamos a liberação
+        // para evitar que o usuário fique preso no spinner por erros de rede ou Supabase pendente.
+        const timeout = setTimeout(() => {
+            if (mounted && !initialLoadDone) {
+                logger.warn("[AuthContext] Timeout de 5s atingido. Forçando encerramento do loading.");
+                setIsLoading(false);
+            }
+        }, 5000);
 
         return () => {
             mounted = false;
             subscription.unsubscribe();
+            clearTimeout(timeout);
         };
     }, [supabase, fetchProfile]);
 

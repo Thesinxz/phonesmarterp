@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
 import webpush from "web-push";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
                 } catch (err: any) {
                     // Se o erro for 410 ou 404, significa que a subscrição expirou ou é inválida
                     if (err.statusCode === 410 || err.statusCode === 404) {
-                        console.log(`[Push] Subscrição expirada removida: ${sub.endpoint}`);
+                        logger.log(`[Push] Subscrição expirada removida: ${sub.endpoint}`);
                         await supabase.from("push_subscriptions").delete().eq("id", sub.id);
                     }
                     throw err;

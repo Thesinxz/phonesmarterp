@@ -1,4 +1,5 @@
 "use client";
+import { logger } from "@/lib/logger";
 
 import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -161,13 +162,13 @@ export function FinanceConfigProvider({ children }: { children: ReactNode }) {
                         writeToStorage(updated, defaultGateway);
                         return updated;
                     });
-                    console.log(`[AutoCambio] Cotação atualizada para: ${data.rate}`);
+                    logger.log(`[AutoCambio] Cotação atualizada para: ${data.rate}`);
                 } else if (data.success) {
                     // Taxa não mudou mas registrar o timestamp para evitar nova chamada
                     sessionStorage.setItem(CAMBIO_TS_KEY, String(now));
                 }
             } catch (err) {
-                console.warn("[AutoCambio] Erro silencioso:", err);
+                logger.warn("[AutoCambio] Erro silencioso:", err);
             }
         };
 

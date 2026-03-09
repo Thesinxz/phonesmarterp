@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { logger } from "@/lib/logger";
 import { type Empresa, type Usuario } from "@/types/database";
 
 export interface CompanyLink {
@@ -41,7 +42,7 @@ export async function getUsuarioEmpresas(authUserId: string) {
             }
         }
     } catch (e) {
-        console.warn("[Auth] Erro ao buscar vínculos na tabela 'usuario_vinculos_empresa'. Usando fallback...", e);
+        logger.warn("[Auth] Erro ao buscar vínculos na tabela 'usuario_vinculos_empresa'. Usando fallback...", e);
     }
 
     // Fallback: Buscar na tabela 'usuarios' atual (1-to-1)

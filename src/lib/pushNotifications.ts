@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { logger } from "@/lib/logger";
 
 /**
  * Converte uma string base64 VAPID para Uint8Array necessário para a inscrição
@@ -34,14 +35,14 @@ export async function subscribeToPush(usuarioId: string, empresaId: string) {
 
     // 1. Verificar suporte e permissão
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-        console.warn("[Push] Navegador não suporta Push Notifications.");
+        logger.warn("[Push] Navegador não suporta Push Notifications.");
         return null;
     }
 
     try {
         const permission = await Notification.requestPermission();
         if (permission !== "granted") {
-            console.warn("[Push] Permissão negada pelo usuário.");
+            logger.warn("[Push] Permissão negada pelo usuário.");
             return null;
         }
 
@@ -66,7 +67,7 @@ export async function subscribeToPush(usuarioId: string, empresaId: string) {
         const authBuffer = subscription.getKey("auth");
 
         if (!p256dhBuffer || !authBuffer) {
-            console.warn("[Push] Falha ao obter chaves da subscrição.");
+            logger.warn("[Push] Falha ao obter chaves da subscrição.");
             return null;
         }
 
@@ -84,10 +85,10 @@ export async function subscribeToPush(usuarioId: string, empresaId: string) {
         );
 
         if (error) {
-            console.warn("[Push] Não foi possível salvar subscrição (não crítico):", error.code);
+            logger.warn("[Push] Não foi possível salvar subscrição (não crítico):", error.code);
         }
 
-        console.log("[Push] Subscrição realizada com sucesso.");
+        logger.log("[Push] Subscrição realizada com sucesso.");
         return subscription;
     } catch (err) {
         console.error("[Push] Erro crítico na subscrição:", err);

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger } from "@/lib/logger";
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { aggregateXmlsForMonth, getNomeMes } from '@/lib/xml-aggregator';
 import { sendAccountantEmail } from '@/lib/email';
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
         const nomeMes = getNomeMes(mesRef);
         const mesReferencia = `${nomeMes}/${anoRef}`;
 
-        console.log(`[Contabilidade] ▶ Iniciando envio automático - Dia ${diaHoje} - Ref: ${mesReferencia}`);
+        logger.log(`[Contabilidade] ▶ Iniciando envio automático - Dia ${diaHoje} - Ref: ${mesReferencia}`);
 
         // 3. Buscar todas as empresas com contador habilitado e dia de envio = hoje
         const { data: configs, error: configError } = await supabase
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
         });
 
         if (empresasParaEnviar.length === 0) {
-            console.log('[Contabilidade] ℹ Nenhuma empresa para enviar hoje.');
+            logger.log('[Contabilidade] ℹ Nenhuma empresa para enviar hoje.');
             return NextResponse.json({
                 success: true,
                 message: 'Nenhuma empresa configurada para envio hoje.',
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
             });
         }
 
-        console.log(`[Contabilidade] 📋 ${empresasParaEnviar.length} empresa(s) para processar.`);
+        logger.log(`[Contabilidade] 📋 ${empresasParaEnviar.length} empresa(s) para processar.`);
 
         const resultados: any[] = [];
 
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
 
                 const empresaNome = empresa?.nome || 'Empresa';
 
-                console.log(`[Contabilidade] 🏢 Processando: ${empresaNome}`);
+                logger.log(`[Contabilidade] 🏢 Processando: ${empresaNome}`);
 
                 // Agregar XMLs
                 const { zipBuffer, stats } = await aggregateXmlsForMonth(
@@ -101,7 +102,7 @@ export async function POST(req: Request) {
                     attachments
                 );
 
-                console.log(`[Contabilidade] ✅ Enviado para ${contadorCfg.email} - ${stats.total} XMLs`);
+                logger.log(`[Contabilidade] ✅ Enviado para ${contadorCfg.email} - ${stats.total} XMLs`);
 
                 resultados.push({
                     empresa: empresaNome,

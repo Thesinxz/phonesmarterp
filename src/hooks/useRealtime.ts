@@ -1,4 +1,5 @@
 "use client";
+import { logger } from "@/lib/logger";
 
 import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -42,7 +43,7 @@ export function useRealtimeSubscription({ table, filter, callback, enabled = tru
             )
             .subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log(`[Realtime] ✅ Subscribed to ${table}${filter ? ` (${filter})` : ''}`);
+                    logger.log(`[Realtime] ✅ Subscribed to ${table}${filter ? ` (${filter})` : ''}`);
                 }
                 if (status === 'CHANNEL_ERROR') {
                     console.error(`[Realtime] ❌ Channel error for ${table}`);
@@ -53,7 +54,7 @@ export function useRealtimeSubscription({ table, filter, callback, enabled = tru
             });
 
         return () => {
-            console.log(`[Realtime] 🔌 Unsubscribing from ${table}`);
+            logger.log(`[Realtime] 🔌 Unsubscribing from ${table}`);
             supabase.removeChannel(channel);
         };
     }, [table, filter, enabled]);

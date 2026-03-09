@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
 import { headers } from "next/headers";
 
 // Tipos de mensagens predefinidas de cobrança/lembrete
@@ -61,13 +62,13 @@ export async function POST(req: NextRequest) {
                 throw new Error(errorData.message || "Erro no provedor de WhatsApp");
             }
         } else {
-             console.log("Mock WhatsApp Send -> ", telefoneLimpo, mensagem);
+             logger.log("Mock WhatsApp Send -> ", telefoneLimpo, mensagem);
              await new Promise(r => setTimeout(r, 1000)); // simula rede
         }
         */
 
         // Mock de sucesso temporário
-        console.log(`[WhatsApp API Mock] Enviando para ${telefoneLimpo}:\n${mensagem}`);
+        logger.log(`[WhatsApp API Mock] Enviando para ${telefoneLimpo}:\n${mensagem}`);
         await new Promise(r => setTimeout(r, 600)); // simula delay de rede
 
         return NextResponse.json({ success: true, message: "Mensagem enviada com sucesso" });

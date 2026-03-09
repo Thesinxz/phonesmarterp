@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
+import { logger } from "@/lib/logger";
 
 export async function POST(req: Request) {
     try {
         const body = await req.json();
         const { vendaId } = body;
 
-        console.log(`[FISCAL] Iniciando emissão de NFC-e para venda ${vendaId}`);
+        logger.log(`[FISCAL] Iniciando emissão de NFC-e para venda ${vendaId}`);
 
         // Simulação de processamento SEFAZ
         await new Promise(resolve => setTimeout(resolve, 2000));

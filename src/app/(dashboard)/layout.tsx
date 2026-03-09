@@ -18,19 +18,20 @@ export default function DashboardLayout({
     const { status, loading: loadingOnboarding } = useOnboardingStatus();
     const { isTrialExpired, profile, isLoading: loadingAuth } = useAuth();
 
-    const loading = loadingOnboarding || loadingAuth;
     const isDeactivated = profile && profile.ativo === false;
+    const shouldShowOnboarding = !loadingOnboarding && status && !status.completed && !status.skipped;
 
-    // Show nothing while checking status to avoid flashing dashboard
-    if (loading) {
+    // ── Bloom Filter / Global Lock ──
+    // Só bloqueamos com o spinner central se a autenticação básica ainda estiver pendente.
+    // Uma vez que temos o perfil, permitimos que a estrutura do dashboard (sidebar/header)
+    // seja montada para melhorar a percepção de performance (LCP).
+    if (loadingAuth) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="w-10 h-10 border-4 border-brand-200 border-t-brand-500 rounded-full animate-spin" />
             </div>
         );
     }
-
-    const shouldShowOnboarding = status && !status.completed && !status.skipped;
 
     if (shouldShowOnboarding) {
         return (

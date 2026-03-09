@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { logger } from "@/lib/logger";
 import { Database } from "@/types/database";
 
 const supabase = createClient() as any;
@@ -101,7 +102,7 @@ export async function validarConviteToken(token: string) {
             .single();
 
         if (error || !data) {
-            console.warn("[equipe.ts] Convite inválido ou expirado.", error);
+            logger.warn("[equipe.ts] Convite inválido ou expirado.", error);
             return null;
         }
 

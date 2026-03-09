@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { logger } from "@/lib/logger";
 
 export interface GeminiOCRItem {
     item: string;
@@ -8,7 +9,7 @@ export interface GeminiOCRItem {
 }
 
 export async function extractProductsWithGemini(imageDataUrl: string, apiKey: string) {
-    console.log("[Gemini Service] Starting extraction...");
+    logger.log("[Gemini Service] Starting extraction...");
 
     try {
         if (!apiKey) {
@@ -21,10 +22,10 @@ export async function extractProductsWithGemini(imageDataUrl: string, apiKey: st
 
         const prompt = `Extraia dados desta nota fiscal em JSON puro (array de objetos): item, cost, qtd, categoria. Use o formato: [{"item": "...", "cost": 10.0, "qtd": 1, "categoria": "..."}]`;
 
-        console.log("[Gemini Service] Calling API with model gemini-2.5-flash...");
+        logger.log("[Gemini Service] Calling API with model gemini-2.5-flash...");
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {
-            console.warn("[Gemini Service] Timeout reached (30s)");
+            logger.warn("[Gemini Service] Timeout reached (30s)");
             controller.abort();
         }, 30000);
 
@@ -50,7 +51,7 @@ export async function extractProductsWithGemini(imageDataUrl: string, apiKey: st
 
             clearTimeout(timeoutId);
             const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-            console.log(`[Gemini Service] API responded in ${duration}s. Status: ${response.status}`);
+            logger.log(`[Gemini Service] API responded in ${duration}s. Status: ${response.status}`);
 
             if (!response.ok) {
                 const errText = await response.text();
@@ -60,12 +61,12 @@ export async function extractProductsWithGemini(imageDataUrl: string, apiKey: st
 
             const result = await response.json();
             const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-            console.log("[Gemini Service] Raw text extracted successfully.");
+            logger.log("[Gemini Service] Raw text extracted successfully.");
 
             try {
                 const parsed = JSON.parse(textResponse);
                 const items = Array.isArray(parsed) ? parsed : (parsed.items || parsed.produtos || []);
-                console.log(`[Gemini Service] Parsed ${items.length} items.`);
+                logger.log(`[Gemini Service] Parsed ${items.length} items.`);
                 return { items };
             } catch (e) {
                 console.error("[Gemini Service] JSON Parse Error:", textResponse);

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { logger } from "@/lib/logger";
 
 const supabase = createClient();
 
@@ -85,7 +86,7 @@ export async function emitirNFCe(vendaId: string) {
     //     body: JSON.stringify(payload)
     // });
 
-    console.log("Enviando NFCe para Focus:", url, payload);
+    logger.log("Enviando NFCe para Focus:", url, payload);
 
     return { status: "enviado_homologacao", ref: vendaId };
 }

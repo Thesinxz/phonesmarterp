@@ -167,6 +167,7 @@ export default function ConfiguracoesPage() {
     const [crediarioConfig, setCrediarioConfig] = useState({
         client_id: "",
         client_secret: "",
+        webhook_secret: "",
         sandbox: true
     });
 
@@ -203,7 +204,10 @@ export default function ConfiguracoesPage() {
 
     // ── Carregar configs ──
     const fetchConfigs = async (background = false) => {
-        if (!profile?.empresa_id) return;
+        if (!profile?.empresa_id) {
+            setConfigsLoaded(true);
+            return;
+        }
 
         if (!background) setConfigsLoaded(false);
 
@@ -1950,6 +1954,19 @@ export default function ConfiguracoesPage() {
                                                 className="w-full text-sm font-medium text-slate-700 bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 focus:outline-none focus:border-brand-500/20 focus:ring-4 focus:ring-brand-500/10 transition-all font-mono"
                                                 placeholder="Client_Secret_..."
                                             />
+                                        </div>
+                                        <div className="col-span-1 md:col-span-2 space-y-2">
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Webhook Secret (Opcional)</label>
+                                            <input
+                                                type="password"
+                                                value={crediarioConfig.webhook_secret}
+                                                onChange={e => setCrediarioConfig(p => ({ ...p, webhook_secret: e.target.value }))}
+                                                className="w-full text-sm font-medium text-slate-700 bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 focus:outline-none focus:border-brand-500/20 focus:ring-4 focus:ring-brand-500/10 transition-all font-mono"
+                                                placeholder="Defina o segredo configurado no painel da Efí"
+                                            />
+                                            <p className="text-[10px] text-slate-400">
+                                                * Se preenchido, o sistema validará a assinatura de todas as notificações recebidas.
+                                            </p>
                                         </div>
                                     </div>
 

@@ -7,40 +7,56 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
  * Recebe notificações de pagamento da EfíBank.
  * Atualiza o status das parcelas automaticamente.
  * 
- * A EfíBank envia um POST com { notification } contendo o token.
- * Depois precisamos consultar os detalhes da notificação.
+ * Proteção: Verificação dinâmica por empresa (webhook_secret no banco).
  */
 export async function POST(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin();
 
     try {
         const body = await request.json();
-        const { notification } = body;
-
-        if (!notification) {
-            return NextResponse.json({ received: true }, { status: 200 });
-        }
 
         // A EfíBank envia notificações com o token contendo o charge_id atualizado
-        // O formato pode variar, processar o que recebemos
-        const chargeId = body.identifiers?.charge_id || body.charge_id;
-        const status = body.status || body.identifiers?.status;
+        const chargeId = body.identifiers?.charge_id || body.charge_id || body.notification;
 
         if (!chargeId) {
-            console.log("Webhook EfíBank sem charge_id:", JSON.stringify(body));
             return NextResponse.json({ received: true }, { status: 200 });
         }
 
-        // Buscar a parcela pelo efibank_charge_id
+        // 1. Buscar a parcela e a empresa dona desta cobrança
         const { data: parcela, error: findErr } = await (supabaseAdmin.from("crediario_parcelas") as any)
-            .select("id, status, crediario_id")
+            .select("id, status, crediario_id, empresa_id")
             .eq("efibank_charge_id", chargeId)
             .single();
 
         if (findErr || !parcela) {
-            console.log(`Webhook EfíBank: parcela com charge_id ${chargeId} não encontrada`);
+            console.warn(`[Efí Webhook] Cobrança ${chargeId} não encontrada no banco.`);
             return NextResponse.json({ received: true }, { status: 200 });
         }
+
+        // 2. Buscar o segredo de webhook desta empresa específica
+        const { data: configData } = await (supabaseAdmin.from("configuracoes") as any)
+            .select("valor")
+            .eq("empresa_id", parcela.empresa_id)
+            .eq("chave", "efibank_credentials")
+            .single();
+
+        const webhookSecret = configData?.valor?.webhook_secret || process.env.EFIBANK_WEBHOOK_SECRET;
+
+        // 3. Validar se o token enviado bate com o segredo da empresa
+        if (webhookSecret) {
+            const authHeader = request.headers.get("authorization") || request.headers.get("x-webhook-secret") || "";
+            const token = authHeader.replace("Bearer ", "").trim();
+
+            if (token !== webhookSecret) {
+                console.warn(`[Efí Webhook] Tentativa de acesso não autorizada para empresa ${parcela.empresa_id}. Token inválido.`);
+                return NextResponse.json(
+                    { error: "Unauthorized", message: "Token de webhook inválido" },
+                    { status: 401 }
+                );
+            }
+        }
+
+        const status = body.status || body.identifiers?.status;
 
         // Se o status da EfíBank indica pagamento confirmado
         if (status === "paid" || status === "settled") {
@@ -53,8 +69,6 @@ export async function POST(request: NextRequest) {
                         updated_at: new Date().toISOString(),
                     })
                     .eq("id", parcela.id);
-
-                console.log(`Webhook: Parcela ${parcela.id} marcada como paga via EfíBank`);
             }
         }
 
@@ -62,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     } catch (error: any) {
         console.error("Erro no webhook EfíBank:", error);
-        // Sempre retornar 200 para evitar retries excessivos
+        // Sempre retornar 200 para evitar retries excessivos de notificações que já falharam por outros motivos
         return NextResponse.json({ received: true }, { status: 200 });
     }
 }

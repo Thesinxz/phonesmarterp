@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger } from "@/lib/logger";
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic'; // Não cachear a resposta da rota
@@ -6,7 +7,7 @@ export const dynamic = 'force-dynamic'; // Não cachear a resposta da rota
 export async function GET() {
     const supabaseAdmin = getSupabaseAdmin();
     try {
-        console.log("Iniciando atualização de câmbio...");
+        logger.log("Iniciando atualização de câmbio...");
 
         // 1. Buscar dados da Cambios Chaco (Branch 9 = Adrian Jara)
         const response = await fetch('https://www.cambioschaco.com.py/api/branch_office/9/exchange', {
@@ -41,7 +42,7 @@ export async function GET() {
             throw new Error(`Valor de cotação inválido recebido: ${brlRate.saleArbitrage}`);
         }
 
-        console.log(`Nova cotação encontrada: ${newRate} (saleArbitrage)`);
+        logger.log(`Nova cotação encontrada: ${newRate} (saleArbitrage)`);
 
         // 3. Atualizar configurações no banco (Para todas as empresas)
         // Primeiro buscamos todas as configs financeiras

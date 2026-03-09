@@ -60,7 +60,10 @@ export default function VendasPage() {
     });
 
     useEffect(() => {
-        if (!profile?.empresa_id) return;
+        if (!profile?.empresa_id) {
+            setLoading(false);
+            return;
+        }
         loadData();
     }, [profile?.empresa_id, currentPage, filterStartDate, filterEndDate]);
 

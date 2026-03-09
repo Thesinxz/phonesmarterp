@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { logger } from "@/lib/logger";
 import { type Produto, type Database } from "@/types/database";
 import { addProdutoHistorico } from "./historico_produto";
 
@@ -76,7 +77,7 @@ export async function createProdutos(produtos: Database["public"]["Tables"]["pro
 
     const empresaId = produtos[0].empresa_id;
     const totalItens = produtos.length;
-    console.log(`[Service:Estoque] Iniciando importação para ${totalItens} produtos na empresa ${empresaId}...`);
+    logger.log(`[Service:Estoque] Iniciando importação para ${totalItens} produtos na empresa ${empresaId}...`);
 
     // Helper: Timeout para evitar travamento eterno (RLS hanging)
     const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
@@ -94,7 +95,7 @@ export async function createProdutos(produtos: Database["public"]["Tables"]["pro
 
     // === ESTRATÉGIA 1: RPC com empresa_id (Nova versão, mais segura) ===
     try {
-        console.log("[Service:Estoque] Tentativa 1: RPC importar_produtos_massa (v2, com empresa_id)...");
+        logger.log("[Service:Estoque] Tentativa 1: RPC importar_produtos_massa (v2, com empresa_id)...");
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result: any = await withTimeout(
             (supabase as any).rpc("importar_produtos_massa", {
@@ -106,19 +107,19 @@ export async function createProdutos(produtos: Database["public"]["Tables"]["pro
         );
 
         if (!result.error && typeof result.data === 'number' && result.data > 0) {
-            console.log(`[Service:Estoque] ✅ RPC v2 OK! ${result.data} produtos importados.`);
+            logger.log(`[Service:Estoque] ✅ RPC v2 OK! ${result.data} produtos importados.`);
             return new Array(result.data).fill({ id: 'imported' }) as Produto[];
         }
         if (result.error) {
-            console.warn("[Service:Estoque] RPC v2 falhou:", result.error.message);
+            logger.warn("[Service:Estoque] RPC v2 falhou:", result.error.message);
         }
     } catch (e: any) {
-        console.warn("[Service:Estoque] RPC v2 erro/timeout:", e.message);
+        logger.warn("[Service:Estoque] RPC v2 erro/timeout:", e.message);
     }
 
     // === ESTRATÉGIA 2: RPC sem empresa_id (Versão antiga, se existir no banco) ===
     try {
-        console.log("[Service:Estoque] Tentativa 2: RPC importar_produtos_massa (v1, sem empresa_id)...");
+        logger.log("[Service:Estoque] Tentativa 2: RPC importar_produtos_massa (v1, sem empresa_id)...");
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result: any = await withTimeout(
             (supabase as any).rpc("importar_produtos_massa", {
@@ -129,21 +130,21 @@ export async function createProdutos(produtos: Database["public"]["Tables"]["pro
         );
 
         if (!result.error && typeof result.data === 'number' && result.data > 0) {
-            console.log(`[Service:Estoque] ✅ RPC v1 OK! ${result.data} produtos importados.`);
+            logger.log(`[Service:Estoque] ✅ RPC v1 OK! ${result.data} produtos importados.`);
             return new Array(result.data).fill({ id: 'imported' }) as Produto[];
         }
         if (result.error) {
-            console.warn("[Service:Estoque] RPC v1 falhou:", result.error.message);
+            logger.warn("[Service:Estoque] RPC v1 falhou:", result.error.message);
         }
     } catch (e: any) {
-        console.warn("[Service:Estoque] RPC v1 erro/timeout:", e.message);
+        logger.warn("[Service:Estoque] RPC v1 erro/timeout:", e.message);
     }
 
     // === ESTRATÉGIA 3: INSERT direto SEM .select() ===
     // IMPORTANTE: NÃO chamamos .select() após .insert() pois o PostgREST
     // tentará executar um SELECT na tabela com RLS, causando recursão infinita.
     try {
-        console.log("[Service:Estoque] Tentativa 3: INSERT direto (sem .select(), sem retorno de dados)...");
+        logger.log("[Service:Estoque] Tentativa 3: INSERT direto (sem .select(), sem retorno de dados)...");
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result: any = await withTimeout(
             (supabase.from("produtos") as any).insert(produtos),
@@ -152,7 +153,7 @@ export async function createProdutos(produtos: Database["public"]["Tables"]["pro
         );
 
         if (!result.error) {
-            console.log(`[Service:Estoque] ✅ INSERT direto OK! ${totalItens} produtos enviados.`);
+            logger.log(`[Service:Estoque] ✅ INSERT direto OK! ${totalItens} produtos enviados.`);
             return new Array(totalItens).fill({ id: 'imported' }) as Produto[];
         }
         console.error("[Service:Estoque] INSERT direto falhou:", result.error.message);
@@ -213,7 +214,7 @@ export async function deleteProdutos(ids: string[]): Promise<{ deleted: number; 
 
     // 2. Se falhou por FK constraint, deletar um por um
     if (error.code === '23503') {
-        console.warn("[Service:Estoque] FK constraint em exclusão em massa. Tentando individualmente...");
+        logger.warn("[Service:Estoque] FK constraint em exclusão em massa. Tentando individualmente...");
         let deleted = 0;
         const blockedNames: string[] = [];
 

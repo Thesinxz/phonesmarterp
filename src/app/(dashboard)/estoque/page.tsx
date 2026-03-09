@@ -61,9 +61,11 @@ export default function EstoquePage() {
     };
 
     useEffect(() => {
-        if (profile?.empresa_id) {
-            loadProdutos();
+        if (!profile?.empresa_id) {
+            setLoading(false);
+            return;
         }
+        loadProdutos();
     }, [filters, currentPage, profile?.empresa_id]);
 
     useRealtimeSubscription({

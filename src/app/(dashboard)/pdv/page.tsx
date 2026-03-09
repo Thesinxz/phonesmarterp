@@ -103,7 +103,11 @@ export default function PDVPage() {
     });
 
     useEffect(() => {
-        if (!profile?.empresa_id) return;
+        if (!profile?.empresa_id) {
+            setLoading(false);
+            setCaixaLoading(false);
+            return;
+        }
         loadProducts();
         checkCaixa();
         loadMembros();
