@@ -21,6 +21,7 @@ import { cn } from "@/utils/cn";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { PedidoMenuDropdown } from "@/components/pedidos/PedidoMenuDropdown";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 
 const STATUS_CONFIG = {
     rascunho: { label: "Rascunho", color: "bg-slate-100 text-slate-600" },
@@ -38,6 +39,12 @@ export default function PedidosPage() {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<string>("todos");
     const [searchTerm, setSearchTerm] = useState("");
+
+    useRealtimeSubscription({
+        table: 'vendas',
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: () => loadData()
+    });
 
     useEffect(() => {
         if (!profile?.empresa_id) return;

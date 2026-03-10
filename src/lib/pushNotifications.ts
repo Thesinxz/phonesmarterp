@@ -42,7 +42,7 @@ export async function subscribeToPush(usuarioId: string, empresaId: string) {
     try {
         const permission = await Notification.requestPermission();
         if (permission !== "granted") {
-            logger.warn("[Push] Permissão negada pelo usuário.");
+            logger.log("[Push] Permissão negada pelo usuário. Notificações desativadas.");
             return null;
         }
 

@@ -152,6 +152,9 @@ export function FinanceConfigProvider({ children }: { children: ReactNode }) {
 
                 // Chama a API Route que já salva no banco e retorna a taxa nova
                 const res = await fetch("/api/integrations/cambios-chaco", { cache: "no-store" });
+                if (!res.ok) {
+                    throw new Error(`API retornou status ${res.status}`);
+                }
                 const data = await res.json();
 
                 if (data.success && data.rate && data.rate !== config.cotacao_dolar_paraguai) {
@@ -167,8 +170,8 @@ export function FinanceConfigProvider({ children }: { children: ReactNode }) {
                     // Taxa não mudou mas registrar o timestamp para evitar nova chamada
                     sessionStorage.setItem(CAMBIO_TS_KEY, String(now));
                 }
-            } catch (err) {
-                logger.warn("[AutoCambio] Erro silencioso:", err);
+            } catch (err: any) {
+                logger.warn("[AutoCambio] Erro silencioso:", err.message);
             }
         };
 

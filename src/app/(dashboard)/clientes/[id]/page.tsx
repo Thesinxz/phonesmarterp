@@ -25,6 +25,8 @@ import { formatDate } from "@/utils/formatDate";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { ShoppingBag, ChevronRight, CheckCircle2, TrendingUp, Wrench } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
+import { useAuth } from "@/context/AuthContext";
 
 export default function ClienteDetalhesPage() {
     const { id } = useParams() as { id: string };
@@ -35,6 +37,7 @@ export default function ClienteDetalhesPage() {
     const [timeline, setTimeline] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAddingEquipamento, setIsAddingEquipamento] = useState(false);
+    const { profile } = useAuth();
 
     // New equipment form state
     const [newEquip, setNewEquip] = useState({
@@ -43,6 +46,36 @@ export default function ClienteDetalhesPage() {
         imei: "",
         cor: "",
         observacoes: ""
+    });
+
+    useRealtimeSubscription({
+        table: 'clientes',
+        filter: `id=eq.${id}`,
+        callback: () => loadData()
+    });
+
+    useRealtimeSubscription({
+        table: 'equipamentos',
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: () => loadData()
+    });
+
+    useRealtimeSubscription({
+        table: 'os_timeline',
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: () => loadData()
+    });
+
+    useRealtimeSubscription({
+        table: 'ordens_servico',
+        filter: `cliente_id=eq.${id}`,
+        callback: () => loadData()
+    });
+
+    useRealtimeSubscription({
+        table: 'vendas',
+        filter: `cliente_id=eq.${id}`,
+        callback: () => loadData()
     });
 
     useEffect(() => {

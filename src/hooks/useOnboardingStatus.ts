@@ -68,10 +68,10 @@ export function useOnboardingStatus() {
 
         const timeout = setTimeout(() => {
             if (loading) {
-                logger.warn("[Onboarding] Timeout de 5s carregando status. Liberando layout...");
+                logger.log("[Onboarding] Carregamento lento. Liberando layout...");
                 setLoading(false);
             }
-        }, 5000);
+        }, 3000);
 
         loadStatus();
         return () => clearTimeout(timeout);

@@ -5,6 +5,11 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 export const dynamic = 'force-dynamic'; // Não cachear a resposta da rota
 
 export async function GET() {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        console.warn("[Cambio] SUPABASE_SERVICE_ROLE_KEY não configurada. Ignorando atualização de câmbio.");
+        return NextResponse.json({ success: false, error: "SERVICE_ROLE_KEY não configurada", rate: null });
+    }
+
     const supabaseAdmin = getSupabaseAdmin();
     try {
         logger.log("Iniciando atualização de câmbio...");

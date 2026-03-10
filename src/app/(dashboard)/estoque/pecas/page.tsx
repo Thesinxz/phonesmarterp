@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
     getPecasCatalogo, upsertPeca, deletePeca,
@@ -28,6 +28,8 @@ export default function PecasCatalogoPage() {
     // Form
     const [formNome, setFormNome] = useState("");
     const [formTipo, setFormTipo] = useState("frontal");
+    const [formMarca, setFormMarca] = useState("");
+    const [formModelo, setFormModelo] = useState("");
     const [formModelos, setFormModelos] = useState("");
     const [formQualidade, setFormQualidade] = useState("original");
     const [formPrecoCusto, setFormPrecoCusto] = useState("");
@@ -36,32 +38,41 @@ export default function PecasCatalogoPage() {
     const [formFornecedor, setFormFornecedor] = useState("");
 
     useEffect(() => {
-        if (profile?.empresa_id) loadData();
+        let mounted = true;
+        if (profile?.empresa_id) loadData(mounted);
+        return () => { mounted = false; };
     }, [profile?.empresa_id]);
 
     useEffect(() => {
-        const t = setTimeout(() => { if (profile?.empresa_id) loadData(); }, 300);
-        return () => clearTimeout(t);
-    }, [search, filtroTipo]);
+        let mounted = true;
+        const t = setTimeout(() => {
+            if (profile?.empresa_id && mounted) loadData(mounted);
+        }, 300);
+        return () => {
+            mounted = false;
+            clearTimeout(t);
+        };
+    }, [search, filtroTipo, profile?.empresa_id]);
 
-    async function loadData() {
+    async function loadData(mounted: boolean = true) {
+        if (!mounted) return;
         setLoading(true);
         try {
             const { data } = await getPecasCatalogo(profile!.empresa_id, {
                 search: search || undefined,
                 tipo: filtroTipo || undefined,
             });
-            setItems(data);
+            if (mounted) setItems(data);
         } catch (e: any) {
-            toast.error(e.message);
+            if (mounted) toast.error(e.message);
         } finally {
-            setLoading(false);
+            if (mounted) setLoading(false);
         }
     }
 
     function openNew() {
         setEditing(null);
-        setFormNome(""); setFormTipo("frontal"); setFormModelos("");
+        setFormNome(""); setFormTipo("frontal"); setFormMarca(""); setFormModelo(""); setFormModelos("");
         setFormQualidade("original"); setFormPrecoCusto(""); setFormPrecoVenda("");
         setFormEstoque(""); setFormFornecedor("");
         setShowModal(true);
@@ -71,6 +82,8 @@ export default function PecasCatalogoPage() {
         setEditing(item);
         setFormNome(item.nome);
         setFormTipo(item.tipo_peca);
+        setFormMarca(item.marca || "");
+        setFormModelo(item.modelo || "");
         setFormModelos((item.modelos_compativeis || []).join(", "));
         setFormQualidade(item.qualidade || "original");
         setFormPrecoCusto((item.preco_custo_centavos / 100).toFixed(2).replace('.', ','));
@@ -88,6 +101,8 @@ export default function PecasCatalogoPage() {
                 empresa_id: profile!.empresa_id,
                 nome: formNome.trim(),
                 tipo_peca: formTipo,
+                marca: formMarca.trim() || null,
+                modelo: formModelo.trim() || null,
                 modelos_compativeis: formModelos.split(",").map(m => m.trim()).filter(Boolean),
                 qualidade: formQualidade,
                 preco_custo_centavos: Math.round(parseFloat(formPrecoCusto.replace(",", ".") || "0") * 100),
@@ -224,7 +239,19 @@ export default function PecasCatalogoPage() {
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <span className="text-lg">{tipo?.emoji || "📦"}</span>
-                                                    <span className="font-bold text-slate-800">{item.nome}</span>
+                                                    <div>
+                                                        <span className="font-bold text-slate-800">{item.nome}</span>
+                                                        {(item.marca || item.modelo) && (
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                {item.marca && (
+                                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 uppercase">{item.marca}</span>
+                                                                )}
+                                                                {item.modelo && (
+                                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-600">{item.modelo}</span>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
@@ -320,6 +347,7 @@ export default function PecasCatalogoPage() {
                                     <div className="flex gap-2">
                                         {QUALIDADES.map(q => (
                                             <button key={q.value} onClick={() => setFormQualidade(q.value)}
+                                                type="button"
                                                 className={cn("px-3 py-2 rounded-xl text-xs font-bold transition-all",
                                                     formQualidade === q.value ? q.color + " shadow-sm" : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
                                                 )}>
@@ -327,6 +355,32 @@ export default function PecasCatalogoPage() {
                                             </button>
                                         ))}
                                     </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Marca</label>
+                                    <input value={formMarca} onChange={e => setFormMarca(e.target.value)}
+                                        placeholder="Ex: Apple, Samsung, Motorola"
+                                        list="marcas-list"
+                                        className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+                                    <datalist id="marcas-list">
+                                        <option value="Apple" />
+                                        <option value="Samsung" />
+                                        <option value="Motorola" />
+                                        <option value="Xiaomi" />
+                                        <option value="LG" />
+                                        <option value="Huawei" />
+                                        <option value="JCID" />
+                                        <option value="Genérica" />
+                                    </datalist>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Modelo</label>
+                                    <input value={formModelo} onChange={e => setFormModelo(e.target.value)}
+                                        placeholder="Ex: iPhone 15 Pro Max, Galaxy S24"
+                                        className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
                                 </div>
                             </div>
 

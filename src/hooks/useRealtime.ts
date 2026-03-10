@@ -38,7 +38,11 @@ export function useRealtimeSubscription({ table, filter, callback, enabled = tru
                     filter: filter === null ? undefined : filter
                 },
                 (payload: any) => {
-                    callbackRef.current(payload);
+                    try {
+                        callbackRef.current(payload);
+                    } catch (err) {
+                        console.error(`[Realtime] Error in callback for ${table}:`, err);
+                    }
                 }
             )
             .subscribe((status) => {
@@ -46,7 +50,7 @@ export function useRealtimeSubscription({ table, filter, callback, enabled = tru
                     logger.log(`[Realtime] ✅ Subscribed to ${table}${filter ? ` (${filter})` : ''}`);
                 }
                 if (status === 'CHANNEL_ERROR') {
-                    console.error(`[Realtime] ❌ Channel error for ${table}`);
+                    console.warn(`[Realtime] ⚠ Canal ${table} indisponível (tabela pode não estar na publicação Realtime).`);
                 }
                 if (status === 'TIMED_OUT') {
                     console.error(`[Realtime] ⏰ Timeout for ${table}`);

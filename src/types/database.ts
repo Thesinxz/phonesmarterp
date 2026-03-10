@@ -18,6 +18,7 @@ export interface Database {
                     plano: "starter" | "profissional" | "enterprise";
                     certificado_a1: string | null;
                     logo_url: string | null;
+                    trial_ends_at: string | null;
                     created_at: string;
                     updated_at: string;
                 };

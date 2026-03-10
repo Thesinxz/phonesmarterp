@@ -52,6 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const fetchProfile = useCallback(async (userId: string, userEmail?: string | null, isTopLevel = true) => {
         if (isFetchingRef.current && isTopLevel) {
             logger.log("[AuthContext] fetchProfile already in progress, skipping top-level call.");
+            // Não deixa isLoading preso em true — agenda uma checagem
+            setTimeout(() => {
+                if (!isFetchingRef.current) setIsLoading(false);
+            }, 3000);
             return;
         }
 
@@ -209,11 +213,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Registrar Push Notifications quando o perfil carregar
     useEffect(() => {
         if (profile && empresa && user) {
-            // Pequeno delay para garantir que o SW esteja pronto
-            const timeout = setTimeout(() => {
-                subscribeToPush(profile.id, empresa.id);
-            }, 3000);
-            return () => clearTimeout(timeout);
+            // Só registra push se o usuário já concedeu permissão anteriormente.
+            // NÃO solicitar permissão automaticamente (viola política do Chrome).
+            if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+                const timeout = setTimeout(() => {
+                    subscribeToPush(profile.id, empresa.id);
+                }, 3000);
+                return () => clearTimeout(timeout);
+            }
         }
     }, [profile, empresa, user]);
 
@@ -260,17 +267,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    // Lógica de Trial (14 dias)
+    // Lógica de Trial (14 dias ou data manual)
     let isTrialExpired = false;
     let trialDaysLeft = 0;
 
     if (empresa && empresa.plano === 'starter') {
-        const creationDate = new Date(empresa.created_at);
-        const expirationDate = new Date(creationDate.getTime() + (14 * 24 * 60 * 60 * 1000));
         const now = new Date();
+        let expirationDate: Date;
+
+        if (empresa.trial_ends_at) {
+            expirationDate = new Date(empresa.trial_ends_at);
+            logger.log("[AuthContext] Usando data de expiração manual:", expirationDate.toISOString());
+        } else {
+            const creationDate = new Date(empresa.created_at);
+            expirationDate = new Date(creationDate.getTime() + (14 * 24 * 60 * 60 * 1000));
+            logger.log("[AuthContext] Usando data de expiração padrão (14 dias):", expirationDate.toISOString());
+        }
 
         trialDaysLeft = Math.max(0, Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
         isTrialExpired = now > expirationDate;
+
+        logger.log("[AuthContext] Trial Status:", {
+            isTrialExpired,
+            trialDaysLeft,
+            now: now.toISOString(),
+            empresaPlano: empresa.plano
+        });
     }
 
     const value = {

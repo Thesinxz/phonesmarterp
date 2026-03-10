@@ -8,6 +8,8 @@ export interface PecaCatalogo {
     produto_id: string | null;
     nome: string;
     tipo_peca: string;
+    marca: string | null;
+    modelo: string | null;
     modelos_compativeis: string[];
     preco_custo_centavos: number;
     preco_venda_centavos: number;

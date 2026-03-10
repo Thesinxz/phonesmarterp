@@ -37,6 +37,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { calculateSuggestedPrice } from "@/utils/product-pricing";
 import { cn } from "@/utils/cn";
 import { toast } from "sonner";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 
 export default function DetalheProdutoPage({ params }: { params: { id: string } }) {
     const router = useRouter();
@@ -74,13 +75,15 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
     });
 
     // Carregar produto
-    useEffect(() => {
+    const loadData = async () => {
         if (!params.id) return;
-        async function load() {
-            try {
-                const data = await getProdutoById(params.id);
-                if (data) {
-                    setForm({
+        try {
+            const data = await getProdutoById(params.id);
+            if (data) {
+                setForm(prev => {
+                    // Evita sobrescrever se o usuário estiver digitando (simplificado aqui por atualização completa)
+                    return {
+                        ...prev,
                         nome: data.nome,
                         imei: data.imei || "",
                         grade: (data as any).grade || "",
@@ -91,6 +94,8 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                         condicao: (data as any).condicao || "novo_lacrado",
                         exibirVitrine: (data as any).exibir_vitrine ?? true,
                         imagemUrl: (data as any).imagem_url || "",
+                        // Se editou manualmente, talvez não queira sobrescrever o preço enquanto está na tela,
+                        // mas para realtime de outros usuários, atualizamos:
                         precoCusto: (data.preco_custo_centavos / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
                         precoVenda: (data.preco_venda_centavos / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
                         estoqueQtd: String(data.estoque_qtd),
@@ -103,19 +108,28 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                         cest: data.cest || "",
                         categoria: data.categoria || "",
                         subcategoria: data.subcategoria || ""
-                    });
+                    };
+                });
 
-                    if (data.imei) {
-                        const hist = await getProdutoHistorico(params.id);
-                        setHistorico(hist);
-                    }
-                    setPrecoEditadoManualmente(true); // Evita auto-recalcular ao carregar
+                if (data.imei) {
+                    const hist = await getProdutoHistorico(params.id);
+                    setHistorico(hist);
                 }
-            } catch (err) {
-                console.error("Erro ao carregar produto:", err);
+                setPrecoEditadoManualmente(true); // Evita auto-recalcular ao carregar
             }
+        } catch (err) {
+            console.error("Erro ao carregar produto:", err);
         }
-        load();
+    };
+
+    useRealtimeSubscription({
+        table: 'produtos',
+        filter: `id=eq.${params.id}`,
+        callback: () => loadData()
+    });
+
+    useEffect(() => {
+        loadData();
     }, [params.id]);
 
     // Auto-calcular preço quando custo ou categoria mudam

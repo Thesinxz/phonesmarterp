@@ -10,6 +10,7 @@ import { formatCurrency } from "@/utils/formatCurrency";
 import { formatDate } from "@/utils/formatDate";
 import { cn } from "@/utils/cn";
 import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
+import { useRealtimeSubscription } from "@/hooks/useRealtime";
 
 export default function ComprasPage() {
     const { profile } = useAuth();
@@ -33,6 +34,12 @@ export default function ComprasPage() {
             setLoading(false);
         }
     }, [profile?.empresa_id, filterStart, filterEnd]);
+
+    useRealtimeSubscription({
+        table: 'compras',
+        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
+        callback: () => loadCompras()
+    });
 
     useEffect(() => { loadCompras(); }, [loadCompras]);
 

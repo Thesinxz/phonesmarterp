@@ -57,8 +57,29 @@ export function BuscaPecaEstoque({ onSelect, modeloEquipamento }: BuscaPecaEstoq
 
     const handleSearch = async (val: string) => {
         setSearch(val);
-        if (val.trim().length < 2) {
-            setResults([]);
+        const term = val.trim().toLowerCase();
+
+        // Sempre começamos filtrando as sugeridas localmente (instantâneo)
+        const localMatches = term === ""
+            ? pecasSugeridas
+            : pecasSugeridas.filter(p => p.nome.toLowerCase().includes(term));
+
+        const formattedLocal = localMatches.map((p: any) => ({
+            id: p.id,
+            nome: p.nome,
+            preco_venda_centavos: p.preco_venda_centavos,
+            preco_custo_centavos: p.preco_custo_centavos,
+            estoque_qtd: p.estoque_qtd,
+            categoria: p.tipo_peca,
+            qualidade: p.qualidade,
+            marca: p.marca || null,
+            modelo: p.modelo || null,
+            _source: "catalogo"
+        }));
+
+        // Se for muito curto, apenas mostre as correspondências locais
+        if (term.length < 2) {
+            setResults(formattedLocal);
             return;
         }
 
@@ -92,10 +113,18 @@ export function BuscaPecaEstoque({ onSelect, modeloEquipamento }: BuscaPecaEstoq
                 estoque_qtd: p.estoque_qtd,
                 categoria: p.tipo_peca,
                 qualidade: p.qualidade,
+                marca: p.marca || null,
+                modelo: p.modelo || null,
                 _source: "catalogo"
             }));
 
-            setResults([...pecas, ...prods]);
+            // Mesclar e desduplicar (evitar que a mesma peça do catálogo apareça duas vezes)
+            const map = new Map();
+            [...formattedLocal, ...pecas, ...prods].forEach(item => {
+                map.set(item.id, item);
+            });
+
+            setResults(Array.from(map.values()));
         } catch (err) {
             console.error("Erro na busca:", err);
         } finally {
@@ -186,69 +215,6 @@ export function BuscaPecaEstoque({ onSelect, modeloEquipamento }: BuscaPecaEstoq
 
     return (
         <div className="space-y-4 relative">
-            {/* Peças sugeridas por modelo */}
-            {modeloEquipamento && pecasSugeridas.length > 0 && !showNewForm && (
-                <div className="bg-gradient-to-r from-brand-50 to-indigo-50 rounded-2xl border border-brand-100 p-5 space-y-3">
-                    <div className="flex items-center gap-2 mb-1">
-                        <Wrench size={16} className="text-brand-600" />
-                        <h4 className="text-sm font-black text-brand-700">
-                            Peças compatíveis com {modeloEquipamento}
-                        </h4>
-                        <span className="text-[10px] bg-brand-100 text-brand-600 font-bold px-2 py-0.5 rounded-full">
-                            {pecasSugeridas.length} peças
-                        </span>
-                    </div>
-
-                    {Object.entries(sugeridasPorTipo).map(([tipo, pecas]) => {
-                        const tipoInfo = TIPOS_PECA.find(t => t.value === tipo);
-                        return (
-                            <div key={tipo}>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
-                                    {tipoInfo?.emoji} {tipoInfo?.label || tipo}
-                                </p>
-                                <div className="space-y-1">
-                                    {pecas.map(peca => (
-                                        <button
-                                            key={peca.id}
-                                            type="button"
-                                            onClick={() => handleSelectSugerida(peca)}
-                                            className="w-full flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-white hover:border-brand-200 hover:bg-brand-50/50 transition-all text-left group"
-                                        >
-                                            <div>
-                                                <p className="font-bold text-slate-800 text-sm">{peca.nome}</p>
-                                                <div className="flex gap-2 mt-0.5">
-                                                    <span className={cn(
-                                                        "text-[9px] font-bold px-1.5 py-0.5 rounded uppercase",
-                                                        peca.qualidade === 'original' ? "bg-emerald-100 text-emerald-700" :
-                                                            peca.qualidade === 'oem' ? "bg-blue-100 text-blue-700" :
-                                                                "bg-amber-100 text-amber-700"
-                                                    )}>
-                                                        {peca.qualidade}
-                                                    </span>
-                                                    <span className={cn(
-                                                        "text-[9px] font-bold",
-                                                        peca.estoque_qtd > 0 ? "text-emerald-600" : "text-red-500"
-                                                    )}>
-                                                        {peca.estoque_qtd > 0 ? `${peca.estoque_qtd} em estoque` : "Sem estoque"}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-sm font-black text-brand-600">
-                                                    {formatCurrency(peca.preco_venda_centavos)}
-                                                </span>
-                                                <div className="w-8 h-8 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Plus size={16} />
-                                                </div>
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
 
             {loadingSugeridas && modeloEquipamento && (
                 <div className="text-center py-4 text-sm text-slate-400 flex items-center justify-center gap-2">
@@ -262,10 +228,35 @@ export function BuscaPecaEstoque({ onSelect, modeloEquipamento }: BuscaPecaEstoq
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                     <input
                         type="text"
-                        placeholder="Buscar peça no estoque ou catálogo..."
+                        placeholder={pecasSugeridas.length > 0 ? `Buscar... (${pecasSugeridas.length} peças para ${modeloEquipamento})` : "Buscar peça no estoque ou catálogo..."}
                         className="w-full h-14 pl-12 pr-12 rounded-2xl border border-slate-100 bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none text-lg transition-all"
                         value={search}
-                        onChange={(e) => handleSearch(e.target.value)}
+                        onFocus={() => {
+                            if (!search && pecasSugeridas.length > 0) {
+                                setResults(pecasSugeridas.map((p: any) => ({
+                                    ...p,
+                                    categoria: p.tipo_peca,
+                                    marca: p.marca || null,
+                                    modelo: p.modelo || null,
+                                    _source: "catalogo"
+                                })));
+                            }
+                        }}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setSearch(val);
+                            if (val.trim() === "" && pecasSugeridas.length > 0) {
+                                setResults(pecasSugeridas.map((p: any) => ({
+                                    ...p,
+                                    categoria: p.tipo_peca,
+                                    marca: p.marca || null,
+                                    modelo: p.modelo || null,
+                                    _source: "catalogo"
+                                })));
+                            } else {
+                                handleSearch(val);
+                            }
+                        }}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter' && search && results.length === 0) {
                                 onSelect({
@@ -286,7 +277,20 @@ export function BuscaPecaEstoque({ onSelect, modeloEquipamento }: BuscaPecaEstoq
                     {search && (
                         <button
                             type="button"
-                            onClick={() => { setSearch(""); setResults([]); }}
+                            onClick={() => {
+                                setSearch("");
+                                if (pecasSugeridas.length > 0) {
+                                    setResults(pecasSugeridas.map((p: any) => ({
+                                        ...p,
+                                        categoria: p.tipo_peca,
+                                        marca: p.marca || null,
+                                        modelo: p.modelo || null,
+                                        _source: "catalogo"
+                                    })));
+                                } else {
+                                    setResults([]);
+                                }
+                            }}
                             className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
                         >
                             <X size={20} />
@@ -328,7 +332,13 @@ export function BuscaPecaEstoque({ onSelect, modeloEquipamento }: BuscaPecaEstoq
                                 </div>
                                 <div>
                                     <p className="font-bold text-slate-800 text-base">{prod.nome}</p>
-                                    <div className="flex gap-3 mt-1">
+                                    <div className="flex gap-2 mt-1 flex-wrap">
+                                        {prod.marca && (
+                                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 uppercase">{prod.marca}</span>
+                                        )}
+                                        {prod.modelo && (
+                                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-600">{prod.modelo}</span>
+                                        )}
                                         <span className={cn(
                                             "text-[10px] font-black uppercase px-2 py-0.5 rounded tracking-widest",
                                             prod.estoque_qtd > 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
