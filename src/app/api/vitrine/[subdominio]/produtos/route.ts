@@ -94,29 +94,36 @@ export async function GET(
             );
         }
 
-        // 5. Calcular preços públicos para cada produto
-        const produtos: ProdutoVitrine[] = (produtosRaw ?? []).map((p: any) => {
-            const precoBase = p.preco_venda_centavos; // Já é o preço de venda definido pela loja
+        // 5. Calcular preços públicos para cada produto e agrupá-los
+        const groupedMap = new Map<string, ProdutoVitrine>();
+        const stockInfoMap = new Map<string, { total: number, min: number }>();
 
-            // Preço Pix: preço base (já considera a margem desejada)
-            // O preço de venda já foi calculado sem taxa de gateway,
-            // então o preço Pix = preço base (sem acréscimo de gateway)
+        (produtosRaw ?? []).forEach((p: any) => {
+            // Chave de agrupamento: Nome + Cor + Capacidade + Grade + Condição + Categoria
+            const groupKey = `${p.nome}-${p.cor}-${p.capacidade}-${p.grade}-${p.condicao}-${p.categoria}`.toLowerCase();
+            
+            if (groupedMap.has(groupKey)) {
+                // Se já existe, apenas soma o estoque para o cálculo de "poucas unidades"
+                const stock = stockInfoMap.get(groupKey)!;
+                stock.total += p.estoque_qtd;
+                stock.min = Math.min(stock.min, p.estoque_minimo || 1);
+                
+                // Atualiza o estado de "poucas unidades" do item agrupado
+                const groupedItem = groupedMap.get(groupKey)!;
+                groupedItem.poucas_unidades = stock.total <= stock.min;
+                return;
+            }
+
+            const precoBase = p.preco_venda_centavos;
             const precoPix = precoBase;
+            const precoDebito = taxaDebito > 0 ? Math.round(precoBase / (1 - taxaDebito / 100)) : precoBase;
 
-            // Preço Débito: acréscimo da taxa de débito
-            const precoDebito = taxaDebito > 0
-                ? Math.round(precoBase / (1 - taxaDebito / 100))
-                : precoBase;
-
-            // Parcelas: acréscimo da taxa de crédito para cada parcela
             const maxParcelas = Math.min(vitrineConfig.max_parcelas, taxasCredito.length);
             const parcelas: ParcelaInfo[] = [];
 
             for (let i = 0; i < maxParcelas; i++) {
                 const taxa = taxasCredito[i]?.taxa ?? 0;
-                const valorTotalParcelado = taxa > 0
-                    ? Math.round(precoBase / (1 - taxa / 100))
-                    : precoBase;
+                const valorTotalParcelado = taxa > 0 ? Math.round(precoBase / (1 - taxa / 100)) : precoBase;
                 const valorParcela = Math.round(valorTotalParcelado / (i + 1));
 
                 parcelas.push({
@@ -127,12 +134,11 @@ export async function GET(
                 });
             }
 
-            // Buscar garantia pela categoria
             const categorias: CategoriaMargin[] = financeiroRaw?.categorias ?? [];
             const catConfig = p.categoria ? categorias.find((c: CategoriaMargin) => c.nome === p.categoria) : null;
 
-            return {
-                id: p.id,
+            const finalItem: ProdutoVitrine = {
+                id: p.id, // O ID do primeiro produto do grupo servirá como ID do card
                 nome: p.nome,
                 cor: p.cor,
                 capacidade: p.capacidade,
@@ -149,7 +155,12 @@ export async function GET(
                 parcelas,
                 imagem_url: p.imagem_url ?? null,
             };
+
+            groupedMap.set(groupKey, finalItem);
+            stockInfoMap.set(groupKey, { total: p.estoque_qtd, min: p.estoque_minimo || 1 });
         });
+
+        const produtos = Array.from(groupedMap.values());
 
         // Ordenar: destaques primeiro, depois por nome
         const destaqueSet = new Set(vitrineConfig.produtos_destaque);

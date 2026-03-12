@@ -8,25 +8,32 @@ interface GatewaySelectorProps {
     selectedId: string | null;
     onSelect: (gateway: PaymentGateway) => void;
     className?: string;
+    compact?: boolean;
 }
 
 export function GatewaySelector({
     gateways,
     selectedId,
     onSelect,
-    className
+    className,
+    compact = false
 }: GatewaySelectorProps) {
     const selected = gateways.find(g => g.id === selectedId) || gateways.find(g => g.is_default) || gateways[0];
 
     return (
-        <div className={cn("space-y-2", className)}>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">
-                Gateway de Pagamento
-            </label>
+        <div className={cn(!compact && "space-y-2", className)}>
+            {!compact && (
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">
+                    Gateway de Pagamento
+                </label>
+            )}
 
             <div className="relative group">
                 <select
-                    className="input-glass h-12 w-full appearance-none pr-10 font-bold text-sm cursor-pointer"
+                    className={cn(
+                        "input-glass w-full appearance-none pr-10 font-bold text-sm cursor-pointer",
+                        compact ? "h-10 text-xs" : "h-12"
+                    )}
                     value={selectedId || ""}
                     onChange={(e) => {
                         const gw = gateways.find(g => g.id === e.target.value);
@@ -41,11 +48,11 @@ export function GatewaySelector({
                 </select>
 
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-brand-500 transition-colors">
-                    <ChevronDown size={18} />
+                    <ChevronDown size={compact ? 14 : 18} />
                 </div>
             </div>
 
-            {selected && (
+            {selected && !compact && (
                 <div className="flex items-center gap-3 px-3 py-2 bg-brand-50/50 rounded-xl border border-brand-100/50 animate-in fade-in slide-in-from-top-1">
                     <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white shrink-0">
                         <CreditCard size={16} />

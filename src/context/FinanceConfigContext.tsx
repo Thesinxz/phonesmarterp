@@ -108,6 +108,13 @@ export function FinanceConfigProvider({ children }: { children: ReactNode }) {
         initialized.current = true;
 
         const checkAndLoad = async () => {
+            const timeoutId = setTimeout(() => {
+                if (loading) {
+                    console.warn("[FinanceConfig] Timeout atingido. Liberando loading...");
+                    setLoading(false);
+                }
+            }, 5000);
+
             try {
                 // 1. Tentar carregar do storage primeiro (Client-side only)
                 const storage = readFromStorage();
@@ -131,6 +138,8 @@ export function FinanceConfigProvider({ children }: { children: ReactNode }) {
             } catch (err) {
                 console.error("[FinanceConfig] Erro no checkAndLoad:", err);
                 setLoading(false);
+            } finally {
+                clearTimeout(timeoutId);
             }
         };
         checkAndLoad();

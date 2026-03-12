@@ -112,7 +112,7 @@ function ProductSlide({
                             {produto.categoria}
                         </span>
                     )}
-                    <h2 className="text-7xl lg:text-9xl font-black text-white leading-[0.9] tracking-tighter drop-shadow-2xl">
+                    <h2 className="text-5xl lg:text-7xl font-black text-white leading-[0.9] tracking-tighter drop-shadow-2xl line-clamp-3">
                         {produto.nome}
                     </h2>
                 </div>
@@ -148,9 +148,9 @@ function ProductSlide({
                             <Zap size={32} />
                             <span className="text-2xl font-black uppercase tracking-[0.2em]">À vista no Pix</span>
                         </div>
-                        <p className="text-[10rem] lg:text-[14rem] font-black text-emerald-400 leading-none tracking-tighter drop-shadow-[0_0_30px_rgba(52,211,153,0.3)]">
+                        <p className="text-[7rem] lg:text-[10rem] font-black text-emerald-400 leading-none tracking-tighter drop-shadow-[0_0_30px_rgba(52,211,153,0.3)]">
                             {formatBRL(produto.preco_pix).replace("R$", "").trim()}
-                            <span className="text-5xl lg:text-6xl text-emerald-500/50 -ml-4 uppercase italic">Pix</span>
+                            <span className="text-3xl lg:text-4xl text-emerald-500/50 -ml-2 uppercase italic">Pix</span>
                         </p>
                     </div>
 
@@ -372,12 +372,12 @@ export default function VitrineTV() {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-12">
+                <div className="flex items-center gap-12 bg-slate-900/40 backdrop-blur-md px-8 py-4 rounded-[2.5rem] border border-white/5">
                     <div className="text-right">
-                        <p className="text-[6rem] font-black text-white tracking-tighter leading-none tabular-nums drop-shadow-lg">
+                        <p className="text-[4rem] font-black text-white tracking-tighter leading-none tabular-nums drop-shadow-lg">
                             {formatTime(currentTime)}
                         </p>
-                        <p className="text-slate-500 text-2xl font-black uppercase tracking-widest mt-2 drop-shadow-md">
+                        <p className="text-slate-500 text-xl font-black uppercase tracking-widest mt-1 drop-shadow-md">
                             {formatDate(currentTime)}
                         </p>
                     </div>

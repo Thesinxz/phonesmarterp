@@ -19,9 +19,10 @@ import {
     Target,
     CheckSquare,
     Square,
-    History
+    History,
+    Split
 } from "lucide-react";
-import { getProdutos, deleteProduto, deleteProdutos, type ProdutoFilters } from "@/services/estoque";
+import { getProdutos, deleteProduto, deleteProdutos, type ProdutoFilters, desmembrarProduto, updateProduto } from "@/services/estoque";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -146,6 +147,27 @@ export default function EstoquePage() {
         } catch (error: any) {
             console.error("Erro ao excluir produtos em massa:", error);
             toast.error(`Erro ao excluir produtos: ${error.message || 'Erro desconhecido'}`);
+        }
+    };
+
+    const handleDesmembrar = async (id: string) => {
+        if (!confirm("Isso irá transformar este registro em vários itens de 1 unidade cada. Deseja continuar?")) return;
+        try {
+            await desmembrarProduto(id);
+            toast.success("Produto desmembrado com sucesso!");
+            loadProdutos();
+        } catch (error: any) {
+            console.error("Erro ao desmembrar:", error);
+            toast.error("Erro ao desmembrar produto.");
+        }
+    };
+    const handleQuickUpdate = async (id: string, updates: Partial<Produto>) => {
+        try {
+            await updateProduto(id, updates);
+            toast.success("Atualizado!");
+        } catch (error) {
+            console.error("Erro na atualização rápida:", error);
+            toast.error("Erro ao atualizar.");
         }
     };
 
@@ -335,21 +357,31 @@ export default function EstoquePage() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <div className="space-y-1">
-                                                        {p.imei && (
-                                                            <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                                                                <Hash size={12} className="text-slate-300" />
-                                                                {p.imei}
-                                                            </div>
-                                                        )}
+                                                    <div className="space-y-1 w-40">
+                                                        <div className="flex items-center gap-1.5 group/imei">
+                                                            <Hash size={12} className="text-slate-300" />
+                                                            <input 
+                                                                type="text"
+                                                                placeholder="IMEI / Serial"
+                                                                defaultValue={p.imei || ""}
+                                                                onBlur={e => {
+                                                                    if (e.target.value !== (p.imei || "")) {
+                                                                        handleQuickUpdate(p.id, { imei: e.target.value });
+                                                                    }
+                                                                }}
+                                                                onKeyDown={e => {
+                                                                    if (e.key === 'Enter') {
+                                                                        (e.target as HTMLInputElement).blur();
+                                                                    }
+                                                                }}
+                                                                className="bg-transparent border-none outline-none text-xs text-slate-600 focus:bg-white focus:ring-1 focus:ring-brand-200 rounded px-1 w-full font-medium"
+                                                            />
+                                                        </div>
                                                         {p.codigo_barras && (
-                                                            <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                                                                <Barcode size={12} className="text-slate-300" />
+                                                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                                                                <Barcode size={10} className="text-slate-200" />
                                                                 {p.codigo_barras}
                                                             </div>
-                                                        )}
-                                                        {!p.imei && !p.codigo_barras && (
-                                                            <span className="text-xs text-slate-300 italic">Nenhum</span>
                                                         )}
                                                     </div>
                                                 </td>
@@ -396,6 +428,15 @@ export default function EstoquePage() {
                                                         >
                                                             <History size={16} />
                                                         </button>
+                                                        {p.estoque_qtd > 1 && (
+                                                            <button
+                                                                onClick={() => handleDesmembrar(p.id)}
+                                                                title="Desmembrar - Transformar em itens individuais para gerir IMEI"
+                                                                className="p-2 hover:bg-brand-50 rounded-lg text-brand-400 hover:text-brand-600"
+                                                            >
+                                                                <Split size={16} />
+                                                            </button>
+                                                        )}
                                                         <Link href={`/estoque/${p.id}`} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-brand-500">
                                                             <Edit size={16} />
                                                         </Link>

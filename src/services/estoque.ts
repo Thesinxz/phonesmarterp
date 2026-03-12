@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/client";
 import { logger } from "@/lib/logger";
 import { type Produto, type Database } from "@/types/database";
 import { addProdutoHistorico } from "./historico_produto";
+import { toast } from "sonner";
 
 const supabase = createClient();
 
@@ -21,7 +22,7 @@ export async function getProdutos(page = 1, limit = 50, filters?: ProdutoFilters
         .range(from, to);
 
     if (filters?.search) {
-        query = query.or(`nome.ilike.%${filters.search}%,imei.ilike.%${filters.search}%,codigo_barras.ilike.%${filters.search}%,categoria.ilike.%${filters.search}%,marca.ilike.%${filters.search}%`);
+        query = query.or(`nome.ilike.%${filters.search}%,imei.ilike.%${filters.search}%,codigo_barras.ilike.%${filters.search}%,categoria.ilike.%${filters.search}%`);
     }
 
     if (filters?.grade) {
@@ -77,7 +78,7 @@ export async function createProdutos(produtos: Database["public"]["Tables"]["pro
 
     const empresaId = produtos[0].empresa_id;
     const totalItens = produtos.length;
-    logger.log(`[Service:Estoque] Iniciando importação para ${totalItens} produtos na empresa ${empresaId}...`);
+    logger.log(`[Service:Estoque v3] Iniciando importação para ${totalItens} produtos na empresa ${empresaId}...`);
 
     // Helper: Timeout para evitar travamento eterno (RLS hanging)
     const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
@@ -102,7 +103,7 @@ export async function createProdutos(produtos: Database["public"]["Tables"]["pro
                 p_produtos: produtos,
                 p_empresa_id: empresaId
             }),
-            15000,
+            60000,
             "RPC v2"
         );
 
@@ -125,7 +126,7 @@ export async function createProdutos(produtos: Database["public"]["Tables"]["pro
             (supabase as any).rpc("importar_produtos_massa", {
                 p_produtos: produtos
             }),
-            15000,
+            60000,
             "RPC v1"
         );
 
@@ -141,14 +142,12 @@ export async function createProdutos(produtos: Database["public"]["Tables"]["pro
     }
 
     // === ESTRATÉGIA 3: INSERT direto SEM .select() ===
-    // IMPORTANTE: NÃO chamamos .select() após .insert() pois o PostgREST
-    // tentará executar um SELECT na tabela com RLS, causando recursão infinita.
     try {
-        logger.log("[Service:Estoque] Tentativa 3: INSERT direto (sem .select(), sem retorno de dados)...");
+        logger.log("[Service:Estoque] Tentativa 3: INSERT direto (sem .select(), timeout prolongado)...");
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result: any = await withTimeout(
             (supabase.from("produtos") as any).insert(produtos),
-            20000,
+            60000,
             "INSERT direto"
         );
 
@@ -156,16 +155,46 @@ export async function createProdutos(produtos: Database["public"]["Tables"]["pro
             logger.log(`[Service:Estoque] ✅ INSERT direto OK! ${totalItens} produtos enviados.`);
             return new Array(totalItens).fill({ id: 'imported' }) as Produto[];
         }
-        console.error("[Service:Estoque] INSERT direto falhou:", result.error.message);
-        throw result.error;
+        logger.warn("[Service:Estoque] INSERT direto falhou:", result.error.message);
     } catch (e: any) {
-        console.error("[Service:Estoque] ❌ Todas as 3 estratégias falharam:", e.message);
-        throw new Error(
-            `Falha ao importar produtos. O banco de dados pode estar com problemas de RLS. ` +
-            `Detalhes: ${e.message}. ` +
-            `Solução: Execute a migration 058 no SQL Editor do Supabase.`
-        );
+        logger.warn("[Service:Estoque] INSERT direto erro/timeout:", e.message);
     }
+
+    // === ESTRATÉGIA 4: Inserção INDIVIDUAL (O "Debug" Final) ===
+    logger.log("[Service:Estoque] Tentativa 4: Inserção INDIVIDUAL (Lenta, mas mostra o erro real de cada item)...");
+    let sucessos = 0;
+    const erros: string[] = [];
+
+    for (let i = 0; i < produtos.length; i++) {
+        const prod = produtos[i];
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { error: indError } = await (supabase.from("produtos") as any).insert(prod);
+            if (!indError) {
+                sucessos++;
+            } else {
+                console.error(`[Service:Estoque] Erro no item ${i} (${prod.nome}):`, indError.message);
+                erros.push(`${prod.nome}: ${indError.message}`);
+            }
+        } catch (errInd: any) {
+            console.error(`[Service:Estoque] Erro fatal no item ${i}:`, errInd.message);
+            erros.push(`${prod.nome}: ${errInd.message}`);
+        }
+    }
+
+    if (sucessos > 0) {
+        logger.log(`[Service:Estoque] ✅ Concluído com sucesso parcial: ${sucessos}/${totalItens} importados.`);
+        if (erros.length > 0) {
+            toast.error(`${sucessos} importados, ${erros.length} falharam. Verifique o console.`);
+        }
+        return new Array(sucessos).fill({ id: 'imported' }) as Produto[];
+    }
+
+    logger.error("[Service:Estoque] ❌ Todas as estratégias (incluindo individual) falharam.");
+    throw new Error(
+        `Falha total na importação. O banco pode estar travado por RLS ou falta a migration 058. ` +
+        `Últimos erros: ${erros.slice(0, 3).join(", ")}`
+    );
 }
 
 export async function updateProduto(id: string, produto: Partial<Database["public"]["Tables"]["produtos"]["Update"]>) {
@@ -315,4 +344,56 @@ export async function processarBalanco(itens: BalancoItem[]) {
             }
         }
     }
+}
+
+export async function desmembrarProduto(id: string) {
+    // 1. Busca o produto original
+    const { data: original, error: fetchError } = await (supabase.from("produtos") as any)
+        .select("*")
+        .eq("id", id)
+        .single();
+
+    if (fetchError || !original) throw new Error("Produto não encontrado para desmembramento.");
+    if (original.estoque_qtd <= 1) return original;
+
+    const qtdOriginal = original.estoque_qtd;
+
+    // 2. Cria as novas cópias (qtd - 1)
+    const novasCopias = [];
+    for (let i = 0; i < qtdOriginal - 1; i++) {
+        const { id: _, created_at: __, updated_at: ___, ...resto } = original;
+        novasCopias.push({
+            ...resto,
+            estoque_qtd: 1,
+            imei: null, // Limpa o IMEI nas cópias para forçar preenchimento correto
+        });
+    }
+
+    // 3. Atualiza o original para Qtd 1
+    const { error: updateError } = await (supabase.from("produtos") as any)
+        .update({ estoque_qtd: 1 })
+        .eq("id", id);
+
+    if (updateError) throw updateError;
+
+    // 4. Insere as cópias
+    const { data: inserts, error: insertError } = await (supabase.from("produtos") as any)
+        .insert(novasCopias)
+        .select();
+
+    if (insertError) {
+        // Rollback manual (opcional, mas bom tentar)
+        await (supabase.from("produtos") as any).update({ estoque_qtd: qtdOriginal }).eq("id", id);
+        throw insertError;
+    }
+
+    // 5. Histórico no original
+    addProdutoHistorico(
+        id,
+        original.empresa_id,
+        "edicao",
+        `Produto desmembrado de ${qtdOriginal} para 1 unidade (criadas outras ${qtdOriginal - 1} entradas separadas).`
+    );
+
+    return inserts;
 }

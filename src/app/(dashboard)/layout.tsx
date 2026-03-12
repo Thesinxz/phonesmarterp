@@ -25,7 +25,9 @@ export default function DashboardLayout({
     // Só bloqueamos com o spinner central se a autenticação básica ainda estiver pendente.
     // Uma vez que temos o perfil, permitimos que a estrutura do dashboard (sidebar/header)
     // seja montada para melhorar a percepção de performance (LCP).
-    if (loadingAuth) {
+    // Só bloqueamos com o spinner central se a autenticação básica ainda estiver pendente E não tivermos perfil.
+    // Se o profile já existe (cacheado), permitimos que a estrutura seja montada.
+    if (loadingAuth && !profile) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="w-10 h-10 border-4 border-brand-200 border-t-brand-500 rounded-full animate-spin" />
