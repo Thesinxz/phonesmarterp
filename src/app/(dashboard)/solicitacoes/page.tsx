@@ -124,14 +124,14 @@ export default function SolicitacoesPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Solicitações e Lembretes</h1>
-                    <p className="text-slate-500 text-sm">Gerencie pedidos e avisos para evitar esquecimentos.</p>
+                    <h1 className="text-xl md:text-2xl font-bold text-slate-900">Solicitações e Lembretes</h1>
+                    <p className="text-slate-500 text-[10px] md:text-sm">Gerencie pedidos e avisos para evitar esquecimentos.</p>
                 </div>
                 <button
                     onClick={() => setIsModalOpen(true)}
-                    className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-xl shadow-lg shadow-brand-500/20 transition-all font-medium"
+                    className="inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-xl shadow-lg shadow-brand-500/20 transition-all font-medium w-full sm:w-auto text-sm"
                 >
                     <Plus className="w-5 h-5" />
                     Nova Solicitação
@@ -145,8 +145,8 @@ export default function SolicitacoesPage() {
             />
 
             {/* Filtros */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <div className="relative col-span-1 md:col-span-1">
+            <div className="flex flex-col lg:grid lg:grid-cols-5 gap-4">
+                <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-400" />
                     <input
                         type="text"
@@ -156,7 +156,7 @@ export default function SolicitacoesPage() {
                         className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all text-sm"
                     />
                 </div>
-                <div>
+                <div className="flex gap-2">
                     <select
                         value={statusFilter}
                         onChange={(e: any) => setStatusFilter(e.target.value)}
@@ -168,21 +168,19 @@ export default function SolicitacoesPage() {
                         <option value="concluido">Concluído</option>
                         <option value="arquivado">Arquivado</option>
                     </select>
-                </div>
-                <div>
                     <select
                         value={categoryFilter}
                         onChange={(e: any) => setCategoryFilter(e.target.value)}
                         className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all text-sm appearance-none"
                     >
                         <option value="todas">Categoria: Todas</option>
-                        <option value="pedido">Pedidos Internos</option>
-                        <option value="aviso_cliente">Avisos a Clientes</option>
+                        <option value="pedido">Pedidos</option>
+                        <option value="aviso_cliente">Avisos</option>
                         <option value="lembrete">Lembretes</option>
                         <option value="outro">Outros</option>
                     </select>
                 </div>
-                <div>
+                <div className="flex gap-2">
                     <select
                         value={priorityFilter}
                         onChange={(e: any) => setPriorityFilter(e.target.value)}
@@ -195,18 +193,18 @@ export default function SolicitacoesPage() {
                         <option value="urgente">🔥 Urgente</option>
                     </select>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="flex gap-2">
                     <select
                         value={sortBy}
                         onChange={(e: any) => setSortBy(e.target.value)}
                         className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all text-[11px] font-bold uppercase tracking-tight appearance-none text-slate-600"
                     >
-                        <option value="created_at">Ordenar: Recentes</option>
-                        <option value="prioridade">Ordenar: Urgência</option>
-                        <option value="data_vencimento">Ordenar: Vencimento</option>
+                        <option value="created_at">Recentes</option>
+                        <option value="prioridade">Urgência</option>
+                        <option value="data_vencimento">Vencimento</option>
                     </select>
 
-                    <div className="flex bg-slate-100 p-1 rounded-xl">
+                    <div className="flex bg-slate-100 p-1 rounded-xl w-32 shrink-0">
                         <button
                             onClick={() => setViewMode("grid")}
                             className={cn(

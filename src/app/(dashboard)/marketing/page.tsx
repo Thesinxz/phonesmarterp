@@ -49,16 +49,18 @@ export default function MarketingPage() {
     const taxaEntrega = stats.total > 0 ? Math.round((stats.entregues / stats.total) * 100) : 0;
 
     return (
-        <div className="space-y-6 page-enter">
+        <div className="space-y-6 page-enter pb-20 lg:pb-6">
             {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/20 shrink-0">
                         <Megaphone className="w-5 h-5 text-white" />
                     </div>
-                    Marketing
-                </h1>
-                <p className="text-slate-500 text-sm mt-1 ml-[52px]">Central de comunicação, automações e campanhas</p>
+                    <div>
+                        <h1 className="text-xl md:text-2xl font-bold text-slate-800 leading-tight">Marketing</h1>
+                        <p className="text-slate-500 text-[10px] md:text-sm mt-0.5">Central de comunicação, automações e campanhas</p>
+                    </div>
+                </div>
             </div>
 
             {/* Stats Cards */}

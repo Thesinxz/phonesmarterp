@@ -63,39 +63,41 @@ export default function ClientesPage() {
     return (
         <div className="space-y-6 page-enter">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Clientes</h1>
-                    <p className="text-slate-500 text-sm mt-0.5">Gerencie sua base de clientes</p>
+                    <h1 className="text-xl md:text-2xl font-bold text-slate-800">Clientes</h1>
+                    <p className="text-slate-500 text-xs md:text-sm mt-0.5">Gerencie sua base de clientes</p>
                 </div>
-                <Link
-                    href="/clientes/novo"
-                    className="btn-primary"
-                >
-                    <Plus className="w-4 h-4" />
-                    Novo Cliente
-                </Link>
+                <div className="flex gap-3 w-full sm:w-auto">
+                    <Link
+                        href="/clientes/novo"
+                        className="btn-primary flex-1 sm:flex-initial justify-center"
+                    >
+                        <Plus className="w-4 h-4" />
+                        <span className="whitespace-nowrap">Novo Cliente</span>
+                    </Link>
+                </div>
             </div>
 
             {/* Filters */}
-            <GlassCard className="flex items-center gap-4 py-4">
-                <div className="relative flex-1 max-w-md">
+            <GlassCard className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 py-4">
+                <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                         type="text"
-                        placeholder="Buscar por nome, email ou CPF/CNPJ..."
+                        placeholder="Buscar..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="input-glass pl-9"
+                        className="input-glass pl-9 w-full"
                     />
                 </div>
-                <div className="w-48">
+                <div className="w-full sm:w-48">
                     <select
-                        className="input-glass appearance-none cursor-pointer"
+                        className="input-glass appearance-none cursor-pointer w-full"
                         value={filters.segmento || ""}
                         onChange={(e) => setFilters((prev) => ({ ...prev, segmento: e.target.value }))}
                     >
-                        <option value="">Todos os segmentos</option>
+                        <option value="">Segmentos</option>
                         <option value="novo">Novo</option>
                         <option value="vip">VIP</option>
                         <option value="atacadista">Atacadista</option>
@@ -108,7 +110,7 @@ export default function ClientesPage() {
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                         <thead className="bg-slate-50/50 text-slate-500 font-medium border-b border-slate-100">
-                            <tr>
+                            <tr className="whitespace-nowrap">
                                 <th className="px-6 py-4">Nome</th>
                                 <th className="px-6 py-4">Contato</th>
                                 <th className="px-6 py-4">Segmento</th>

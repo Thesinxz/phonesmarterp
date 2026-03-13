@@ -85,15 +85,15 @@ export default function PedidosPage() {
     return (
         <div className="space-y-6 page-enter pb-12">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-black text-slate-800">Pedidos de Venda</h1>
-                    <p className="text-slate-500 text-sm mt-0.5">Gerencie orçamentos e vendas remotas</p>
+                    <h1 className="text-xl md:text-2xl font-black text-slate-800">Pedidos de Venda</h1>
+                    <p className="text-slate-500 text-xs md:text-sm mt-0.5">Gerencie orçamentos e vendas remotas</p>
                 </div>
-                <div className="flex gap-3">
-                    <Link href="/pedidos/novo" className="btn-primary flex items-center gap-2">
+                <div className="flex gap-3 w-full sm:w-auto">
+                    <Link href="/pedidos/novo" className="btn-primary flex items-center gap-2 flex-1 sm:flex-initial justify-center">
                         <Plus size={18} />
-                        Novo Pedido
+                        <span className="whitespace-nowrap">Novo Pedido</span>
                     </Link>
                 </div>
             </div>

@@ -66,62 +66,62 @@ function ProductSlide({
 
     return (
         <div className={`
-            absolute inset-0 flex flex-col lg:flex-row items-center justify-center p-10 lg:p-20 gap-16 transition-all duration-1000 ease-in-out
+            absolute inset-0 flex flex-col lg:flex-row items-center justify-center p-6 lg:p-20 gap-8 lg:gap-16 transition-all duration-1000 ease-in-out
             ${isActive ? "opacity-100 scale-100 translate-x-0" : "opacity-0 scale-110 translate-x-20 pointer-events-none"}
         `}>
             {/* Esquerda: Imagem Gigante */}
-            <div className="w-full lg:w-1/2 h-full flex items-center justify-center relative">
-                <div className="relative w-full aspect-square max-h-[70vh] rounded-[4rem] bg-gradient-to-br from-white/[0.08] to-white/[0.02] border border-white/10 overflow-hidden shadow-[0_0_100px_rgba(99,102,241,0.15)] group">
+            <div className="w-full lg:w-1/2 h-1/2 lg:h-full flex items-center justify-center relative">
+                <div className="relative w-full aspect-square max-h-[40vh] lg:max-h-[70vh] rounded-[2rem] lg:rounded-[4rem] bg-gradient-to-br from-white/[0.08] to-white/[0.02] border border-white/10 overflow-hidden shadow-[0_0_100px_rgba(99,102,241,0.15)] group">
                     {produto.imagem_url ? (
                         <img
                             src={produto.imagem_url}
                             alt={produto.nome}
-                            className="w-full h-full object-contain p-12 transition-transform duration-[10s] ease-linear group-hover:scale-110"
+                            className="w-full h-full object-contain p-6 lg:p-12 transition-transform duration-[10s] ease-linear group-hover:scale-110"
                         />
                     ) : (
-                        <ShoppingBag className="w-40 h-40 text-slate-800" />
+                        <ShoppingBag className="w-20 h-20 lg:w-40 lg:h-40 text-slate-800" />
                     )}
 
                     {/* Badge Condição */}
                     {produto.condicao && (
-                        <div className="absolute top-10 left-10">
-                            <span className="px-8 py-3 rounded-2xl text-xl font-black uppercase tracking-widest bg-indigo-500 text-white shadow-2xl">
-                                {produto.condicao === "novo_lacrado" ? "Novo Lacrado" : produto.condicao === "seminovo" ? "Seminovo" : "Usado"}
+                        <div className="absolute top-4 left-4 lg:top-10 lg:left-10">
+                            <span className="px-4 py-1.5 lg:px-8 lg:py-3 rounded-xl lg:rounded-2xl text-xs lg:text-xl font-black uppercase tracking-widest bg-indigo-500 text-white shadow-2xl">
+                                {produto.condicao === "novo_lacrado" ? "Novo" : produto.condicao === "seminovo" ? "Seminovo" : "Usado"}
                             </span>
                         </div>
                     )}
                 </div>
 
                 {/* QR Code Flutuante na Imagem */}
-                <div className="absolute -bottom-8 -right-8 bg-white p-4 rounded-[2rem] shadow-2xl border-4 border-slate-900 group">
+                <div className="absolute -bottom-4 -right-4 lg:-bottom-8 lg:-right-8 bg-white p-2 lg:p-4 rounded-[1rem] lg:rounded-[2rem] shadow-2xl border-2 lg:border-4 border-slate-900 group">
                     <div className="relative">
-                        <img src={qrCodeUrl} alt="QR Code" className="w-32 h-32 lg:w-48 lg:h-48" />
+                        <img src={qrCodeUrl} alt="QR Code" className="w-20 h-20 lg:w-48 lg:h-48" />
                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-xl">
-                            <p className="text-[10px] font-black text-slate-900 text-center px-2">APONTE A CÂMERA<br />PARA COMPRAR</p>
+                            <p className="text-[8px] lg:text-[10px] font-black text-slate-900 text-center px-1 lg:px-2">APONTE A CÂMERA<br />PARA COMPRAR</p>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Direita: Info e Preços Gigantes */}
-            <div className="w-full lg:w-1/2 flex flex-col justify-center space-y-10">
-                <div className="space-y-4">
+            <div className="w-full lg:w-1/2 flex flex-col justify-center space-y-4 lg:space-y-10 text-center lg:text-left">
+                <div className="space-y-2 lg:space-y-4">
                     {produto.categoria && (
-                        <span className="inline-flex items-center gap-2 text-xl text-indigo-400 font-black uppercase tracking-[0.3em]">
-                            <Tag size={20} />
+                        <span className="inline-flex items-center gap-2 text-xs lg:text-xl text-indigo-400 font-black uppercase tracking-[0.3em]">
+                            <Tag size={16} className="lg:w-5 lg:h-5" />
                             {produto.categoria}
                         </span>
                     )}
-                    <h2 className="text-5xl lg:text-7xl font-black text-white leading-[0.9] tracking-tighter drop-shadow-2xl line-clamp-3">
+                    <h2 className="text-2xl lg:text-7xl font-black text-white leading-tight lg:leading-[0.9] tracking-tighter drop-shadow-2xl line-clamp-2 lg:line-clamp-3">
                         {produto.nome}
                     </h2>
                 </div>
 
                 {/* Grades e Specs */}
-                <div className="flex flex-wrap gap-4">
+                <div className="flex flex-wrap justify-center lg:justify-start gap-2 lg:gap-4">
                     {mostrarGrade && produto.grade && (
                         <span className={`
-                            px-8 py-3 rounded-2xl text-2xl font-black uppercase border-4
+                            px-4 py-1.5 lg:px-8 lg:py-3 rounded-xl lg:rounded-2xl text-xs lg:text-2xl font-black uppercase border-2 lg:border-4
                             ${produto.grade === "A" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" :
                                 produto.grade === "B" ? "bg-blue-500/10 text-blue-400 border-blue-500/30" :
                                     "bg-orange-500/10 text-orange-400 border-orange-500/30"}
@@ -130,37 +130,32 @@ function ProductSlide({
                         </span>
                     )}
                     {produto.capacidade && (
-                        <span className="px-8 py-3 rounded-2xl text-2xl font-black bg-white/5 text-slate-300 border-4 border-white/10 uppercase">
+                        <span className="px-4 py-1.5 lg:px-8 lg:py-3 rounded-xl lg:rounded-2xl text-xs lg:text-2xl font-black bg-white/5 text-slate-300 border-2 lg:border-4 border-white/10 uppercase">
                             {produto.capacidade}
-                        </span>
-                    )}
-                    {produto.cor && (
-                        <span className="px-8 py-3 rounded-2xl text-2xl font-black bg-white/5 text-slate-300 border-4 border-white/10 uppercase">
-                            {produto.cor}
                         </span>
                     )}
                 </div>
 
                 {/* Preços */}
-                <div className="space-y-6 pt-6">
-                    <div className="space-y-1">
-                        <div className="flex items-center gap-3 text-emerald-400">
-                            <Zap size={32} />
-                            <span className="text-2xl font-black uppercase tracking-[0.2em]">À vista no Pix</span>
+                <div className="space-y-4 lg:space-y-6 pt-2 lg:pt-6">
+                    <div className="space-y-0.5 lg:space-y-1">
+                        <div className="flex items-center justify-center lg:justify-start gap-2 lg:gap-3 text-emerald-400">
+                            <Zap size={20} className="lg:w-8 lg:h-8" />
+                            <span className="text-xs lg:text-2xl font-black uppercase tracking-[0.2em]">À vista no Pix</span>
                         </div>
-                        <p className="text-[7rem] lg:text-[10rem] font-black text-emerald-400 leading-none tracking-tighter drop-shadow-[0_0_30px_rgba(52,211,153,0.3)]">
+                        <p className="text-5xl lg:text-[10rem] font-black text-emerald-400 leading-none tracking-tighter drop-shadow-[0_0_30px_rgba(52,211,153,0.3)]">
                             {formatBRL(produto.preco_pix).replace("R$", "").trim()}
-                            <span className="text-3xl lg:text-4xl text-emerald-500/50 -ml-2 uppercase italic">Pix</span>
+                            <span className="text-sm lg:text-4xl text-emerald-500/50 ml-1 lg:-ml-2 uppercase italic">Pix</span>
                         </p>
                     </div>
 
                     {melhorParcela && (
-                        <div className="inline-block bg-indigo-500/10 border-l-[12px] border-indigo-500 rounded-r-[3rem] px-12 py-8">
-                            <p className="text-3xl font-black text-white/60 uppercase tracking-widest mb-2 flex items-center gap-3">
-                                <CreditCard size={28} />
+                        <div className="inline-block bg-indigo-500/10 border-l-4 lg:border-l-[12px] border-indigo-500 rounded-r-2xl lg:rounded-r-[3rem] px-6 py-3 lg:px-12 lg:py-8">
+                            <p className="text-xs lg:text-3xl font-black text-white/60 uppercase tracking-widest mb-1 lg:mb-2 flex items-center justify-center lg:justify-start gap-2 lg:gap-3">
+                                <CreditCard size={16} className="lg:w-7 lg:h-7" />
                                 No Cartão
                             </p>
-                            <p className="text-6xl lg:text-8xl font-black text-indigo-300 tracking-tighter">
+                            <p className="text-2xl lg:text-8xl font-black text-indigo-300 tracking-tighter">
                                 {melhorParcela.qtd}x de {formatBRL(melhorParcela.valor_parcela)}
                             </p>
                         </div>
@@ -357,27 +352,27 @@ export default function VitrineTV() {
             </div>
 
             {/* ── Header Fixo ── */}
-            <header className="fixed top-0 left-0 right-0 z-50 p-12 flex items-center justify-between">
-                <div className="flex items-center gap-8">
+            <header className="fixed top-0 left-0 right-0 z-50 p-6 lg:p-12 flex flex-col sm:flex-row items-center justify-between gap-6 sm:gap-0">
+                <div className="flex items-center gap-4 lg:gap-8">
                     {empresa.logo_url ? (
-                        <img src={empresa.logo_url} alt={`Logo ${empresa.nome}`} className="w-24 h-24 object-contain rounded-[2rem] bg-white p-2 shadow-[0_0_50px_rgba(99,102,241,0.4)]" />
+                        <img src={empresa.logo_url} alt={`Logo ${empresa.nome}`} className="w-12 h-12 lg:w-24 lg:h-24 object-contain rounded-2xl lg:rounded-[2rem] bg-white p-1 lg:p-2 shadow-[0_0_50px_rgba(99,102,241,0.4)]" />
                     ) : (
-                        <div className="w-24 h-24 rounded-[2rem] bg-indigo-500 flex items-center justify-center shadow-[0_0_50px_rgba(99,102,241,0.4)]">
-                            <ShoppingBag className="w-12 h-12 text-white" />
+                        <div className="w-12 h-12 lg:w-24 lg:h-24 rounded-2xl lg:rounded-[2rem] bg-indigo-500 flex items-center justify-center shadow-[0_0_50px_rgba(99,102,241,0.4)]">
+                            <ShoppingBag className="w-6 h-6 lg:w-12 lg:h-12 text-white" />
                         </div>
                     )}
                     <div>
-                        <h1 className="text-white font-black text-6xl tracking-tighter leading-none">{empresa.nome}</h1>
-                        <p className="text-indigo-400 text-2xl font-black uppercase tracking-[0.4em] mt-2">{config.titulo}</p>
+                        <h1 className="text-white font-black text-3xl lg:text-6xl tracking-tighter leading-none">{empresa.nome}</h1>
+                        <p className="text-indigo-400 text-xs lg:text-2xl font-black uppercase tracking-[0.4em] mt-1 lg:mt-2">{config.titulo}</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-12 bg-slate-900/40 backdrop-blur-md px-8 py-4 rounded-[2.5rem] border border-white/5">
-                    <div className="text-right">
-                        <p className="text-[4rem] font-black text-white tracking-tighter leading-none tabular-nums drop-shadow-lg">
+                <div className="flex items-center gap-6 lg:gap-12 bg-slate-900/40 backdrop-blur-md px-6 py-3 lg:px-8 lg:py-4 rounded-2xl lg:rounded-[2.5rem] border border-white/5">
+                    <div className="text-center sm:text-right">
+                        <p className="text-2xl lg:text-[4rem] font-black text-white tracking-tighter leading-none tabular-nums drop-shadow-lg">
                             {formatTime(currentTime)}
                         </p>
-                        <p className="text-slate-500 text-xl font-black uppercase tracking-widest mt-1 drop-shadow-md">
+                        <p className="text-slate-500 text-[10px] lg:text-xl font-black uppercase tracking-widest mt-0.5 lg:mt-1 drop-shadow-md">
                             {formatDate(currentTime)}
                         </p>
                     </div>
@@ -405,27 +400,27 @@ export default function VitrineTV() {
             </div>
 
             {/* ── Footer / Barra de Progresso ── */}
-            <footer className="fixed bottom-0 left-0 right-0 z-50 p-12">
-                <div className="flex items-center justify-between mb-8">
-                    <div className="flex items-center gap-6">
+            <footer className="fixed bottom-0 left-0 right-0 z-50 p-6 lg:p-12">
+                <div className="flex items-center justify-between mb-4 lg:mb-8">
+                    <div className="flex items-center gap-4 lg:gap-6">
                         <div className="flex items-center gap-2 text-emerald-400">
-                            <Wifi size={24} />
-                            <span className="text-xl font-bold uppercase tracking-widest">Loja Online</span>
+                            <Wifi size={16} className="lg:w-6 lg:h-6" />
+                            <span className="text-xs lg:text-xl font-bold uppercase tracking-widest">Loja Online</span>
                         </div>
-                        <div className="h-2 w-2 rounded-full bg-slate-800" />
-                        <span className="text-xl font-bold text-slate-500 uppercase tracking-widest">
-                            Produto {currentIndex + 1} de {produtos.length}
+                        <div className="h-1.5 w-1.5 lg:h-2 lg:w-2 rounded-full bg-slate-800" />
+                        <span className="text-[10px] lg:text-xl font-bold text-slate-500 uppercase tracking-widest">
+                            {currentIndex + 1} / {produtos.length}
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-4 text-slate-600 text-xl font-black italic">
-                        <ShoppingBag size={24} />
-                        SMART OS TV MODE
+                    <div className="flex items-center gap-2 lg:gap-4 text-slate-600 text-[10px] lg:text-xl font-black italic">
+                        <ShoppingBag size={16} className="lg:w-6 lg:h-6" />
+                        SMART OS TV
                     </div>
                 </div>
 
                 {/* Progress Bar Slideshow */}
-                <div className="h-4 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
+                <div className="h-2 lg:h-4 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
                     <div
                         key={currentIndex}
                         className="h-full bg-gradient-to-r from-indigo-500 via-emerald-500 to-indigo-500 animate-progress origin-left"
@@ -436,42 +431,42 @@ export default function VitrineTV() {
 
             {/* ── Controles Flutuantes ── */}
             <div className={`
-                fixed bottom-32 left-1/2 -translate-x-1/2 z-[100]
-                bg-slate-900/95 backdrop-blur-2xl rounded-[3rem] border-4 border-white/10
-                px-10 py-5 flex items-center gap-8 shadow-[0_0_100px_rgba(0,0,0,0.5)]
+                fixed bottom-28 lg:bottom-32 left-1/2 -translate-x-1/2 z-[100]
+                bg-slate-900/95 backdrop-blur-2xl rounded-2xl lg:rounded-[3rem] border-2 lg:border-4 border-white/10
+                px-4 py-3 lg:px-10 lg:py-5 flex items-center gap-4 lg:gap-8 shadow-[0_0_100px_rgba(0,0,0,0.5)]
                 transition-all duration-500
                 ${showControls ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10 pointer-events-none"}
             `}>
-                <button onClick={prevSlide} className="p-4 rounded-2xl hover:bg-white/10 text-white transition-all transform hover:scale-110 active:scale-95">
-                    <ChevronLeft size={40} />
+                <button onClick={prevSlide} className="p-2 lg:p-4 rounded-xl lg:rounded-2xl hover:bg-white/10 text-white transition-all transform hover:scale-110 active:scale-95">
+                    <ChevronLeft size={24} className="lg:w-10 lg:h-10" />
                 </button>
 
                 <button
                     onClick={() => setIsPlaying(prev => !prev)}
-                    className="w-24 h-24 flex items-center justify-center rounded-[2rem] bg-indigo-500 text-white shadow-xl hover:bg-indigo-400 transition-all transform hover:scale-110 active:scale-95"
+                    className="w-12 h-12 lg:w-24 lg:h-24 flex items-center justify-center rounded-xl lg:rounded-[2rem] bg-indigo-500 text-white shadow-xl hover:bg-indigo-400 transition-all transform hover:scale-110 active:scale-95"
                 >
-                    {isPlaying ? <Pause size={48} fill="white" /> : <Play size={48} fill="white" className="ml-2" />}
+                    {isPlaying ? <Pause size={24} fill="white" className="lg:w-12 lg:h-12" /> : <Play size={24} fill="white" className="ml-1 lg:ml-2 lg:w-12 lg:h-12" />}
                 </button>
 
-                <button onClick={nextSlide} className="p-4 rounded-2xl hover:bg-white/10 text-white transition-all transform hover:scale-110 active:scale-95">
-                    <ChevronRight size={40} />
+                <button onClick={nextSlide} className="p-2 lg:p-4 rounded-xl lg:rounded-2xl hover:bg-white/10 text-white transition-all transform hover:scale-110 active:scale-95">
+                    <ChevronRight size={24} className="lg:w-10 lg:h-10" />
                 </button>
 
-                <div className="h-16 w-px bg-white/10 mx-2" />
+                <div className="h-8 lg:h-16 w-px bg-white/10 mx-1 lg:mx-2" />
 
                 <div className="flex flex-col items-center">
-                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Velocidade</span>
-                    <div className="flex items-center gap-4">
-                        <button onClick={() => setSlideTime(t => Math.min(t + 2, 30))} className="text-slate-400 hover:text-white">-</button>
-                        <span className="text-2xl font-black text-white min-w-[3ch] text-center">{slideTime}s</span>
-                        <button onClick={() => setSlideTime(t => Math.max(t - 2, 4))} className="text-slate-400 hover:text-white">+</button>
+                    <span className="text-[8px] lg:text-xs font-black text-slate-500 uppercase tracking-widest mb-0.5 lg:mb-1">Tempo</span>
+                    <div className="flex items-center gap-2 lg:gap-4">
+                        <button onClick={() => setSlideTime(t => Math.min(t + 2, 30))} className="text-slate-400 hover:text-white text-sm lg:text-base">-</button>
+                        <span className="text-sm lg:text-2xl font-black text-white min-w-[3ch] text-center">{slideTime}s</span>
+                        <button onClick={() => setSlideTime(t => Math.max(t - 2, 4))} className="text-slate-400 hover:text-white text-sm lg:text-base">+</button>
                     </div>
                 </div>
 
-                <div className="h-16 w-px bg-white/10 mx-2" />
+                <div className="hidden sm:block h-8 lg:h-16 w-px bg-white/10 mx-1 lg:mx-2" />
 
-                <button onClick={toggleFullscreen} className="p-4 rounded-2xl hover:bg-white/10 text-white transition-all transform hover:scale-110">
-                    <Maximize size={40} />
+                <button onClick={toggleFullscreen} className="hidden sm:block p-2 lg:p-4 rounded-xl lg:rounded-2xl hover:bg-white/10 text-white transition-all transform hover:scale-110">
+                    <Maximize size={24} className="lg:w-10 lg:h-10" />
                 </button>
             </div>
 

@@ -44,9 +44,11 @@ export default function FerramentasHub() {
     return (
         <div className="space-y-8 page-enter pb-20">
             {/* Header */}
-            <div>
-                <h1 className="text-3xl font-black text-slate-800 tracking-tight">Centro de Inteligência</h1>
-                <p className="text-slate-500 mt-2">Ferramentas avançadas para otimizar sua lucratividade e processos.</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">Centro de Inteligência</h1>
+                    <p className="text-slate-500 text-sm mt-1">Ferramentas avançadas para otimizar sua lucratividade e processos.</p>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

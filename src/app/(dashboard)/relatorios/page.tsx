@@ -63,21 +63,21 @@ export default function RelatoriosPage() {
     return (
         <div className="space-y-6 page-enter pb-12">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Relatórios & Insights</h1>
-                    <p className="text-slate-500 text-sm mt-0.5">Análise detalhada do seu negócio</p>
+                    <h1 className="text-xl md:text-2xl font-bold text-slate-800">Relatórios & Insights</h1>
+                    <p className="text-slate-500 text-[10px] md:text-sm mt-0.5">Análise detalhada do seu negócio</p>
                 </div>
                 <div className="flex gap-3">
-                    <button className="bg-white/60 h-10 px-4 rounded-xl border border-white/60 text-slate-600 flex items-center gap-2 text-sm font-medium hover:bg-white/80 transition-all opacity-50 cursor-not-allowed" disabled>
+                    <button className="bg-white/60 h-10 px-4 rounded-xl border border-white/60 text-slate-600 flex items-center justify-center gap-2 text-[10px] md:text-sm font-medium hover:bg-white/80 transition-all opacity-50 cursor-not-allowed w-full sm:w-auto" disabled>
                         <Download size={16} />
-                        Exportar PDF (Em Breve)
+                        Exportar PDF
                     </button>
                 </div>
             </div>
 
             {/* Quick Stats Grid */}
-            <div className="grid grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                 {reportCards.map((card, i) => (
                     <GlassCard key={i} className="p-5 border-white/40">
                         <div className="flex items-start justify-between mb-4">

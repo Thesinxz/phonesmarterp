@@ -149,69 +149,73 @@ export default function OSPage() {
             {/* Header com ações */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-black text-slate-800 tracking-tight">Ordens de Serviço</h1>
-                    <p className="text-slate-500 text-sm">Gerencie todos os consertos e manutenções.</p>
+                    <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Ordens de Serviço</h1>
+                    <p className="text-slate-500 text-xs md:text-sm">Gerencie todos os consertos e manutenções.</p>
                 </div>
-                <Link
-                    href="/os/nova"
-                    className="h-12 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition-all active:scale-95"
-                >
-                    <Plus size={20} />
-                    Nova OS
-                </Link>
+                <div className="flex gap-3 w-full sm:w-auto">
+                    <Link
+                        href="/os/nova"
+                        className="h-12 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition-all active:scale-95 flex-1 sm:flex-initial"
+                    >
+                        <Plus size={20} />
+                        <span className="whitespace-nowrap">Nova OS</span>
+                    </Link>
+                </div>
             </div>
 
             {/* Filtros e Busca */}
-            <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex flex-col gap-4">
                 <div className="flex-1 relative group">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
                     <input
                         type="text"
-                        placeholder="Buscar por cliente, equipamento, IMEI ou problema..."
+                        placeholder="Buscar..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="w-full h-12 pl-12 pr-4 bg-white rounded-2xl border border-slate-100 shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
                     />
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <div className="relative">
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="relative flex-1 min-w-[140px]">
                         <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                         <select
                             value={filterTecnico}
                             onChange={(e) => setFilterTecnico(e.target.value)}
-                            className="h-12 pl-10 pr-8 bg-white rounded-2xl border border-slate-100 shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold text-slate-600 appearance-none"
+                            className="w-full h-12 pl-10 pr-8 bg-white rounded-2xl border border-slate-100 shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold text-slate-600 appearance-none"
                         >
-                            <option value="">Todos Técnicos</option>
+                            <option value="">Técnicos</option>
                             {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
                         </select>
                     </div>
 
-                    <DateRangeFilter
-                        onChange={(start, end) => {
-                            setFilterStart(start || "");
-                            setFilterEnd(end || "");
-                        }}
-                    />
+                    <div className="flex-1 min-w-[200px] overflow-x-auto scrollbar-none bg-white rounded-2xl border border-slate-100 shadow-sm px-2">
+                        <DateRangeFilter
+                            onChange={(start, end) => {
+                                setFilterStart(start || "");
+                                setFilterEnd(end || "");
+                            }}
+                        />
+                    </div>
 
-                    <div className="flex h-12 bg-slate-100 p-1 rounded-2xl border border-slate-200 shadow-inner">
+                    <div className="flex h-12 bg-slate-100 p-1 rounded-2xl border border-slate-200 shadow-inner w-full sm:w-auto ml-auto">
                         <button
                             onClick={() => setViewMode("kanban")}
                             className={cn(
-                                "flex-1 flex items-center justify-center gap-2 px-4 rounded-xl text-xs font-bold transition-all",
+                                "flex-1 sm:px-4 flex items-center justify-center gap-2 rounded-xl text-xs font-bold transition-all",
                                 viewMode === "kanban" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                             )}
                         >
-                            <LayoutGrid size={16} /> Kanban
+                            <LayoutGrid size={16} /> <span className="hidden xs:inline">Kanban</span>
                         </button>
                         <button
                             onClick={() => setViewMode("list")}
                             className={cn(
-                                "flex-1 flex items-center justify-center gap-2 px-4 rounded-xl text-xs font-bold transition-all",
+                                "flex-1 sm:px-4 flex items-center justify-center gap-2 rounded-xl text-xs font-bold transition-all",
                                 viewMode === "list" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                             )}
                         >
-                            <List size={16} /> Lista
+                            <List size={16} /> <span className="hidden xs:inline">Lista</span>
                         </button>
                     </div>
                 </div>
@@ -268,8 +272,8 @@ export default function OSPage() {
                     ))}
                 </div>
             ) : (
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-xl overflow-hidden">
-                    <table className="w-full text-left border-collapse">
+                <div className="bg-white rounded-3xl border border-slate-100 shadow-xl overflow-x-auto scrollbar-thin">
+                    <table className="w-full text-left border-collapse min-w-[800px]">
                         <thead>
                             <tr className="bg-slate-50 border-b border-slate-100">
                                 <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Número</th>

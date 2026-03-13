@@ -81,10 +81,10 @@ export default function EquipePage() {
     return (
         <PermissionGuard modulo="equipe" fallback="error">
             <div className="space-y-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-900">Gestão de Equipe</h1>
-                        <p className="text-slate-500 text-sm">Gerencie funcionários, papéis e permissões de acesso.</p>
+                        <h1 className="text-xl md:text-2xl font-bold text-slate-900">Gestão de Equipe</h1>
+                        <p className="text-slate-500 text-[10px] md:text-sm">Gerencie funcionários, papéis e permissões de acesso.</p>
                     </div>
                     {profile?.papel === "admin" && (
                         <button
@@ -92,7 +92,7 @@ export default function EquipePage() {
                                 setSelectedMembro(null);
                                 setIsModalOpen(true);
                             }}
-                            className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-xl shadow-lg shadow-brand-500/20 transition-all font-medium"
+                            className="inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-xl shadow-lg shadow-brand-500/20 transition-all font-medium w-full sm:w-auto text-sm"
                         >
                             <Plus size={20} />
                             Novo Membro
@@ -101,8 +101,8 @@ export default function EquipePage() {
                 </div>
 
                 {/* Filtros */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="relative col-span-1 md:col-span-2">
+                <div className="flex flex-col sm:grid sm:grid-cols-4 gap-4">
+                    <div className="relative col-span-1 sm:col-span-2">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-400" />
                         <input
                             type="text"
@@ -112,27 +112,24 @@ export default function EquipePage() {
                             className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all text-sm"
                         />
                     </div>
-                    <div>
+                    <div className="flex gap-2">
                         <select
                             value={roleFilter}
                             onChange={(e) => setRoleFilter(e.target.value)}
                             className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all text-sm appearance-none"
                         >
-                            <option value="todos">Todos os Cargos</option>
-                            <option value="admin">Administrador</option>
+                            <option value="todos">Cargos</option>
+                            <option value="admin">Admin</option>
                             <option value="gerente">Gerente</option>
                             <option value="tecnico">Técnico</option>
                             <option value="financeiro">Financeiro</option>
-                            <option value="atendente">Atendente</option>
                         </select>
-                    </div>
-                    <div>
                         <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
                             className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all text-sm appearance-none"
                         >
-                            <option value="todos">Todos os Status</option>
+                            <option value="todos">Status</option>
                             <option value="ativo">Ativos</option>
                             <option value="inativo">Inativos</option>
                         </select>

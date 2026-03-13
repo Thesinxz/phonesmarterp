@@ -174,20 +174,20 @@ export default function EstoquePage() {
     return (
         <div className="space-y-6 page-enter">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Estoque</h1>
-                    <p className="text-slate-500 text-sm mt-0.5">Gerenciamento de produtos e peças</p>
+                    <h1 className="text-xl md:text-2xl font-bold text-slate-800">Estoque</h1>
+                    <p className="text-slate-500 text-[10px] md:text-sm mt-0.5">Gerenciamento de produtos e peças</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <Link href="/estoque/etiquetas" className="bg-white/60 p-2.5 rounded-xl border border-white/60 text-slate-500 hover:text-brand-600 hover:bg-white transition-all shadow-sm" title="Central de Etiquetas">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Link href="/estoque/etiquetas" className="bg-white/60 p-2.5 rounded-xl border border-white/60 text-slate-500 hover:text-brand-600 hover:bg-white transition-all shadow-sm hidden sm:block" title="Central de Etiquetas">
                         <Printer size={18} />
                     </Link>
-                    <Link href="/estoque/balanco" className="bg-white/60 px-4 py-2.5 rounded-xl border border-white/60 text-slate-700 flex items-center gap-2 text-sm font-bold hover:bg-white transition-all shadow-sm">
+                    <Link href="/estoque/balanco" className="flex-1 sm:flex-initial bg-white/60 px-4 py-2.5 rounded-xl border border-white/60 text-slate-700 flex items-center justify-center gap-2 text-xs font-bold hover:bg-white transition-all shadow-sm">
                         <Target size={18} className="text-indigo-500" />
-                        Balanço / Scanner
+                        Balanço
                     </Link>
-                    <Link href="/estoque/novo" className="btn-primary">
+                    <Link href="/estoque/novo" className="flex-1 sm:flex-initial btn-primary justify-center text-xs">
                         <Plus size={18} />
                         Novo Produto
                     </Link>
@@ -195,7 +195,7 @@ export default function EstoquePage() {
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
                 <GlassCard className="p-4 bg-brand-50/20 border-brand-100/50">
                     <p className="text-[10px] font-bold text-brand-600 uppercase tracking-wider mb-1">Itens Totais</p>
                     <p className="text-2xl font-bold text-brand-900">{totalItems}</p>
@@ -227,8 +227,8 @@ export default function EstoquePage() {
             </div>
 
             {/* Filters Bar */}
-            <div className="flex items-center gap-4">
-                <div className="relative flex-1 max-w-md">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+                <div className="relative w-full sm:flex-1 max-w-md">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                     <input
                         className="input-glass pl-10"
@@ -237,9 +237,9 @@ export default function EstoquePage() {
                         onChange={e => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                     <select
-                        className="input-glass w-32 appearance-none"
+                        className="input-glass flex-1 sm:w-32 appearance-none"
                         onChange={e => setFilters(p => ({ ...p, grade: e.target.value as any || undefined }))}
                     >
                         <option value="">Todas Grades</option>
@@ -248,7 +248,7 @@ export default function EstoquePage() {
                         <option value="C">Grade C</option>
                     </select>
                     <select
-                        className="input-glass w-40 appearance-none"
+                        className="input-glass flex-1 sm:w-40 appearance-none"
                         value={categoriaFilter}
                         onChange={e => setCategoriaFilter(e.target.value)}
                     >
@@ -265,7 +265,7 @@ export default function EstoquePage() {
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
                         <thead className="bg-slate-50/50">
-                            <tr className="text-left text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                            <tr className="text-left text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 whitespace-nowrap">
                                 <th className="px-6 py-4 w-10">
                                     <button onClick={toggleSelectAll} className="w-5 h-5 flex items-center justify-center rounded border border-slate-200 hover:border-indigo-400 transition-colors">
                                         {selectedIds.length === produtos.length && produtos.length > 0 ? (
@@ -484,34 +484,40 @@ export default function EstoquePage() {
 
             {/* Selected Items Floating Bar */}
             {selectedIds.length > 0 && (
-                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-6 py-4 bg-slate-900/90 backdrop-blur text-white rounded-2xl shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-4 z-50">
-                    <div className="flex items-center gap-3 pr-6 border-r border-white/10">
+                <div className="fixed bottom-24 sm:bottom-8 left-1/2 -translate-x-1/2 flex flex-col sm:flex-row items-center gap-4 sm:gap-6 px-4 sm:px-6 py-4 bg-slate-900/95 backdrop-blur text-white rounded-2xl shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-4 z-[60] w-[calc(100%-2rem)] sm:w-auto">
+                    <div className="flex items-center gap-3 pr-0 sm:pr-6 border-b sm:border-b-0 sm:border-r border-white/10 pb-3 sm:pb-0 w-full sm:w-auto">
                         <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center font-bold text-sm">
                             {selectedIds.length}
                         </div>
                         <p className="font-medium text-sm">itens selecionados</p>
-                    </div>
-
-                    <div className="flex items-center gap-3">
                         <button
                             onClick={() => setSelectedIds([])}
-                            className="text-white/60 hover:text-white text-xs font-bold transition-colors"
+                            className="ml-auto sm:hidden text-white/60 hover:text-white text-xs font-bold"
+                        >
+                            Limpar
+                        </button>
+                    </div>
+
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <button
+                            onClick={() => setSelectedIds([])}
+                            className="hidden sm:block text-white/60 hover:text-white text-xs font-bold transition-colors"
                         >
                             Limpar seleção
                         </button>
                         <Link
                             href={`/estoque/etiquetas?ids=${selectedIds.join(',')}`}
-                            className="bg-brand-500 hover:bg-brand-600 text-white px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-brand-500/20"
+                            className="flex-1 sm:flex-initial bg-brand-500 hover:bg-brand-600 text-white px-5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-brand-500/20"
                         >
                             <Printer size={16} />
-                            Imprimir Etiquetas
+                            Etiquetas
                         </Link>
                         <button
                             onClick={handleBulkDelete}
-                            className="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-red-500/20"
+                            className="flex-1 sm:flex-initial bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-500/20"
                         >
                             <Trash2 size={16} />
-                            Excluir Selecionados
+                            Excluir
                         </button>
                     </div>
                 </div>

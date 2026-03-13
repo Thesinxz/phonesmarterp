@@ -55,25 +55,25 @@ export default function FiscalPage() {
     return (
         <div className="space-y-6 page-enter pb-12">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Módulo Fiscal</h1>
-                    <p className="text-slate-500 text-sm mt-0.5">Gestão de documentos fiscais e conformidade tributária</p>
+                    <h1 className="text-xl md:text-2xl font-bold text-slate-800">Módulo Fiscal</h1>
+                    <p className="text-slate-500 text-[10px] md:text-sm mt-0.5">Gestão de documentos fiscais e conformidade</p>
                 </div>
-                <div className="flex gap-3">
-                    <button className="bg-white/60 h-10 px-4 rounded-xl border border-white/60 text-slate-600 flex items-center gap-2 text-sm font-medium hover:bg-white/80 transition-all">
+                <div className="flex gap-3 w-full sm:w-auto">
+                    <button className="flex-1 sm:flex-initial bg-white/60 h-10 px-4 rounded-xl border border-white/60 text-slate-600 flex items-center justify-center gap-2 text-xs font-medium hover:bg-white/80 transition-all">
                         <Calendar size={16} />
                         Este Mês
                     </button>
-                    <Link href="/fiscal/nfe/nova" className="btn-primary">
+                    <Link href="/fiscal/nfe/nova" className="flex-1 sm:flex-initial btn-primary justify-center text-xs">
                         <FileText size={18} />
-                        Emitir NF-e Avulsa
+                        Emitir NF-e
                     </Link>
                 </div>
             </div>
 
             {/* SEFAZ Monitor & Stats */}
-            <div className="grid grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                 <GlassCard className="p-5 flex items-center justify-between">
                     <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status WebService</p>
@@ -112,7 +112,7 @@ export default function FiscalPage() {
                 </GlassCard>
             </div>
 
-            <div className="grid grid-cols-3 gap-6">
+            <div className="flex flex-col lg:grid lg:grid-cols-3 gap-6">
                 {/* List of Documents */}
                 <GlassCard className="col-span-2 p-0 overflow-hidden">
                     <div className="p-4 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
@@ -125,7 +125,7 @@ export default function FiscalPage() {
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
                             <thead className="text-[10px] font-bold uppercase text-slate-400 tracking-widest border-b border-slate-100 bg-slate-50/50">
-                                <tr>
+                                <tr className="whitespace-nowrap">
                                     <th className="px-6 py-4">Status</th>
                                     <th className="px-6 py-4">Número/Série</th>
                                     <th className="px-6 py-4">Tipo</th>

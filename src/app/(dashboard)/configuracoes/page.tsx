@@ -549,38 +549,45 @@ export default function ConfiguracoesPage() {
         <PermissionGuard modulo="configuracoes">
             <div className="space-y-6 page-enter pb-12">
                 {/* Header */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-800">Configurações</h1>
-                        <p className="text-slate-500 text-sm mt-0.5">Gerencie integrações, dados fiscais e certificados</p>
+                        <h1 className="text-xl md:text-2xl font-bold text-slate-800">Configurações</h1>
+                        <p className="text-slate-500 text-xs md:text-sm mt-0.5">Gerencie integrações, dados fiscais e certificados</p>
                     </div>
                     {/* SEFAZ Status Badge */}
                     <button
                         onClick={checkSefazStatus}
                         className={cn(
-                            "flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold transition-all",
+                            "flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold transition-all w-full sm:w-auto h-11 justify-center",
                             sefazStatus === "online" && "bg-emerald-50 border-emerald-200 text-emerald-700",
                             sefazStatus === "offline" && "bg-red-50 border-red-200 text-red-700",
                             sefazStatus === "checking" && "bg-slate-50 border-slate-200 text-slate-500 animate-pulse",
                             sefazStatus === "unconfigured" && "bg-slate-50 border-slate-200 text-slate-500",
                         )}
                     >
-                        {sefazStatus === "online" && <><Wifi size={16} /> SEFAZ Online</>}
-                        {sefazStatus === "offline" && <><WifiOff size={16} /> SEFAZ Offline</>}
-                        {sefazStatus === "checking" && <><RefreshCw size={16} className="animate-spin" /> Verificando...</>}
-                        {sefazStatus === "unconfigured" && <><RefreshCw size={16} /> Verificar SEFAZ</>}
+                        {sefazStatus === "online" && <><Wifi size={16} /> <span className="whitespace-nowrap">SEFAZ Online</span></>}
+                        {sefazStatus === "offline" && <><WifiOff size={16} /> <span className="whitespace-nowrap">SEFAZ Offline</span></>}
+                        {sefazStatus === "checking" && <><RefreshCw size={16} className="animate-spin" /> <span className="whitespace-nowrap">Verificando...</span></>}
+                        {sefazStatus === "unconfigured" && <><RefreshCw size={16} /> <span className="whitespace-nowrap">Verificar SEFAZ</span></>}
                     </button>
                 </div>
 
-                <div className="flex gap-6">
+                <div className="flex flex-col lg:flex-row gap-6">
                     {/* Sidebar Tabs */}
-                    <div className="w-64 space-y-1.5 shrink-0">
+                    <div className="flex lg:flex-col overflow-x-auto lg:overflow-x-visible lg:w-64 space-x-2 lg:space-x-0 lg:space-y-1.5 shrink-0 pb-2 lg:pb-0 scrollbar-none">
                         {tabs.map(tab => (
                             <button
                                 key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
+                                onClick={() => {
+                                    setActiveTab(tab.id);
+                                    // Scroll into view on mobile
+                                    const el = document.getElementById(`tab-btn-${tab.id}`);
+                                    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                                }}
+                                id={`tab-btn-${tab.id}`}
                                 className={cn(
-                                    "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all group",
+                                    "flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all group shrink-0 lg:shrink",
+                                    "min-w-[160px] lg:min-w-0 lg:w-full",
                                     activeTab === tab.id
                                         ? "bg-brand-500 text-white shadow-brand-glow"
                                         : "bg-white/60 text-slate-600 hover:bg-white/80 border border-white/60"
@@ -589,17 +596,17 @@ export default function ConfiguracoesPage() {
                                 <tab.icon size={18} className={activeTab === tab.id ? "text-white" : "text-brand-500"} />
                                 <div className="flex-1 min-w-0">
                                     <p className="font-bold text-sm leading-tight">{tab.label}</p>
-                                    <p className={cn("text-[10px] truncate", activeTab === tab.id ? "text-white/70" : "text-slate-400")}>
+                                    <p className={cn("text-[10px] truncate hidden lg:block", activeTab === tab.id ? "text-white/70" : "text-slate-400")}>
                                         {tab.desc}
                                     </p>
                                 </div>
-                                <ChevronRight size={14} className={activeTab === tab.id ? "text-white/70" : "text-slate-300"} />
+                                <ChevronRight size={14} className={cn("hidden lg:block", activeTab === tab.id ? "text-white/70" : "text-slate-300")} />
                             </button>
                         ))}
                     </div>
 
                     {/* Content */}
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                         {/* ── EMPRESA ── */}
                         {activeTab === "empresa" && (
                             <GlassCard title="Dados do Emitente" icon={Building2}>

@@ -161,111 +161,111 @@ export default function FinanceiroPage() {
                 </div>
 
                 {/* Detailed Panels */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* A Pagar Breakdown */}
-                    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6 flex flex-col">
+                    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 md:p-6 space-y-6 flex flex-col">
                         <div className="flex items-center justify-between mb-2">
-                            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <h2 className="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
                                 <div className="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
                                     <TrendingDown size={16} />
                                 </div>
-                                Despesas (A Pagar)
+                                <span className="truncate">Despesas (A Pagar)</span>
                             </h2>
-                            <Link href="/financeiro/pagar" className="text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors">
+                            <Link href="/financeiro/pagar" className="text-xs md:text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors whitespace-nowrap">
                                 Ver todas
                             </Link>
                         </div>
 
-                        <div className="flex-1 space-y-4">
-                            <div className="flex items-center justify-between p-4 rounded-2xl border border-red-100 bg-red-50/50">
+                        <div className="flex-1 space-y-3 md:space-y-4">
+                            <div className="flex items-center justify-between p-3 md:p-4 rounded-2xl border border-red-100 bg-red-50/50">
                                 <div className="flex items-center gap-3">
-                                    <AlertCircle className="text-red-500" size={20} />
+                                    <AlertCircle className="text-red-500 shrink-0" size={20} />
                                     <div>
-                                        <p className="font-bold text-slate-700">Atrasados</p>
-                                        <p className="text-xs text-slate-500">Títulos vencidos não pagos</p>
+                                        <p className="font-bold text-slate-700 text-sm md:text-base">Atrasados</p>
+                                        <p className="text-[10px] md:text-xs text-slate-500">Títulos vencidos</p>
                                     </div>
                                 </div>
-                                <span className="text-lg font-black text-red-600">{formatCurrency(resumoPagar.atrasado)}</span>
+                                <span className="text-base md:text-lg font-black text-red-600 whitespace-nowrap">{formatCurrency(resumoPagar.atrasado)}</span>
                             </div>
 
-                            <div className="flex items-center justify-between p-4 rounded-2xl border border-amber-100 bg-amber-50/50">
+                            <div className="flex items-center justify-between p-3 md:p-4 rounded-2xl border border-amber-100 bg-amber-50/50">
                                 <div className="flex items-center gap-3">
-                                    <Clock className="text-amber-500" size={20} />
+                                    <Clock className="text-amber-500 shrink-0" size={20} />
                                     <div>
-                                        <p className="font-bold text-slate-700">Vencendo Hoje</p>
-                                        <p className="text-xs text-slate-500">Atenção com estes pagamentos</p>
+                                        <p className="font-bold text-slate-700 text-sm md:text-base">Vencendo Hoje</p>
+                                        <p className="text-[10px] md:text-xs text-slate-500">Atenção imediata</p>
                                     </div>
                                 </div>
-                                <span className="text-lg font-black text-amber-600">{formatCurrency(resumoPagar.vencendoHoje)}</span>
+                                <span className="text-base md:text-lg font-black text-amber-600 whitespace-nowrap">{formatCurrency(resumoPagar.vencendoHoje)}</span>
                             </div>
 
-                            <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                            <div className="flex items-center justify-between p-3 md:p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
                                 <div className="flex items-center gap-3">
-                                    <Calendar className="text-slate-500" size={20} />
+                                    <Calendar className="text-slate-500 shrink-0" size={20} />
                                     <div>
-                                        <p className="font-bold text-slate-700">A Vencer Futuro</p>
-                                        <p className="text-xs text-slate-500">Próximos dias</p>
+                                        <p className="font-bold text-slate-700 text-sm md:text-base">A Vencer</p>
+                                        <p className="text-[10px] md:text-xs text-slate-500">Próximos dias</p>
                                     </div>
                                 </div>
-                                <span className="text-lg font-black text-slate-600">{formatCurrency(resumoPagar.aVencer)}</span>
+                                <span className="text-base md:text-lg font-black text-slate-600 whitespace-nowrap">{formatCurrency(resumoPagar.aVencer)}</span>
                             </div>
                         </div>
 
-                        <Link href="/financeiro/pagar" className="w-full text-center block py-3 rounded-xl border-2 border-dashed border-red-200 text-red-600 font-bold hover:bg-red-50 transition-colors">
+                        <Link href="/financeiro/pagar" className="w-full text-center block py-3 rounded-xl border-2 border-dashed border-red-200 text-red-600 font-bold hover:bg-red-50 transition-colors text-xs md:text-sm">
                             Gerenciar Contas a Pagar
                         </Link>
                     </div>
 
                     {/* A Receber Breakdown */}
-                    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6 flex flex-col">
+                    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 md:p-6 space-y-6 flex flex-col">
                         <div className="flex items-center justify-between mb-2">
-                            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <h2 className="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
                                 <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
                                     <TrendingUp size={16} />
                                 </div>
-                                Receitas (A Receber)
+                                <span className="truncate">Receitas (A Receber)</span>
                             </h2>
-                            <Link href="/financeiro/receber" className="text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors">
+                            <Link href="/financeiro/receber" className="text-xs md:text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors whitespace-nowrap">
                                 Ver todos
                             </Link>
                         </div>
 
-                        <div className="flex-1 space-y-4">
-                            <div className="flex items-center justify-between p-4 rounded-2xl border border-red-100 bg-red-50/50">
+                        <div className="flex-1 space-y-3 md:space-y-4">
+                            <div className="flex items-center justify-between p-3 md:p-4 rounded-2xl border border-red-100 bg-red-50/50">
                                 <div className="flex items-center gap-3">
-                                    <AlertCircle className="text-red-500" size={20} />
+                                    <AlertCircle className="text-red-500 shrink-0" size={20} />
                                     <div>
-                                        <p className="font-bold text-slate-700">Inadimplentes</p>
-                                        <p className="text-xs text-slate-500">Boletos/crediário vencidos</p>
+                                        <p className="font-bold text-slate-700 text-sm md:text-base">Inadimplentes</p>
+                                        <p className="text-[10px] md:text-xs text-slate-500">Vencidos</p>
                                     </div>
                                 </div>
-                                <span className="text-lg font-black text-red-600">{formatCurrency(resumoReceber.atrasado)}</span>
+                                <span className="text-base md:text-lg font-black text-red-600 whitespace-nowrap">{formatCurrency(resumoReceber.atrasado)}</span>
                             </div>
 
-                            <div className="flex items-center justify-between p-4 rounded-2xl border border-emerald-100 bg-emerald-50/50">
+                            <div className="flex items-center justify-between p-3 md:p-4 rounded-2xl border border-emerald-100 bg-emerald-50/50">
                                 <div className="flex items-center gap-3">
-                                    <CheckCircle2 className="text-emerald-500" size={20} />
+                                    <CheckCircle2 className="text-emerald-500 shrink-0" size={20} />
                                     <div>
-                                        <p className="font-bold text-slate-700">Para Receber Hoje</p>
-                                        <p className="text-xs text-slate-500">Vencendo nesta data</p>
+                                        <p className="font-bold text-slate-700 text-sm md:text-base">Receber Hoje</p>
+                                        <p className="text-[10px] md:text-xs text-slate-500">Vencendo hoje</p>
                                     </div>
                                 </div>
-                                <span className="text-lg font-black text-emerald-600">{formatCurrency(resumoReceber.vencendoHoje)}</span>
+                                <span className="text-base md:text-lg font-black text-emerald-600 whitespace-nowrap">{formatCurrency(resumoReceber.vencendoHoje)}</span>
                             </div>
 
-                            <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                            <div className="flex items-center justify-between p-3 md:p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
                                 <div className="flex items-center gap-3">
-                                    <Calendar className="text-slate-500" size={20} />
+                                    <Calendar className="text-slate-500 shrink-0" size={20} />
                                     <div>
-                                        <p className="font-bold text-slate-700">A Vencer Futuro</p>
-                                        <p className="text-xs text-slate-500">Parcelas a longo prazo</p>
+                                        <p className="font-bold text-slate-700 text-sm md:text-base">A Vencer</p>
+                                        <p className="text-[10px] md:text-xs text-slate-500">Parcelas futuras</p>
                                     </div>
                                 </div>
-                                <span className="text-lg font-black text-slate-600">{formatCurrency(resumoReceber.aVencer)}</span>
+                                <span className="text-base md:text-lg font-black text-slate-600 whitespace-nowrap">{formatCurrency(resumoReceber.aVencer)}</span>
                             </div>
                         </div>
 
-                        <Link href="/financeiro/receber" className="w-full text-center block py-3 rounded-xl border-2 border-dashed border-emerald-200 text-emerald-600 font-bold hover:bg-emerald-50 transition-colors">
+                        <Link href="/financeiro/receber" className="w-full text-center block py-3 rounded-xl border-2 border-dashed border-emerald-200 text-emerald-600 font-bold hover:bg-emerald-50 transition-colors text-xs md:text-sm">
                             Gerenciar Contas a Receber
                         </Link>
                     </div>

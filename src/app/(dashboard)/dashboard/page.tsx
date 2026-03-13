@@ -104,7 +104,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Metric Cards */}
-            <div className="grid grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 {metricsList.map((m) => {
                     const Icon = m.icon;
                     return (
@@ -134,7 +134,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Faturamento do Dia + Atividades */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {/* Faturamento do Dia */}
                 <GlassCard title="Faturamento do Dia" icon={DollarSign}>
                     {faturamentoDia.total === 0 && !loading ? (
@@ -254,7 +254,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Agenda da Semana */}
-                <div className="col-span-2">
+                <div className="col-span-1 md:col-span-2 lg:col-span-2">
                     <GlassCard title="Agenda da Semana" icon={Calendar}>
                         {agendaSemana.length === 0 && !loading ? (
                             <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -294,7 +294,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-4">
                 <Link href="/os/nova" className="glass-card flex items-center gap-3 hover:shadow-glass-lg hover:-translate-y-0.5 transition-all cursor-pointer group">
                     <div className="w-10 h-10 rounded-xl bg-brand-500 flex items-center justify-center group-hover:bg-brand-600 transition-colors">
                         <Plus className="w-5 h-5 text-white" />

@@ -286,35 +286,35 @@ export default function VitrinePage() {
             {/* ── Header ── */}
             <header className="sticky top-0 z-50 backdrop-blur-xl bg-slate-950/80 border-b border-white/5">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-4">
                         {/* Logo + Nome */}
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 overflow-hidden">
                             {empresa.logo_url ? (
-                                <img src={empresa.logo_url} alt={`Logo ${empresa.nome}`} className="w-10 h-10 object-contain rounded-xl bg-white p-1" />
+                                <img src={empresa.logo_url} alt={`Logo ${empresa.nome}`} className="w-9 h-9 md:w-10 md:h-10 object-contain rounded-xl bg-white p-1 shrink-0" />
                             ) : (
-                                <div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 shrink-0">
                                     <ShoppingBag className="w-5 h-5 text-white" />
                                 </div>
                             )}
-                            <div>
-                                <h1 className="text-white font-bold text-lg leading-tight">{empresa.nome}</h1>
-                                <p className="text-slate-500 text-xs">{config.titulo}</p>
+                            <div className="truncate">
+                                <h1 className="text-white font-bold text-base md:text-lg leading-tight truncate">{empresa.nome}</h1>
+                                <p className="text-slate-500 text-[10px] md:text-xs truncate">{config.titulo}</p>
                             </div>
                         </div>
 
-                        {/* Modo TV link */}
+                        {/* Modo TV link - Hide on smallest, show on small+ */}
                         <Link
                             href={`/v/${subdominio}/tv`}
-                            className="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition-all text-sm"
+                            className="bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition-all text-xs p-2.5 rounded-xl md:px-4 md:py-2 md:flex items-center md:gap-2"
                         >
                             <Monitor size={16} />
-                            Modo TV
+                            <span className="hidden md:inline">Modo TV</span>
                         </Link>
                     </div>
 
                     {/* Barra de busca + filtros */}
-                    <div className="flex items-center gap-3 mt-4">
-                        <div className="relative flex-1">
+                    <div className="flex flex-col sm:flex-row items-center gap-3 mt-4">
+                        <div className="relative w-full">
                             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                             <input
                                 className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-2.5 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 transition-all"
@@ -325,20 +325,22 @@ export default function VitrinePage() {
                         </div>
 
                         {config.mostrar_grade && (
-                            <div className="flex items-center gap-1.5">
-                                <Filter size={14} className="text-slate-500" />
-                                {["todos", "A", "B", "C"].map(g => (
-                                    <button
-                                        key={g}
-                                        onClick={() => setFiltroGrade(g)}
-                                        className={`px-3 py-2 rounded-lg text-xs font-bold uppercase transition-all ${filtroGrade === g
-                                            ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
-                                            : "bg-white/5 text-slate-500 border border-white/5 hover:text-white hover:bg-white/10"
-                                            }`}
-                                    >
-                                        {g === "todos" ? "Todos" : `Grade ${g}`}
-                                    </button>
-                                ))}
+                            <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+                                <div className="flex items-center gap-1.5">
+                                    <Filter size={14} className="text-slate-500 shrink-0" />
+                                    {["todos", "A", "B", "C"].map(g => (
+                                        <button
+                                            key={g}
+                                            onClick={() => setFiltroGrade(g)}
+                                            className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase transition-all whitespace-nowrap ${filtroGrade === g
+                                                ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                                                : "bg-white/5 text-slate-500 border border-white/5 hover:text-white hover:bg-white/10"
+                                                }`}
+                                        >
+                                            {g === "todos" ? "Todos" : `Grade ${g}`}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -408,17 +410,17 @@ export default function VitrinePage() {
             </main>
 
             {/* ── Footer ── */}
-            <footer className="fixed bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur-xl border-t border-white/5 py-3 px-6 z-40">
-                <div className="max-w-7xl mx-auto flex items-center justify-between">
-                    <p className="text-slate-600 text-xs">
-                        © {new Date().getFullYear()} {empresa.nome} • Powered by <span className="text-indigo-400 font-bold">SmartOS</span>
+            <footer className="fixed bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur-xl border-t border-white/5 py-3 px-4 md:px-6 z-40">
+                <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+                    <p className="text-slate-600 text-[10px] md:text-xs">
+                        © {new Date().getFullYear()} {empresa.nome} <span className="hidden sm:inline">• Powered by <span className="text-indigo-400 font-bold">SmartOS</span></span>
                     </p>
                     {empresa.whatsapp && (
                         <a
                             href={`https://wa.me/${empresa.whatsapp}?text=${encodeURIComponent(config.mensagem_whatsapp)}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/30 transition-all text-sm font-bold"
+                            className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/30 transition-all text-[11px] md:text-sm font-bold shrink-0"
                         >
                             <ExternalLink size={14} />
                             WhatsApp

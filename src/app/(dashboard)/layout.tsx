@@ -9,6 +9,9 @@ import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
 import { useAuth } from "@/context/AuthContext";
 import { TrialExpiredOverlay } from "@/components/trial/TrialExpiredOverlay";
 import { DeactivatedOverlay } from "@/components/auth/DeactivatedOverlay";
+import { useState } from "react";
+import { cn } from "@/utils/cn";
+import { BottomNav } from "@/components/layout/BottomNav";
 
 export default function DashboardLayout({
     children,
@@ -20,6 +23,8 @@ export default function DashboardLayout({
 
     const isDeactivated = profile && profile.ativo === false;
     const shouldShowOnboarding = !loadingOnboarding && status && !status.completed && !status.skipped;
+
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
     // ── Bloom Filter / Global Lock ──
     // Só bloqueamos com o spinner central se a autenticação básica ainda estiver pendente.
@@ -48,11 +53,18 @@ export default function DashboardLayout({
             <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50/30 to-slate-100">
                 {isDeactivated && <DeactivatedOverlay />}
                 {isTrialExpired && <TrialExpiredOverlay />}
-                <Sidebar />
-                <Header />
+                
+                <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+                <Header onMenuClick={() => setSidebarOpen(true)} />
+                
                 <CommandPalette />
-                <main className="ml-[260px] pt-16 min-h-screen">
-                    <div className="p-6 animate-fade-in">{children}</div>
+                <BottomNav />
+                
+                <main className={cn(
+                    "transition-all duration-300 min-h-screen pt-16 pb-20 md:pb-6",
+                    "lg:ml-[260px]" // Só tem margem lateral no desktop
+                )}>
+                    <div className="p-4 md:p-6 animate-fade-in">{children}</div>
                 </main>
             </div>
         </FinanceConfigProvider>

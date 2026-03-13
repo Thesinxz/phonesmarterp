@@ -142,38 +142,40 @@ export default function VendasPage() {
         <PermissionGuard modulo="vendas">
             <div className="space-y-6 page-enter pb-12">
                 {/* Header */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-800">Histórico de Vendas</h1>
-                        <p className="text-slate-500 text-sm mt-0.5">Gerencie vendas realizadas e emita notas fiscais (NFC-e)</p>
+                        <h1 className="text-xl md:text-2xl font-bold text-slate-800">Histórico de Vendas</h1>
+                        <p className="text-slate-500 text-xs md:text-sm mt-0.5">Gerencie vendas realizadas e emita notas fiscais (NFC-e)</p>
                     </div>
-                    <div className="flex gap-3">
-                        <Link href="/pdv" className="btn-primary flex items-center gap-2">
+                    <div className="flex gap-3 w-full sm:w-auto">
+                        <Link href="/pdv" className="btn-primary flex items-center gap-2 flex-1 sm:flex-initial justify-center">
                             <ShoppingCart size={18} />
-                            Nova Venda (PDV)
+                            <span className="whitespace-nowrap">Nova Venda (PDV)</span>
                         </Link>
                     </div>
                 </div>
 
                 {/* Filtros e Busca */}
-                <div className="flex flex-wrap items-center gap-4 bg-white/40 p-3 rounded-2xl border border-white/60 shadow-sm">
-                    <div className="relative flex-1 min-w-[240px]">
+                <div className="flex flex-col sm:flex-row items-center gap-4 bg-white/40 p-3 rounded-2xl border border-white/60 shadow-sm">
+                    <div className="relative w-full sm:flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                         <input
                             className="w-full bg-white/60 border border-slate-200/60 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
-                            placeholder="Buscar por cliente, ID da venda ou valor..."
+                            placeholder="Buscar..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />
                     </div>
-                    <DateRangeFilter
-                        defaultPreset="mes"
-                        onChange={(start, end) => {
-                            setFilterStartDate(start);
-                            setFilterEndDate(end);
-                            setCurrentPage(1);
-                        }}
-                    />
+                    <div className="w-full sm:w-auto overflow-x-auto scrollbar-none">
+                        <DateRangeFilter
+                            defaultPreset="mes"
+                            onChange={(start, end) => {
+                                setFilterStartDate(start);
+                                setFilterEndDate(end);
+                                setCurrentPage(1);
+                            }}
+                        />
+                    </div>
                 </div>
 
                 {/* Lista de Vendas */}

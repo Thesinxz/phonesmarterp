@@ -31,6 +31,12 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { CompanySwitcher } from "./CompanySwitcher";
+import { X } from "lucide-react";
+
+interface SidebarProps {
+    isOpen: boolean;
+    onClose: () => void;
+}
 
 const navItems = [
     {
@@ -166,7 +172,7 @@ const navItems = [
     },
 ];
 
-export function Sidebar() {
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
     const pathname = usePathname();
     const { empresa, profile } = useAuth();
     const { can } = usePermissions();
@@ -215,17 +221,38 @@ export function Sidebar() {
     };
 
     return (
-        <aside className="fixed left-0 top-0 h-screen w-[260px] bg-sidebar-gradient flex flex-col z-40 shadow-xl">
-            {/* Logo */}
-            <Link href="/dashboard" className="flex items-center gap-3 px-6 py-5 border-b border-white/10 mb-2 hover:bg-white/5 transition-colors cursor-pointer">
-                <div className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center shadow-brand-glow">
-                    <Zap className="w-5 h-5 text-white" />
+        <>
+            {/* Mobile Backdrop */}
+            {isOpen && (
+                <div 
+                    className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 lg:hidden animate-in fade-in duration-300" 
+                    onClick={onClose}
+                />
+            )}
+
+            <aside className={cn(
+                "fixed left-0 top-0 h-screen w-[260px] bg-sidebar-gradient flex flex-col z-50 shadow-xl transition-transform duration-300",
+                isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+            )}>
+                {/* Logo & Close Button */}
+                <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 mb-2 hover:bg-white/5 transition-colors">
+                    <Link href="/dashboard" className="flex items-center gap-3 cursor-pointer" onClick={onClose}>
+                        <div className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center shadow-brand-glow">
+                            <Zap className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                            <p className="text-white font-bold text-sm leading-tight">Phone Smart</p>
+                            <p className="text-white/50 text-xs">ERP v2.0</p>
+                        </div>
+                    </Link>
+                    
+                    <button 
+                        onClick={onClose}
+                        className="lg:hidden p-2 text-white/50 hover:text-white transition-colors"
+                    >
+                        <X size={20} />
+                    </button>
                 </div>
-                <div>
-                    <p className="text-white font-bold text-sm leading-tight">Phone Smart</p>
-                    <p className="text-white/50 text-xs">ERP v2.0</p>
-                </div>
-            </Link>
 
             {/* Navigation */}
             <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-0.5 scrollbar-none">
@@ -259,6 +286,7 @@ export function Sidebar() {
                             ) : (
                                 <Link
                                     href={item.href}
+                                    onClick={onClose}
                                     className={cn("sidebar-item", isActive && "active")}
                                 >
                                     <Icon className="w-4.5 h-4.5 shrink-0" size={18} />
@@ -280,6 +308,7 @@ export function Sidebar() {
                                         <Link
                                             key={child.href}
                                             href={child.href}
+                                            onClick={onClose}
                                             className={cn(
                                                 "flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-all",
                                                 pathname === child.href
@@ -315,6 +344,7 @@ export function Sidebar() {
                     </Link>
                 </div>
             </div>
-        </aside>
+            </aside>
+        </>
     );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Bell, Plus, ShoppingCart, MapPin, ChevronDown } from "lucide-react";
+import { Search, Bell, Plus, ShoppingCart, MapPin, ChevronDown, Menu } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
@@ -9,9 +9,10 @@ import { cn } from "@/utils/cn";
 
 interface HeaderProps {
     title?: string;
+    onMenuClick: () => void;
 }
 
-export function Header({ title }: HeaderProps) {
+export function Header({ title, onMenuClick }: HeaderProps) {
     const [unidade, setUnidade] = useState("Matriz");
     const [solicitationsCount, setSolicitationsCount] = useState(0);
     const { user, profile, empresa, trialDaysLeft, isTrialExpired } = useAuth();
@@ -70,15 +71,25 @@ export function Header({ title }: HeaderProps) {
     }, [profile?.empresa_id]);
 
     return (
-        <header className="fixed top-0 right-0 left-[260px] h-16 z-30 glass border-b border-white/40 px-6 flex items-center justify-between gap-4">
-            {/* Left: Title or Search */}
-            <div className="flex items-center gap-6 flex-1">
+        <header className={cn(
+            "fixed top-0 right-0 h-16 z-30 glass border-b border-white/40 px-4 md:px-6 flex items-center justify-between gap-4 transition-all duration-300",
+            "left-0 lg:left-[260px]" // Ajusta a largura dependendo se o menu desktop está ativo
+        )}>
+            {/* Left: Menu Toggle + Title or Search */}
+            <div className="flex items-center gap-3 md:gap-6 flex-1">
+                <button 
+                    onClick={onMenuClick}
+                    className="p-2 -ml-2 text-slate-600 hover:bg-slate-100/50 rounded-xl transition-colors lg:hidden"
+                >
+                    <Menu className="w-6 h-6" />
+                </button>
+
                 {title && (
-                    <h1 className="text-slate-800 font-bold text-lg whitespace-nowrap">{title}</h1>
+                    <h1 className="text-slate-800 font-bold text-sm md:text-lg whitespace-nowrap">{title}</h1>
                 )}
 
-                {/* Unit Selector */}
-                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-100/50 rounded-xl border border-slate-200/50 cursor-pointer hover:bg-white transition-all group">
+                {/* Unit Selector - Hidden on very small screens */}
+                <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-slate-100/50 rounded-xl border border-slate-200/50 cursor-pointer hover:bg-white transition-all group">
                     <div className="w-5 h-5 rounded-lg bg-white flex items-center justify-center shadow-sm">
                         <MapPin size={12} className="text-brand-600" />
                     </div>
@@ -91,19 +102,19 @@ export function Header({ title }: HeaderProps) {
                     </div>
                 </div>
 
-                <div className="relative flex-1 max-sm:hidden max-w-sm">
+                <div className="relative flex-1 max-md:hidden max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                         type="text"
-                        placeholder="Buscar OS, clientes, produtos..."
+                        placeholder="Buscar..."
                         className="input-glass pl-9 h-9 text-sm"
                     />
                 </div>
 
-                {/* Trial Badge */}
+                {/* Trial Badge - Only visible on desktop/tablets */}
                 {empresa?.plano === 'starter' && !isTrialExpired && (
                     <div className={cn(
-                        "flex items-center gap-2 px-3 py-1.5 rounded-xl border font-bold animate-in fade-in slide-in-from-left-2",
+                        "hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border font-bold animate-in fade-in slide-in-from-left-2",
                         trialDaysLeft <= 3
                             ? "bg-amber-50 border-amber-200 text-amber-700 shadow-sm shadow-amber-200/50"
                             : "bg-blue-50 border-blue-200 text-blue-700"
@@ -113,7 +124,7 @@ export function Header({ title }: HeaderProps) {
                             trialDaysLeft <= 3 ? "bg-amber-500 animate-pulse" : "bg-blue-500"
                         )} />
                         <span className="text-[10px] uppercase tracking-wider">
-                            {trialDaysLeft === 0 ? "Último dia de teste!" : `${trialDaysLeft} dias de teste grátis`}
+                            {trialDaysLeft === 0 ? "Teste Expira" : `${trialDaysLeft}d teste`}
                         </span>
                     </div>
                 )}
@@ -123,17 +134,18 @@ export function Header({ title }: HeaderProps) {
             <div className="flex items-center gap-2">
                 <Link
                     href="/os/nova"
-                    className="btn-primary text-xs px-3 py-2"
+                    className="btn-primary text-[10px] md:text-xs px-2 md:px-3 py-2"
                 >
-                    <Plus className="w-3.5 h-3.5" />
-                    Nova OS
+                    <Plus className="w-3 md:w-3.5 h-3 md:h-3.5" />
+                    <span className="hidden xs:inline">Nova OS</span>
+                    <span className="xs:hidden">OS</span>
                 </Link>
                 <Link
                     href="/pdv"
-                    className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-3 py-2 rounded-xl transition-all duration-200 flex items-center gap-1.5 text-xs"
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-2 md:px-3 py-2 rounded-xl transition-all duration-200 flex items-center gap-1.5 text-[10px] md:text-xs"
                 >
-                    <ShoppingCart className="w-3.5 h-3.5" />
-                    Nova Venda
+                    <ShoppingCart className="w-3 md:w-3.5 h-3 md:h-3.5" />
+                    <span className="hidden xs:inline">Venda</span>
                 </Link>
 
                 {/* Notifications */}
@@ -149,11 +161,9 @@ export function Header({ title }: HeaderProps) {
                     )}
                 </Link>
 
-
-                {/* Avatar */}
                 <div
                     title={user?.email || "Perfil"}
-                    className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center text-white text-sm font-bold cursor-pointer hover:bg-brand-600 transition-colors uppercase"
+                    className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center text-white text-xs md:text-sm font-bold cursor-pointer hover:bg-brand-600 transition-colors uppercase"
                 >
                     {profile?.nome ? profile.nome.charAt(0) : (user?.email?.charAt(0) || "U")}
                 </div>
