@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Bell, Plus, ShoppingCart, MapPin, ChevronDown, Menu, CheckCircle2 } from "lucide-react";
+import { Search, Bell, Plus, ShoppingCart, MapPin, ChevronDown, Menu } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
@@ -18,17 +18,15 @@ export function Header({ title, onMenuClick, className }: HeaderProps) {
     const [unidade, setUnidade] = useState("Matriz");
     const [units, setUnits] = useState<any[]>([]);
     const [showUnits, setShowUnits] = useState(false);
-    const [showCompanies, setShowCompanies] = useState(false);
     const [isSwitching, setIsSwitching] = useState(false);
     const [solicitationsCount, setSolicitationsCount] = useState(0);
     const [notificationsCount, setNotificationsCount] = useState(0);
-    const { user, profile, empresa, profiles, trialDaysLeft, isTrialExpired, maxEmpresas, canCreateEmpresa, switchUnit, switchCompany } = useAuth();
+    const { user, profile, empresa, trialDaysLeft, isTrialExpired, switchUnit } = useAuth();
     const supabase = createClient();
 
     useEffect(() => {
         async function loadData() {
             try {
-                // Load unit
                 const { data: configData } = await supabase
                     .from("configuracoes")
                     .select("valor")
@@ -40,7 +38,6 @@ export function Header({ title, onMenuClick, className }: HeaderProps) {
                     setUnidade(val.municipio + (val.uf ? ` - ${val.uf}` : ""));
                 }
 
-                // Load pending solicitations count
                 if (profile?.empresa_id) {
                     const { count: sCount } = await (supabase.from("solicitacoes") as any)
                         .select("*", { count: 'exact', head: true })
@@ -68,94 +65,86 @@ export function Header({ title, onMenuClick, className }: HeaderProps) {
         }
         loadData();
 
-        // Subscribe to changes in solicitacoes to update count in real-time
-            if (profile?.empresa_id) {
-                const sChannel = supabase
-                    .channel('header-solicitacoes')
-                    .on(
-                        'postgres_changes',
-                        { event: '*', schema: 'public', table: 'solicitacoes', filter: `empresa_id=eq.${profile.empresa_id}` },
-                        () => {
-                            (supabase.from("solicitacoes") as any)
-                                .select("*", { count: 'exact', head: true })
-                                .eq("empresa_id", profile.empresa_id)
-                                .eq("status", "pendente")
-                                .then(({ count }: any) => setSolicitationsCount(count || 0));
-                        }
-                    )
-                    .subscribe();
+        if (profile?.empresa_id) {
+            const sChannel = supabase
+                .channel('header-solicitacoes')
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'solicitacoes', filter: `empresa_id=eq.${profile.empresa_id}` },
+                    () => {
+                        (supabase.from("solicitacoes") as any)
+                            .select("*", { count: 'exact', head: true })
+                            .eq("empresa_id", profile.empresa_id)
+                            .eq("status", "pendente")
+                            .then(({ count }: any) => setSolicitationsCount(count || 0));
+                    }
+                )
+                .subscribe();
 
-                const nChannel = supabase
-                    .channel('header-notifications')
-                    .on(
-                        'postgres_changes',
-                        { event: '*', schema: 'public', table: 'notifications', filter: `tenant_id=eq.${profile.empresa_id}` },
-                        () => {
-                            (supabase.from("notifications") as any)
-                                .select("*", { count: 'exact', head: true })
-                                .eq("tenant_id", profile.empresa_id)
-                                .is("read_at", null)
-                                .or(`unit_id.is.null,unit_id.eq.${profile.unit_id}`)
-                                .or(`user_id.is.null,user_id.eq.${profile.id}`)
-                                .then(({ count }: any) => setNotificationsCount(count || 0));
-                        }
-                    )
-                    .subscribe();
+            const nChannel = supabase
+                .channel('header-notifications')
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'notifications', filter: `tenant_id=eq.${profile.empresa_id}` },
+                    () => {
+                        (supabase.from("notifications") as any)
+                            .select("*", { count: 'exact', head: true })
+                            .eq("tenant_id", profile.empresa_id)
+                            .is("read_at", null)
+                            .or(`unit_id.is.null,unit_id.eq.${profile.unit_id}`)
+                            .or(`user_id.is.null,user_id.eq.${profile.id}`)
+                            .then(({ count }: any) => setNotificationsCount(count || 0));
+                    }
+                )
+                .subscribe();
 
-                return () => { 
-                    supabase.removeChannel(sChannel); 
-                    supabase.removeChannel(nChannel);
-                };
-            }
+            return () => { 
+                supabase.removeChannel(sChannel); 
+                supabase.removeChannel(nChannel);
+            };
+        }
     }, [profile?.empresa_id, profile?.unit_id]);
+
+    const totalNotifications = solicitationsCount + notificationsCount;
 
     return (
         <header 
             className={cn(
-                "fixed top-0 right-0 h-16 z-30 glass border-b border-white/40 px-4 md:px-6 flex items-center justify-between gap-4 transition-all duration-300",
-                "left-0 lg:left-[260px]",
+                "fixed top-0 right-0 h-[52px] z-30 bg-white px-5 flex items-center gap-3 transition-all duration-300",
+                "left-0 lg:left-[220px]",
                 className
             )}
+            style={{ borderBottom: '0.5px solid #E2E8F0' }}
         >
-            {/* Left: Menu Toggle + Title or Search */}
-            <div className="flex items-center gap-3 md:gap-6 flex-1">
+            {/* Left: Menu + Unit Selector */}
+            <div className="flex items-center gap-3 flex-1">
                 <button 
                     onClick={onMenuClick}
-                    className="p-2 -ml-2 text-slate-600 hover:bg-slate-100/50 rounded-xl transition-colors lg:hidden"
+                    className="p-1.5 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors lg:hidden"
                 >
-                    <Menu className="w-6 h-6" />
+                    <Menu className="w-5 h-5" />
                 </button>
 
-                {title && (
-                    <h1 className="text-slate-800 font-bold text-sm md:text-lg whitespace-nowrap">{title}</h1>
-                )}
-
-                {/* Unit Selector - Hidden on very small screens */}
+                {/* Unit Selector — pill shape */}
                 <div className="hidden lg:relative lg:block">
                     <button 
                         onClick={() => setShowUnits(!showUnits)}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-slate-100/50 rounded-xl border border-slate-200/50 cursor-pointer hover:bg-white transition-all group"
+                        className="flex items-center gap-1.5 px-3 py-1 rounded-full transition-all hover:border-slate-300"
+                        style={{ border: '0.5px solid #E2E8F0', fontSize: '12px', color: '#64748B' }}
                     >
-                        <div className="w-5 h-5 rounded-lg bg-white flex items-center justify-center shadow-sm">
-                            <MapPin size={12} className="text-brand-600" />
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight leading-none text-left">Unidade</span>
-                            <div className="flex items-center gap-1">
-                                <span className="text-xs font-bold text-slate-700">
-                                    {units.find(u => u.id === profile?.unit_id)?.name || (profile as any)?.unit?.name || unidade}
-                                </span>
-                                <ChevronDown size={10} className={cn("text-slate-400 group-hover:text-brand-600 transition-all", showUnits && "rotate-180")} />
-                            </div>
-                        </div>
+                        <div className="w-[6px] h-[6px] rounded-full bg-emerald-500" />
+                        <span className="font-medium text-slate-600">
+                            {units.find(u => u.id === profile?.unit_id)?.name || (profile as any)?.unit?.name || unidade}
+                        </span>
+                        <ChevronDown size={10} className={cn("text-slate-400 transition-transform", showUnits && "rotate-180")} />
                     </button>
 
                     {showUnits && units.length > 0 && (
-                        <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-slate-100 p-2 z-[100] animate-in fade-in slide-in-from-top-2">
-                            <div className="px-3 py-2 border-b border-slate-50 mb-1">
-                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Alternar Unidade</p>
+                        <div className="absolute top-full left-0 mt-2 w-52 bg-white rounded-xl shadow-lg p-1.5 z-[100] animate-in fade-in slide-in-from-top-2" style={{ border: '0.5px solid #E2E8F0' }}>
+                            <div className="px-2.5 py-1.5 border-b border-slate-50 mb-1">
+                                <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Alternar Unidade</p>
                             </div>
-                            <div className="space-y-0.5 max-h-[200px] overflow-y-auto custom-scrollbar">
+                            <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
                                 {units.map((u) => (
                                     <button
                                         key={u.id}
@@ -164,17 +153,17 @@ export function Header({ title, onMenuClick, className }: HeaderProps) {
                                             await switchUnit(u.id);
                                         }}
                                         className={cn(
-                                            "w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200",
+                                            "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-all text-xs",
                                             profile?.unit_id === u.id 
-                                                ? "bg-brand-50 text-brand-700 shadow-sm" 
+                                                ? "bg-blue-50 text-[#1E40AF] font-medium" 
                                                 : "text-slate-600 hover:bg-slate-50"
                                         )}
                                     >
                                         <div className={cn(
-                                            "w-2 h-2 rounded-full",
-                                            profile?.unit_id === u.id ? "bg-brand-500 shadow-brand-glow" : "bg-slate-200"
+                                            "w-[6px] h-[6px] rounded-full",
+                                            profile?.unit_id === u.id ? "bg-[#1E40AF]" : "bg-slate-200"
                                         )} />
-                                        <span className="text-xs font-semibold flex-1 text-left">{u.name}</span>
+                                        <span className="flex-1 text-left">{u.name}</span>
                                     </button>
                                 ))}
                             </div>
@@ -182,64 +171,61 @@ export function Header({ title, onMenuClick, className }: HeaderProps) {
                     )}
                 </div>
 
+                {/* Global Search */}
                 <GlobalSearch />
 
-                {/* Trial Badge - Only visible on desktop/tablets */}
+                {/* Trial Badge */}
                 {profile?.plano === 'starter' && !isTrialExpired && (
                     <Link
                         href="/planos"
-                        className={cn(
-                            "hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border font-bold animate-in fade-in slide-in-from-left-2 transition-all hover:scale-105 active:scale-95",
-                            trialDaysLeft <= 3
-                                ? "bg-amber-50 border-amber-200 text-amber-700 shadow-sm shadow-amber-200/50 hover:bg-amber-100"
-                                : "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
-                        )}
+                        className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium transition-all hover:opacity-80"
+                        style={{ 
+                            background: '#EFF6FF', 
+                            border: '0.5px solid #BFDBFE', 
+                            color: '#1D4ED8', 
+                            fontSize: '11px' 
+                        }}
                     >
-                        <div className={cn(
-                            "w-2 h-2 rounded-full",
-                            trialDaysLeft <= 3 ? "bg-amber-500 animate-pulse" : "bg-blue-500"
-                        )} />
-                        <span className="text-[10px] uppercase tracking-wider">
-                            {trialDaysLeft === 0 ? "Teste Expira" : `${trialDaysLeft}d teste`}
-                        </span>
+                        {trialDaysLeft === 0 ? "Teste expira hoje" : `${trialDaysLeft}d teste`}
                     </Link>
                 )}
             </div>
 
             {/* Right: Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
                 <Link
                     href="/os/nova"
-                    className="btn-primary text-[10px] md:text-xs px-2 md:px-3 py-2"
+                    className="btn-primary"
                 >
-                    <Plus className="w-3 md:w-3.5 h-3 md:h-3.5" />
-                    <span className="hidden xs:inline">Nova OS</span>
-                    <span className="xs:hidden">OS</span>
+                    <Plus className="w-3 h-3" />
+                    <span className="hidden sm:inline">Nova OS</span>
                 </Link>
                 <Link
                     href="/pdv"
-                    className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-2 md:px-3 py-2 rounded-xl transition-all duration-200 flex items-center gap-1.5 text-[10px] md:text-xs"
+                    className="btn-secondary"
                 >
-                    <ShoppingCart className="w-3 md:w-3.5 h-3 md:h-3.5" />
-                    <span className="hidden xs:inline">Venda</span>
+                    <ShoppingCart className="w-3 h-3" />
+                    <span className="hidden sm:inline">PDV</span>
                 </Link>
 
                 {/* Notifications */}
                 <Link
                     href="/solicitacoes"
-                    className="relative w-9 h-9 rounded-xl glass flex items-center justify-center hover:bg-white/60 transition-colors"
+                    className="relative w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-50 transition-colors text-slate-500"
+                    style={{ border: '0.5px solid #E2E8F0' }}
                 >
-                    <Bell className="w-4 h-4 text-slate-600" />
-                    {(solicitationsCount + notificationsCount) > 0 && (
-                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-white shadow-sm ring-2 ring-red-500/20 animate-pulse">
-                            {(solicitationsCount + notificationsCount) > 9 ? '9+' : (solicitationsCount + notificationsCount)}
+                    <Bell className="w-3.5 h-3.5" />
+                    {totalNotifications > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-medium rounded-full flex items-center justify-center px-1 border-2 border-white">
+                            {totalNotifications > 9 ? '9+' : totalNotifications}
                         </span>
                     )}
                 </Link>
 
+                {/* User Avatar */}
                 <div
                     title={user?.email || "Perfil"}
-                    className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center text-white text-xs md:text-sm font-bold cursor-pointer hover:bg-brand-600 transition-colors uppercase"
+                    className="w-[30px] h-[30px] rounded-full bg-[#1E40AF] flex items-center justify-center text-white text-[11px] font-medium cursor-pointer hover:opacity-90 transition-opacity uppercase"
                 >
                     {profile?.nome ? profile.nome.charAt(0) : (user?.email?.charAt(0) || "U")}
                 </div>
@@ -248,8 +234,8 @@ export function Header({ title, onMenuClick, className }: HeaderProps) {
             {/* Switch Loading Overlay */}
             {isSwitching && (
                 <div className="fixed inset-0 z-[9999] bg-white/60 backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-500">
-                    <div className="w-16 h-16 border-4 border-brand-100 border-t-brand-600 rounded-full animate-spin mb-4" />
-                    <p className="text-brand-900 font-black uppercase tracking-widest text-[10px]">Alterando Empresa...</p>
+                    <div className="w-12 h-12 border-3 border-blue-100 border-t-[#1E40AF] rounded-full animate-spin mb-4" />
+                    <p className="text-slate-600 font-medium text-xs uppercase tracking-widest">Alterando Empresa...</p>
                 </div>
             )}
         </header>

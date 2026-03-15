@@ -27,19 +27,12 @@ export default function DashboardLayout({
 
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
-    // Consider banner height for padding
     const hasBanner = profile?.plano === 'starter' && (isTrialExpired || trialDaysLeft <= 3);
 
-    // ── Bloom Filter / Global Lock ──
-    // Só bloqueamos com o spinner central se a autenticação básica ainda estiver pendente.
-    // Uma vez que temos o perfil, permitimos que a estrutura do dashboard (sidebar/header)
-    // seja montada para melhorar a percepção de performance (LCP).
-    // Só bloqueamos com o spinner central se a autenticação básica ainda estiver pendente E não tivermos perfil.
-    // Se o profile já existe (cacheado), permitimos que a estrutura seja montada.
     if (loadingAuth && !profile) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50">
-                <div className="w-10 h-10 border-4 border-brand-200 border-t-brand-500 rounded-full animate-spin" />
+            <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
+                <div className="w-8 h-8 border-3 border-blue-100 border-t-[#1E40AF] rounded-full animate-spin" />
             </div>
         );
     }
@@ -54,8 +47,8 @@ export default function DashboardLayout({
 
     return (
         <FinanceConfigProvider>
-            <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50/30 to-slate-100">
-                <div className="fixed top-0 left-0 right-0 z-[60] lg:ml-[260px]">
+            <div className="min-h-screen bg-[#F8FAFC]">
+                <div className="fixed top-0 left-0 right-0 z-[60] lg:ml-[220px]">
                     <TrialBanner />
                 </div>
 
@@ -69,14 +62,13 @@ export default function DashboardLayout({
                 <BottomNav />
                 
                 <main className={cn(
-                    "transition-all duration-300 min-h-screen pt-16 pb-20 md:pb-6",
-                    "lg:ml-[260px]", // Só tem margem lateral no desktop
-                    hasBanner && "pt-28 sm:pt-32"
+                    "transition-all duration-300 min-h-screen pt-[52px] pb-20 md:pb-6",
+                    "lg:ml-[220px]",
+                    hasBanner && "pt-24 sm:pt-28"
                 )}>
-                    <div className="p-4 md:p-6 animate-fade-in">{children}</div>
+                    <div className="p-5 animate-fade-in">{children}</div>
                 </main>
             </div>
         </FinanceConfigProvider>
     );
 }
-

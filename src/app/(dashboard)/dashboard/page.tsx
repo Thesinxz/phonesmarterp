@@ -11,32 +11,35 @@ import {
     Wrench,
     Plus,
     ShoppingCart,
-    Calendar,
-    ClipboardCheck,
-    History as HistoryIcon,
+    Package,
+    Shield,
+    AlertTriangle,
+    BarChart3,
+    Clock,
+    CalendarDays,
+    ArrowRight,
     Inbox,
-    BarChart3
+    Target,
+    CreditCard,
+    ChevronRight
 } from "lucide-react";
 import Link from "next/link";
-import { GlassCard } from "@/components/ui/GlassCard";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { cn } from "@/utils/cn";
 import { getLowStockParts } from "@/app/actions/parts";
 import { useAuth } from "@/context/AuthContext";
 import { useState, useEffect } from "react";
-import { AlertTriangle, Info } from "lucide-react";
 
-const eventoColors: Record<string, string> = {
-    receber: "bg-emerald-100 text-emerald-700",
-    pagar: "bg-red-100 text-red-700",
-    os: "bg-blue-100 text-blue-700",
-    compromisso: "bg-purple-100 text-purple-700",
-};
+type DashboardTab = "geral" | "os" | "financeiro" | "estoque";
 
 export default function DashboardPage() {
-    const { profile } = useAuth();
-    const { metrics, loading, faturamentoDia, agendaSemana, atividades } = useDashboardMetrics();
+    const { profile, empresa } = useAuth();
+    const { 
+        metrics, loading, faturamentoDia, atividades, 
+        osStatus, aparelhosParados, estoqueCritico, contasReceber, faturamento7Dias, metaMes 
+    } = useDashboardMetrics();
     const [lowStockParts, setLowStockParts] = useState<any[]>([]);
+    const [activeTab, setActiveTab] = useState<DashboardTab>("geral");
 
     useEffect(() => {
         if (profile) {
@@ -44,340 +47,522 @@ export default function DashboardPage() {
         }
     }, [profile]);
 
-    // Calcular trends reais
     const osHojeChange = metrics.osAbertasOntem;
     const clientesNovos = (metrics.clientesAtivos || 0) - (metrics.clientesMesAnterior || 0);
     const receitaChange = metrics.receitaMesAnterior > 0
         ? (((metrics.receitaMensal - metrics.receitaMesAnterior) / metrics.receitaMesAnterior) * 100).toFixed(1)
         : metrics.receitaMensal > 0 ? "100" : "0";
 
-    const metricsList = [
+    const today = new Date();
+    const dayNames = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+    const monthNames = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+    const dateStr = `${dayNames[today.getDay()]}, ${today.getDate()} de ${monthNames[today.getMonth()]}`;
+
+    const metaPercent = metaMes.meta > 0 ? Math.min(100, Math.round((metaMes.atual / metaMes.meta) * 100)) : 0;
+
+    const maxFat7 = Math.max(...faturamento7Dias.map(f => f.valor), 1);
+
+    const tabs: { key: DashboardTab; label: string }[] = [
+        { key: "geral", label: "Geral" },
+        { key: "os", label: "OS" },
+        { key: "financeiro", label: "Financeiro" },
+        { key: "estoque", label: "Estoque" },
+    ];
+
+    const kpis = [
+        {
+            label: "Receita do Mês",
+            value: loading ? "..." : formatCurrency(metrics.receitaMensal),
+            change: `${Number(receitaChange) >= 0 ? "+" : ""}${receitaChange}%`,
+            changeType: Number(receitaChange) >= 0 ? "up" : "down",
+            accent: true,
+        },
+        {
+            label: "Caixa Hoje",
+            value: loading ? "..." : formatCurrency(metrics.vendasPDVHoje),
+            change: "Tempo real",
+            changeType: "neutral",
+        },
         {
             label: "OS Abertas",
             value: loading ? "..." : metrics.osAbertas.toString(),
-            icon: ClipboardList,
-            color: "text-blue-500",
-            bg: "bg-blue-50",
-            change: osHojeChange > 0 ? `+${osHojeChange}` : "0",
-            changeType: osHojeChange > 0 ? "up" as const : "neutral" as const,
-            changeLabel: "hoje",
+            change: osHojeChange > 0 ? `+${osHojeChange} hoje` : "0 hoje",
+            changeType: osHojeChange > 0 ? "up" : "neutral",
         },
         {
             label: "Clientes Ativos",
             value: loading ? "..." : metrics.clientesAtivos.toString(),
-            icon: Users,
-            color: "text-emerald-500",
-            bg: "bg-emerald-50",
-            change: clientesNovos > 0 ? `+${clientesNovos}` : "0",
-            changeType: clientesNovos > 0 ? "up" as const : "neutral" as const,
-            changeLabel: "este mês",
+            change: clientesNovos > 0 ? `+${clientesNovos} mês` : "0 mês",
+            changeType: clientesNovos > 0 ? "up" : "neutral",
         },
         {
-            label: "Receita Mensal",
-            value: loading ? "..." : formatCurrency(metrics.receitaMensal),
-            icon: DollarSign,
-            color: "text-brand-500",
-            bg: "bg-brand-50",
-            change: `${Number(receitaChange) >= 0 ? "+" : ""}${receitaChange}%`,
-            changeType: Number(receitaChange) >= 0 ? "up" as const : "down" as const,
-            changeLabel: "vs mês anterior",
-        },
-        {
-            label: "Caixa PDV (Hoje)",
-            value: loading ? "..." : formatCurrency(metrics.vendasPDVHoje),
-            icon: ShoppingCart,
-            color: "text-amber-500",
-            bg: "bg-amber-50",
-            change: "Real",
-            changeType: "neutral" as const,
-            changeLabel: "vendas",
-        },
-        {
-            label: "Pedidos em Aberto",
-            value: loading ? "..." : metrics.pedidosPendentes.toString(),
-            icon: ClipboardCheck,
-            color: "text-purple-500",
-            bg: "bg-purple-50",
-            change: "Pipeline",
-            changeType: "neutral" as const,
-            changeLabel: "pendentes",
+            label: "Ticket Médio",
+            value: loading ? "..." : formatCurrency(metrics.ticketMedioGeral),
+            change: "Consolidado",
+            changeType: "neutral",
         },
     ];
 
     return (
-        <div className="space-y-6 page-enter">
+        <div className="space-y-3.5 page-enter">
 
-            {/* Page Header */}
-            <div className="flex items-center justify-between">
+            {/* Page Header + Tabs */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
-                    <p className="text-slate-500 text-sm mt-0.5">Visão geral em tempo real</p>
+                    <h1 className="text-lg font-semibold text-slate-800">Dashboard</h1>
+                    <p className="text-slate-400 text-xs mt-0.5">{dateStr} · {empresa?.nome}</p>
+                </div>
+                <div className="flex items-center gap-1 bg-white rounded-lg p-0.5" style={{ border: '0.5px solid #E2E8F0' }}>
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.key}
+                            onClick={() => setActiveTab(tab.key)}
+                            className={cn(
+                                "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                                activeTab === tab.key
+                                    ? "bg-[#1E40AF] text-white"
+                                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                            )}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            {/* Low Stock Alert */}
-            {lowStockParts.length > 0 && (
-                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 shadow-inner">
-                            <AlertTriangle size={24} />
+            {/* TAB: Geral */}
+            {activeTab === "geral" && (
+                <>
+                    {/* KPI Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                        {kpis.map((kpi, i) => (
+                            <div 
+                                key={kpi.label} 
+                                className="glass-card"
+                                style={kpi.accent ? { borderLeft: '3px solid #1E40AF', borderRadius: '0 10px 10px 0' } : undefined}
+                            >
+                                <p className="text-[9px] font-medium text-slate-400 tracking-wide uppercase mb-1">{kpi.label}</p>
+                                <p className="text-xl font-semibold text-slate-800 leading-none">{kpi.value}</p>
+                                <p className={cn(
+                                    "text-[10px] mt-1",
+                                    kpi.changeType === "up" && "text-emerald-600",
+                                    kpi.changeType === "down" && "text-red-500",
+                                    kpi.changeType === "neutral" && "text-slate-400",
+                                )}>
+                                    {kpi.changeType === "up" && "↑ "}{kpi.changeType === "down" && "↓ "}{kpi.change}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Main Row: OS Status + Meta + Chart */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
+                        {/* OS Status Card */}
+                        <div className="lg:col-span-2 glass-card">
+                            <div className="flex items-center justify-between mb-3">
+                                <p className="text-[11px] font-medium text-slate-800">Ordens de Serviço</p>
+                                <Link href="/os" className="text-[10px] text-[#1E40AF] font-medium hover:underline">Ver todas →</Link>
+                            </div>
+
+                            {/* Status blocks */}
+                            <div className="grid grid-cols-4 gap-1.5 mb-3">
+                                <div className="rounded-lg p-2 text-center bg-amber-50">
+                                    <p className="text-lg font-semibold text-amber-800">{osStatus.aguardando}</p>
+                                    <p className="text-[9px] text-amber-700 opacity-80">Aguardando</p>
+                                </div>
+                                <div className="rounded-lg p-2 text-center bg-blue-50">
+                                    <p className="text-lg font-semibold text-blue-800">{osStatus.emReparo}</p>
+                                    <p className="text-[9px] text-blue-700 opacity-80">Em Reparo</p>
+                                </div>
+                                <div className="rounded-lg p-2 text-center bg-emerald-50">
+                                    <p className="text-lg font-semibold text-emerald-800">{osStatus.pronto}</p>
+                                    <p className="text-[9px] text-emerald-700 opacity-80">Prontas</p>
+                                </div>
+                                <div className="rounded-lg p-2 text-center bg-red-50">
+                                    <p className="text-lg font-semibold text-red-800">{osStatus.atrasadas}</p>
+                                    <p className="text-[9px] text-red-700 opacity-80">Atrasadas</p>
+                                </div>
+                            </div>
+
+                            {/* Aparelhos parados */}
+                            <p className="text-[9px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">Parados há mais de 3 dias</p>
+                            {aparelhosParados.length === 0 ? (
+                                <p className="text-[10px] text-slate-400 py-2">Nenhum aparelho parado ✓</p>
+                            ) : (
+                                <div className="space-y-0">
+                                    {aparelhosParados.map((ap) => (
+                                        <Link href={`/os/${ap.id}`} key={ap.id} className="flex items-center gap-2 py-1.5 hover:bg-slate-50 -mx-2 px-2 rounded transition-colors" style={{ borderBottom: '0.5px solid #F1F5F9' }}>
+                                            <div className={cn("w-[7px] h-[7px] rounded-full flex-shrink-0", ap.dias > 7 ? "bg-red-500" : "bg-amber-500")} />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[11px] text-slate-800 truncate">{ap.equipamento}</p>
+                                                <p className="text-[9px] text-slate-400">{ap.cliente}</p>
+                                            </div>
+                                            <span className={cn("text-[11px] font-medium", ap.dias > 7 ? "text-red-600" : "text-amber-600")}>
+                                                {ap.dias}d
+                                            </span>
+                                        </Link>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                        <div>
-                            <h3 className="text-sm font-bold text-slate-800">Possível falta de peças!</h3>
-                            <p className="text-xs text-slate-500">
-                                <span className="font-bold text-amber-600">{lowStockParts.length} peças</span> com estoque no limite ou zerado.
-                            </p>
-                            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                                {lowStockParts.slice(0, 3).map((p, i) => (
-                                    <span key={i} className="text-[10px] text-slate-500">
-                                        • {p.name} <span className="font-bold">({p.unitName}: {p.qty})</span>
-                                    </span>
-                                ))}
-                                {lowStockParts.length > 3 && (
-                                    <span className="text-[10px] text-slate-400 italic">...e mais {lowStockParts.length - 3}</span>
-                                )}
+
+                        {/* Right: Meta + Faturamento 7 dias */}
+                        <div className="space-y-2.5">
+                            {/* Meta do Mês */}
+                            <div className="glass-card">
+                                <div className="flex items-center justify-between mb-2">
+                                    <p className="text-[11px] font-medium text-slate-800">Meta do Mês</p>
+                                    <Target className="w-3.5 h-3.5 text-slate-400" />
+                                </div>
+                                <p className="text-2xl font-semibold text-slate-800">{metaPercent}%</p>
+                                <div className="bg-slate-100 rounded-full h-2 overflow-hidden my-2">
+                                    <div 
+                                        className="h-full bg-[#1E40AF] rounded-full transition-all duration-700"
+                                        style={{ width: `${metaPercent}%` }}
+                                    />
+                                </div>
+                                <div className="flex justify-between text-[10px] text-slate-400">
+                                    <span>{formatCurrency(metaMes.atual)}</span>
+                                    <span>Meta: {metaMes.meta > 0 ? formatCurrency(metaMes.meta) : "Não definida"}</span>
+                                </div>
+                            </div>
+
+                            {/* Faturamento 7 dias (mini chart) */}
+                            <div className="glass-card">
+                                <div className="flex items-center justify-between mb-3">
+                                    <p className="text-[11px] font-medium text-slate-800">Últimos 7 dias</p>
+                                    <BarChart3 className="w-3.5 h-3.5 text-slate-400" />
+                                </div>
+                                <div className="flex items-end gap-1.5 h-16">
+                                    {faturamento7Dias.map((f, i) => (
+                                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                                            <div 
+                                                className="w-full bg-blue-100 hover:bg-[#1E40AF] transition-colors rounded-sm cursor-default"
+                                                style={{ height: `${Math.max(4, (f.valor / maxFat7) * 56)}px` }}
+                                                title={formatCurrency(f.valor)}
+                                            />
+                                            <span className="text-[8px] text-slate-400">{f.dia}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <Link 
-                        href="/estoque?filter=baixo_estoque" 
-                        className="bg-white px-4 py-2 rounded-xl text-xs font-bold text-slate-700 border border-slate-200 hover:bg-slate-50 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
-                    >
-                        Ver todos no Estoque
-                        <Info size={14} className="text-slate-400" />
-                    </Link>
-                </div>
+
+                    {/* Secondary Row: Contas + Estoque + Atividades */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                        {/* Contas a Receber */}
+                        <div className="glass-card">
+                            <div className="flex items-center justify-between mb-2.5">
+                                <p className="text-[11px] font-medium text-slate-800">Contas a Receber</p>
+                                <Link href="/financeiro/receber" className="text-[10px] text-[#1E40AF] font-medium">Ver →</Link>
+                            </div>
+                            <div className="space-y-0">
+                                {[
+                                    { label: "Vencido", value: contasReceber.vencido, color: "text-red-600" },
+                                    { label: "Hoje", value: contasReceber.hoje, color: "text-amber-600" },
+                                    { label: "Esta semana", value: contasReceber.semana, color: "text-slate-700" },
+                                    { label: "Próx. 30 dias", value: contasReceber.trintaDias, color: "text-slate-500" },
+                                ].map((row) => (
+                                    <div key={row.label} className="flex items-center justify-between py-1.5" style={{ borderBottom: '0.5px solid #F1F5F9' }}>
+                                        <span className="text-[11px] text-slate-500">{row.label}</span>
+                                        <span className={cn("text-[11px] font-medium", row.color)}>{formatCurrency(row.value)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Estoque Crítico */}
+                        <div className="glass-card">
+                            <div className="flex items-center justify-between mb-2.5">
+                                <p className="text-[11px] font-medium text-slate-800">Estoque Crítico</p>
+                                <Link href="/estoque" className="text-[10px] text-[#1E40AF] font-medium">Ver →</Link>
+                            </div>
+                            {estoqueCritico.length === 0 ? (
+                                <p className="text-[10px] text-slate-400 py-4 text-center">Tudo em ordem ✓</p>
+                            ) : (
+                                <div className="space-y-0">
+                                    {estoqueCritico.map((item) => (
+                                        <div key={item.id} className="flex items-center gap-2 py-1.5" style={{ borderBottom: '0.5px solid #F1F5F9' }}>
+                                            <span className="flex-1 text-[11px] text-slate-700 truncate">{item.name}</span>
+                                            <span className={cn(
+                                                "text-[11px] font-medium",
+                                                item.qty === 0 ? "text-red-600" : "text-amber-600"
+                                            )}>
+                                                {item.qty} un
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Atividades Recentes */}
+                        <div className="glass-card">
+                            <div className="flex items-center justify-between mb-2.5">
+                                <p className="text-[11px] font-medium text-slate-800">Atividade Recente</p>
+                                <Link href="/configuracoes/auditoria" className="text-[10px] text-[#1E40AF] font-medium">Ver →</Link>
+                            </div>
+                            {atividades.length === 0 ? (
+                                <p className="text-[10px] text-slate-400 py-4 text-center">Nenhuma atividade</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {atividades.map((act, i) => (
+                                        <div key={i} className="flex gap-2">
+                                            <div className={cn(
+                                                "w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5",
+                                                act.type === 'success' && "bg-emerald-100",
+                                                act.type === 'info' && "bg-blue-100",
+                                                act.type === 'warning' && "bg-amber-100",
+                                                act.type === 'system' && "bg-slate-100",
+                                            )}>
+                                                <div className={cn(
+                                                    "w-1.5 h-1.5 rounded-full",
+                                                    act.type === 'success' && "bg-emerald-500",
+                                                    act.type === 'info' && "bg-blue-500",
+                                                    act.type === 'warning' && "bg-amber-500",
+                                                    act.type === 'system' && "bg-slate-500",
+                                                )} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[11px] font-medium text-slate-700 truncate">{act.action}</p>
+                                                <p className="text-[9px] text-slate-400">{act.time}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Quick Actions */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {[
+                            { label: "Nova OS", desc: "Abrir OS", href: "/os/nova", icon: Plus, bg: "bg-blue-50", iconColor: "text-[#1E40AF]" },
+                            { label: "PDV", desc: "Ponto de Venda", href: "/pdv", icon: ShoppingCart, bg: "bg-emerald-50", iconColor: "text-emerald-600" },
+                            { label: "Novo Cliente", desc: "Cadastrar", href: "/clientes/novo", icon: Users, bg: "bg-purple-50", iconColor: "text-purple-600" },
+                            { label: "Novo Produto", desc: "Adicionar estoque", href: "/estoque/novo", icon: Package, bg: "bg-amber-50", iconColor: "text-amber-600" },
+                        ].map(action => (
+                            <Link 
+                                key={action.href} 
+                                href={action.href}
+                                className="glass-card flex items-center gap-2.5 group"
+                            >
+                                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", action.bg)}>
+                                    <action.icon className={cn("w-4 h-4", action.iconColor)} />
+                                </div>
+                                <div>
+                                    <p className="text-[11px] font-medium text-slate-800">{action.label}</p>
+                                    <p className="text-[9px] text-slate-400">{action.desc}</p>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </>
             )}
 
-            {/* Metric Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                {metricsList.map((m) => {
-                    const Icon = m.icon;
-                    return (
-                        <div key={m.label} className="glass-card animate-slide-up">
-                            <div className="flex items-start justify-between mb-3">
-                                <div className={`w-9 h-9 rounded-xl ${m.bg} flex items-center justify-center`}>
-                                    <Icon className={`w-4.5 h-4.5 ${m.color}`} size={18} />
-                                </div>
-                                {m.changeType !== "neutral" && (
-                                    <div className={`flex items-center gap-1 text-xs font-medium ${m.changeType === "up" ? "text-emerald-600" : "text-red-500"}`}>
-                                        {m.changeType === "up" ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                                        {m.change}
-                                    </div>
-                                )}
-                                {m.changeType === "neutral" && (
-                                    <div className="flex items-center gap-1 text-xs font-medium text-slate-400">
-                                        {m.change}
-                                    </div>
-                                )}
-                            </div>
-                            <p className="text-2xl font-bold text-slate-800 leading-tight">{m.value}</p>
-                            <p className="text-slate-500 text-xs mt-1">{m.label}</p>
-                            <p className="text-slate-400 text-xs">{m.changeLabel}</p>
+            {/* TAB: OS */}
+            {activeTab === "os" && (
+                <>
+                    {/* OS Status Blocks */}
+                    <div className="grid grid-cols-4 gap-2.5">
+                        <div className="glass-card text-center bg-amber-50" style={{ borderColor: '#FEF9C3' }}>
+                            <p className="text-2xl font-semibold text-amber-800">{osStatus.aguardando}</p>
+                            <p className="text-[10px] text-amber-700">Aguardando</p>
                         </div>
-                    );
-                })}
-            </div>
+                        <div className="glass-card text-center bg-blue-50" style={{ borderColor: '#DBEAFE' }}>
+                            <p className="text-2xl font-semibold text-blue-800">{osStatus.emReparo}</p>
+                            <p className="text-[10px] text-blue-700">Em Reparo</p>
+                        </div>
+                        <div className="glass-card text-center bg-emerald-50" style={{ borderColor: '#DCFCE7' }}>
+                            <p className="text-2xl font-semibold text-emerald-800">{osStatus.pronto}</p>
+                            <p className="text-[10px] text-emerald-700">Prontas</p>
+                        </div>
+                        <div className="glass-card text-center bg-red-50" style={{ borderColor: '#FEE2E2' }}>
+                            <p className="text-2xl font-semibold text-red-800">{osStatus.atrasadas}</p>
+                            <p className="text-[10px] text-red-700">Atrasadas</p>
+                        </div>
+                    </div>
 
-            {/* Faturamento do Dia + Atividades */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Faturamento do Dia */}
-                <GlassCard title="Faturamento do Dia" icon={DollarSign}>
-                    {faturamentoDia.total === 0 && !loading ? (
-                        <div className="flex flex-col items-center justify-center py-6 text-center">
-                            <Inbox className="w-8 h-8 text-slate-300 mb-2" />
-                            <p className="text-xs text-slate-400">Nenhuma venda registrada hoje</p>
+                    {/* Kanban */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                        {[
+                            { title: "Aguardando", items: aparelhosParados.filter(a => a.status === "aberta" || a.status === "aguardando_pecas"), color: "border-amber-200 bg-amber-50/30" },
+                            { title: "Em Reparo", items: aparelhosParados.filter(a => a.status === "em_reparo"), color: "border-blue-200 bg-blue-50/30" },
+                            { title: "Pronto p/ Retirada", items: aparelhosParados.filter(a => a.status === "pronta"), color: "border-emerald-200 bg-emerald-50/30" },
+                        ].map(col => (
+                            <div key={col.title} className={cn("glass-card", col.color)} style={{ borderWidth: '0.5px' }}>
+                                <p className="text-[11px] font-medium text-slate-700 mb-2">{col.title}</p>
+                                {col.items.length === 0 ? (
+                                    <p className="text-[10px] text-slate-400 py-3 text-center">Sem itens</p>
+                                ) : (
+                                    <div className="space-y-1.5">
+                                        {col.items.map(item => (
+                                            <Link href={`/os/${item.id}`} key={item.id} className="block bg-white rounded-lg p-2.5 hover:shadow-sm transition-shadow" style={{ border: '0.5px solid #E2E8F0' }}>
+                                                <p className="text-[11px] font-medium text-slate-800">{item.equipamento}</p>
+                                                <p className="text-[9px] text-slate-400">{item.cliente} · há {item.dias}d</p>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* OS Metrics */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                        <div className="glass-card text-center">
+                            <Clock className="w-4 h-4 text-slate-400 mx-auto mb-1" />
+                            <p className="text-lg font-semibold text-slate-800">--d</p>
+                            <p className="text-[9px] text-slate-400">Tempo médio reparo</p>
                         </div>
-                    ) : (
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full bg-brand-500" />
-                                    <span className="text-slate-600 text-sm">Total</span>
-                                </div>
-                                <span className="font-bold text-slate-800">{formatCurrency(faturamentoDia.total)}</span>
+                        <div className="glass-card text-center">
+                            <TrendingUp className="w-4 h-4 text-slate-400 mx-auto mb-1" />
+                            <p className="text-lg font-semibold text-slate-800">--%</p>
+                            <p className="text-[9px] text-slate-400">Taxa conclusão</p>
+                        </div>
+                        <div className="glass-card text-center">
+                            <Plus className="w-4 h-4 text-slate-400 mx-auto mb-1" />
+                            <p className="text-lg font-semibold text-slate-800">{metrics.osAbertasOntem}</p>
+                            <p className="text-[9px] text-slate-400">OS abertas hoje</p>
+                        </div>
+                        <div className="glass-card text-center">
+                            <DollarSign className="w-4 h-4 text-slate-400 mx-auto mb-1" />
+                            <p className="text-lg font-semibold text-slate-800">{formatCurrency(metrics.ticketMedioOS)}</p>
+                            <p className="text-[9px] text-slate-400">Ticket médio OS</p>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* TAB: Financeiro */}
+            {activeTab === "financeiro" && (
+                <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                        <div className="glass-card" style={{ borderLeft: '3px solid #1E40AF', borderRadius: '0 10px 10px 0' }}>
+                            <p className="text-[9px] font-medium text-slate-400 uppercase">Receita Mês</p>
+                            <p className="text-xl font-semibold text-slate-800">{formatCurrency(metrics.receitaMensal)}</p>
+                        </div>
+                        <div className="glass-card">
+                            <p className="text-[9px] font-medium text-slate-400 uppercase">Faturamento Hoje</p>
+                            <p className="text-xl font-semibold text-slate-800">{formatCurrency(faturamentoDia.total)}</p>
+                        </div>
+                        <div className="glass-card">
+                            <p className="text-[9px] font-medium text-slate-400 uppercase">Lucro Hoje</p>
+                            <p className="text-xl font-semibold text-emerald-700">{formatCurrency(faturamentoDia.liquido)}</p>
+                        </div>
+                        <div className="glass-card">
+                            <p className="text-[9px] font-medium text-slate-400 uppercase">Ticket Médio</p>
+                            <p className="text-xl font-semibold text-slate-800">{formatCurrency(metrics.ticketMedioGeral)}</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        {/* Contas a Receber (expanded) */}
+                        <div className="glass-card">
+                            <div className="flex items-center justify-between mb-3">
+                                <p className="text-[11px] font-medium text-slate-800">Contas a Receber</p>
+                                <Link href="/financeiro/receber" className="text-[10px] text-[#1E40AF] font-medium">Ver todas →</Link>
                             </div>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <ShoppingBag className="w-3.5 h-3.5 text-slate-400" />
-                                    <span className="text-slate-500 text-sm">Produtos</span>
+                            {[
+                                { label: "Vencido", value: contasReceber.vencido, color: "text-red-600", bg: "bg-red-50" },
+                                { label: "Hoje", value: contasReceber.hoje, color: "text-amber-600", bg: "bg-amber-50" },
+                                { label: "Esta semana", value: contasReceber.semana, color: "text-slate-700", bg: "" },
+                                { label: "Próx. 30 dias", value: contasReceber.trintaDias, color: "text-slate-500", bg: "" },
+                            ].map((row) => (
+                                <div key={row.label} className={cn("flex items-center justify-between py-2 px-2 rounded", row.bg)} style={{ borderBottom: '0.5px solid #F1F5F9' }}>
+                                    <span className="text-xs text-slate-600">{row.label}</span>
+                                    <span className={cn("text-xs font-medium", row.color)}>{formatCurrency(row.value)}</span>
                                 </div>
-                                <span className="text-slate-700 text-sm font-medium">{formatCurrency(faturamentoDia.produtos)}</span>
+                            ))}
+                        </div>
+
+                        {/* Faturamento 7 dias (expanded) */}
+                        <div className="glass-card">
+                            <p className="text-[11px] font-medium text-slate-800 mb-3">Faturamento — 7 dias</p>
+                            <div className="flex items-end gap-2 h-24">
+                                {faturamento7Dias.map((f, i) => (
+                                    <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
+                                        <span className="text-[8px] text-slate-400 font-medium">{f.valor > 0 ? formatCurrency(f.valor).replace("R$\u00a0", "") : ""}</span>
+                                        <div 
+                                            className="w-full bg-blue-100 hover:bg-[#1E40AF] transition-colors rounded-sm"
+                                            style={{ height: `${Math.max(4, (f.valor / maxFat7) * 64)}px` }}
+                                        />
+                                        <span className="text-[9px] text-slate-500 font-medium">{f.dia}</span>
+                                    </div>
+                                ))}
                             </div>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Wrench className="w-3.5 h-3.5 text-slate-400" />
-                                    <span className="text-slate-500 text-sm">Serviços</span>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* TAB: Estoque */}
+            {activeTab === "estoque" && (
+                <>
+                    {/* Low Stock Alert */}
+                    {lowStockParts.length > 0 && (
+                        <div className="glass-card bg-amber-50" style={{ borderColor: '#FDE68A', borderWidth: '0.5px' }}>
+                            <div className="flex items-center gap-3">
+                                <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                                <div className="flex-1">
+                                    <p className="text-xs font-medium text-slate-800">Peças com estoque baixo</p>
+                                    <p className="text-[10px] text-slate-500">{lowStockParts.length} itens abaixo do mínimo</p>
                                 </div>
-                                <span className="text-slate-700 text-sm font-medium">{formatCurrency(faturamentoDia.servicos)}</span>
-                            </div>
-                            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                                <div className="flex items-center gap-2">
-                                    <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-                                    <span className="text-slate-600 text-sm font-medium">Líquido</span>
-                                </div>
-                                <span className="text-emerald-600 font-bold">{formatCurrency(faturamentoDia.liquido)}</span>
+                                <Link href="/estoque/pecas" className="text-[10px] text-[#1E40AF] font-medium">Ver →</Link>
                             </div>
                         </div>
                     )}
-                </GlassCard>
 
-                {/* Ticket Médio */}
-                <div className="col-span-1">
-                    <GlassCard title="Ticket Médio (Mês)" icon={BarChart3}>
-                        <div className="space-y-4 pt-1">
-                            <div className="p-4 bg-brand-50 border border-brand-100 rounded-2xl relative overflow-hidden transition-transform hover:scale-[1.02]">
-                                <div className="relative z-10">
-                                    <p className="text-[10px] text-brand-600 font-bold uppercase tracking-widest mb-0.5 opacity-80">Geral Consolidado</p>
-                                    <p className="text-3xl font-black text-brand-700 tracking-tight">{formatCurrency(metrics.ticketMedioGeral)}</p>
-                                </div>
-                                <BarChart3 className="absolute right-[-10px] bottom-[-10px] w-20 h-20 text-brand-500/10" />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="p-3 bg-blue-50 border border-blue-100/50 rounded-xl transition-colors hover:bg-blue-100/50">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <p className="text-[9px] text-blue-600 font-bold uppercase tracking-widest opacity-80">Serviços</p>
-                                        <Wrench className="w-3.5 h-3.5 text-blue-400" />
-                                    </div>
-                                    <p className="text-xl font-black text-blue-700 tracking-tight">{formatCurrency(metrics.ticketMedioOS)}</p>
-                                </div>
-
-                                <div className="p-3 bg-emerald-50 border border-emerald-100/50 rounded-xl transition-colors hover:bg-emerald-100/50">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <p className="text-[9px] text-emerald-600 font-bold uppercase tracking-widest opacity-80">Vendas</p>
-                                        <ShoppingBag className="w-3.5 h-3.5 text-emerald-400" />
-                                    </div>
-                                    <p className="text-xl font-black text-emerald-700 tracking-tight">{formatCurrency(metrics.ticketMedioVendas)}</p>
-                                </div>
-                            </div>
+                    {/* Estoque Crítico Table */}
+                    <div className="glass-card">
+                        <div className="flex items-center justify-between mb-3">
+                            <p className="text-[11px] font-medium text-slate-800">Produtos com Estoque Baixo</p>
+                            <Link href="/estoque" className="text-[10px] text-[#1E40AF] font-medium">Ver estoque →</Link>
                         </div>
-                    </GlassCard>
-                </div>
-
-                {/* Atividades Recentes */}
-                <div className="col-span-1">
-                    <GlassCard title="Atividades Recentes" icon={HistoryIcon}>
-                        <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
-                            {loading ? (
-                                <p className="text-xs text-slate-400">Carregando...</p>
-                            ) : atividades.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-6 text-center">
-                                    <Inbox className="w-8 h-8 text-slate-300 mb-2" />
-                                    <p className="text-xs text-slate-400">Nenhuma atividade recente</p>
-                                    <p className="text-[10px] text-slate-300 mt-1">As ações no sistema aparecerão aqui</p>
-                                </div>
-                            ) : (
-                                atividades.map((act, i) => (
-                                    <div key={i} className="flex gap-3 relative pb-4 last:pb-0">
-                                        {i < atividades.length - 1 && <div className="absolute left-[11px] top-6 bottom-0 w-0.5 bg-slate-100" />}
-                                        <div className={cn(
-                                            "w-6 h-6 rounded-full flex items-center justify-center shrink-0 z-10",
-                                            act.type === 'success' && "bg-emerald-100 text-emerald-600",
-                                            act.type === 'info' && "bg-blue-100 text-blue-600",
-                                            act.type === 'warning' && "bg-amber-100 text-amber-600",
-                                            act.type === 'system' && "bg-slate-100 text-slate-600",
-                                        )}>
-                                            <div className="w-1.5 h-1.5 rounded-full bg-current" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-xs font-bold text-slate-800 truncate">{act.action}</p>
-                                            <div className="flex justify-between items-center text-[10px] text-slate-400">
-                                                <span>{act.user}</span>
-                                                <span>{act.time}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                        {atividades.length > 0 && (
-                            <Link href="/configuracoes/auditoria" className="block text-center mt-4 text-[10px] font-bold text-brand-600 hover:text-brand-700 uppercase tracking-widest">
-                                Ver todos os logs →
-                            </Link>
-                        )}
-                    </GlassCard>
-                </div>
-
-                {/* Agenda da Semana */}
-                <div className="col-span-1 md:col-span-2 lg:col-span-2">
-                    <GlassCard title="Agenda da Semana" icon={Calendar}>
-                        {agendaSemana.length === 0 && !loading ? (
-                            <div className="flex flex-col items-center justify-center py-8 text-center">
-                                <Calendar className="w-8 h-8 text-slate-300 mb-2" />
-                                <p className="text-xs text-slate-400">Carregando agenda...</p>
+                        {estoqueCritico.length === 0 ? (
+                            <div className="text-center py-6">
+                                <Package className="w-6 h-6 text-slate-300 mx-auto mb-2" />
+                                <p className="text-xs text-slate-400">Todos os produtos estão com estoque normal</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-7 gap-1.5">
-                                {agendaSemana.map((dia) => (
-                                    <div key={dia.dia + dia.data} className="space-y-1">
-                                        <div className="text-center">
-                                            <p className="text-xs font-semibold text-slate-500">{dia.dia}</p>
-                                            <p className="text-xs text-slate-400">{dia.data.split("/")[0]}</p>
-                                        </div>
-                                        <div className="space-y-1 min-h-[60px]">
-                                            {dia.eventos.length === 0 && (
-                                                <div className="text-[10px] text-slate-300 text-center py-2">—</div>
-                                            )}
-                                            {dia.eventos.map((ev, i) => (
-                                                <div
-                                                    key={i}
-                                                    className={`text-[10px] px-1.5 py-1 rounded-lg font-medium leading-tight ${eventoColors[ev.tipo] || "bg-slate-100 text-slate-600"}`}
-                                                >
-                                                    {ev.label}
-                                                    {ev.valor > 0 && (
-                                                        <div className="font-bold mt-0.5">{formatCurrency(ev.valor)}</div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
+                            <div className="space-y-0">
+                                {estoqueCritico.map((item) => (
+                                    <div key={item.id} className="flex items-center gap-3 py-2" style={{ borderBottom: '0.5px solid #F1F5F9' }}>
+                                        <div className={cn("w-2 h-2 rounded-full flex-shrink-0", item.qty === 0 ? "bg-red-500" : "bg-amber-500")} />
+                                        <span className="flex-1 text-xs text-slate-700 truncate">{item.name}</span>
+                                        <span className={cn("text-xs font-medium", item.qty === 0 ? "text-red-600" : "text-amber-600")}>
+                                            {item.qty} / {item.alertQty}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
                         )}
-                    </GlassCard>
-                </div>
-            </div>
+                    </div>
 
-            {/* Quick Actions */}
-            <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-4">
-                <Link href="/os/nova" className="glass-card flex items-center gap-3 hover:shadow-glass-lg hover:-translate-y-0.5 transition-all cursor-pointer group">
-                    <div className="w-10 h-10 rounded-xl bg-brand-500 flex items-center justify-center group-hover:bg-brand-600 transition-colors">
-                        <Plus className="w-5 h-5 text-white" />
+                    {/* Quick Actions */}
+                    <div className="grid grid-cols-2 gap-2.5">
+                        <Link href="/estoque/novo" className="glass-card flex items-center gap-3 group">
+                            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                                <Plus className="w-4 h-4 text-[#1E40AF]" />
+                            </div>
+                            <div>
+                                <p className="text-[11px] font-medium text-slate-800">Novo Produto</p>
+                                <p className="text-[9px] text-slate-400">Cadastrar item</p>
+                            </div>
+                        </Link>
+                        <Link href="/ferramentas/importacao" className="glass-card flex items-center gap-3 group">
+                            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+                                <Package className="w-4 h-4 text-emerald-600" />
+                            </div>
+                            <div>
+                                <p className="text-[11px] font-medium text-slate-800">Importar iPhones</p>
+                                <p className="text-[9px] text-slate-400">Importação em massa</p>
+                            </div>
+                        </Link>
                     </div>
-                    <div>
-                        <p className="font-semibold text-slate-800 text-sm">Nova OS</p>
-                        <p className="text-slate-400 text-xs">Abrir ordem de serviço</p>
-                    </div>
-                </Link>
-                <Link href="/pdv" className="glass-card flex items-center gap-3 hover:shadow-glass-lg hover:-translate-y-0.5 transition-all cursor-pointer group">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center group-hover:bg-emerald-600 transition-colors">
-                        <ShoppingCart className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                        <p className="font-semibold text-slate-800 text-sm">Nova Venda</p>
-                        <p className="text-slate-400 text-xs">Abrir PDV</p>
-                    </div>
-                </Link>
-                <Link href="/clientes/novo" className="glass-card flex items-center gap-3 hover:shadow-glass-lg hover:-translate-y-0.5 transition-all cursor-pointer group">
-                    <div className="w-10 h-10 rounded-xl bg-purple-500 flex items-center justify-center group-hover:bg-purple-600 transition-colors">
-                        <Users className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                        <p className="font-semibold text-slate-800 text-sm">Novo Cliente</p>
-                        <p className="text-slate-400 text-xs">Cadastrar cliente</p>
-                    </div>
-                </Link>
-                <Link href="/estoque/novo" className="glass-card flex items-center gap-3 hover:shadow-glass-lg hover:-translate-y-0.5 transition-all cursor-pointer group">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center group-hover:bg-amber-600 transition-colors">
-                        <ShoppingBag className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                        <p className="font-semibold text-slate-800 text-sm">Novo Produto</p>
-                        <p className="text-slate-400 text-xs">Adicionar ao estoque</p>
-                    </div>
-                </Link>
-            </div>
+                </>
+            )}
         </div>
     );
 }

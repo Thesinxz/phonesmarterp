@@ -5,8 +5,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --sidebar-width: 260px;
-  --header-height: 64px;
+  --sidebar-width: 220px;
+  --header-height: 52px;
 }
 
 * {
@@ -19,7 +19,7 @@ html {
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background: #f0f4f8;
+  background: #F8FAFC;
   color: #1e293b;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -36,16 +36,44 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(46, 109, 164, 0.3);
+  background: rgba(148, 163, 184, 0.3);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(46, 109, 164, 0.6);
+  background: rgba(148, 163, 184, 0.6);
 }
 
-/* ─── Glass Utilities ───────────────────────────────────── */
+/* ─── Sidebar Items ────────────────────────────────────── */
 @layer components {
+
+  /* Sidebar navigation items — light mode */
+  .sidebar-item {
+    @apply flex items-center gap-2 px-3 py-[7px] mx-[6px] rounded-md text-slate-500 text-xs font-medium transition-all duration-150 cursor-pointer;
+  }
+
+  .sidebar-item:hover {
+    @apply bg-slate-50 text-slate-700;
+  }
+
+  .sidebar-item.active {
+    @apply bg-blue-50 text-[#1E40AF] font-semibold;
+  }
+
+  .sidebar-item svg {
+    @apply w-[14px] h-[14px] flex-shrink-0 opacity-70;
+  }
+
+  .sidebar-item.active svg {
+    @apply opacity-100;
+  }
+
+  /* Section labels */
+  .nav-section-label {
+    @apply px-3 pt-4 pb-1 text-[9px] font-medium text-slate-400 uppercase tracking-[0.08em];
+  }
+
+  /* ─── Glass Utilities ───────────────────────────────────── */
   .glass {
     @apply backdrop-blur-glass bg-white/80 border border-white/60 shadow-glass;
   }
@@ -55,31 +83,20 @@ body {
   }
 
   .glass-card {
-    @apply glass rounded-2xl p-6 transition-all duration-300;
+    @apply bg-white rounded-[10px] border border-[#E2E8F0] p-4 transition-all duration-200;
+    border-width: 0.5px;
   }
 
   .glass-card:hover {
-    @apply shadow-glass-lg -translate-y-0.5;
-  }
-
-  .sidebar-item {
-    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-white/70 text-sm font-medium transition-all duration-200 cursor-pointer;
-  }
-
-  .sidebar-item:hover {
-    @apply bg-white/10 text-white;
-  }
-
-  .sidebar-item.active {
-    @apply bg-white/15 text-white shadow-sm;
+    @apply shadow-card-hover;
   }
 
   .btn-primary {
-    @apply bg-brand-500 hover:bg-brand-600 text-white font-semibold px-4 py-2.5 rounded-xl transition-all duration-200 shadow-brand-glow hover:shadow-brand-glow active:scale-95 flex items-center gap-2 text-sm;
+    @apply bg-[#1E40AF] hover:bg-[#1D3FA8] text-white font-medium px-3.5 py-1.5 rounded-[7px] transition-all duration-150 flex items-center gap-1.5 text-xs;
   }
 
   .btn-secondary {
-    @apply bg-white/60 hover:bg-white/80 text-slate-700 border border-white/60 font-medium px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2 text-sm;
+    @apply bg-white hover:bg-slate-50 text-[#1E40AF] border border-blue-200 font-medium px-3.5 py-1.5 rounded-[7px] transition-all duration-150 flex items-center gap-1.5 text-xs;
   }
 
   .btn-outline {
@@ -87,7 +104,7 @@ body {
   }
 
   .input-glass {
-    @apply w-full bg-white/60 border border-white/60 rounded-xl px-4 py-2.5 text-slate-800 placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/60 transition-all duration-200;
+    @apply w-full bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all duration-200;
   }
 
   .metric-card {

@@ -24,46 +24,46 @@ export function CompanySwitcher() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    // Permite ver o switcher se tiver mais de uma empresa OU for administrador (para criar novas)
     const canCreate = profile?.papel === 'admin';
     
-    // Se não tiver empresa e não puder criar, não mostra nada
     if (!empresa && userCompanies.length === 0 && !canCreate) return null;
 
     return (
-        <div className="relative mb-6" ref={dropdownRef}>
+        <div className="relative mb-1" ref={dropdownRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className={cn(
-                    "w-full flex items-center gap-3 p-3 rounded-2xl transition-all border group",
+                    "w-full flex items-center gap-2.5 p-2 rounded-lg transition-all group",
+                    "bg-slate-50 hover:bg-slate-100 border",
                     isOpen
-                        ? "bg-white border-brand-200 shadow-xl shadow-brand-500/10"
-                        : "bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10"
+                        ? "border-blue-200 shadow-sm"
+                        : "border-slate-100 hover:border-slate-200"
                 )}
+                style={{ borderWidth: '0.5px' }}
             >
-                <div className="w-10 h-10 rounded-xl bg-brand-500 text-white flex items-center justify-center shadow-lg shadow-brand-500/20 shrink-0 group-hover:scale-105 transition-transform">
-                    <Building2 size={20} />
+                <div className="w-8 h-8 rounded-lg bg-[#1E40AF] text-white flex items-center justify-center shrink-0 text-xs font-medium">
+                    {empresa?.nome?.charAt(0)?.toUpperCase() || "E"}
                 </div>
 
                 <div className="flex-1 text-left overflow-hidden">
-                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40 leading-tight">Empresa Ativa</p>
-                    <p className="text-sm font-black text-white truncate drop-shadow-sm">{empresa?.nome || "Carregando..."}</p>
+                    <p className="text-[9px] font-medium uppercase tracking-[0.05em] text-slate-400 leading-tight">Empresa Ativa</p>
+                    <p className="text-[12px] font-medium text-slate-800 truncate">{empresa?.nome || "Carregando..."}</p>
                 </div>
 
                 <ChevronDown
-                    size={16}
-                    className={cn("text-white/30 transition-all duration-300 group-hover:text-white", isOpen && "rotate-180")}
+                    size={14}
+                    className={cn("text-slate-400 transition-all duration-200", isOpen && "rotate-180")}
                 />
             </button>
 
             {/* Dropdown Menu */}
             {isOpen && (
-                <div className="absolute top-full left-0 w-full mt-3 bg-white rounded-3xl shadow-2xl border border-slate-100 p-2 z-[100] animate-in fade-in zoom-in-95 slide-in-from-top-4 duration-200">
-                    <div className="px-3 py-2 border-b border-slate-50 mb-2">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Alternar Negócio</p>
+                <div className="absolute top-full left-0 w-full mt-2 bg-white rounded-xl shadow-lg border border-slate-200 p-1.5 z-[100] animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-200" style={{ borderWidth: '0.5px' }}>
+                    <div className="px-2.5 py-1.5 border-b border-slate-50 mb-1">
+                        <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Alternar Negócio</p>
                     </div>
 
-                    <div className="space-y-1 max-h-[280px] overflow-y-auto custom-scrollbar pr-1">
+                    <div className="space-y-0.5 max-h-[240px] overflow-y-auto custom-scrollbar pr-0.5">
                         {userCompanies.map((link) => {
                             const isSelected = link.empresa_id === empresa?.id;
                             return (
@@ -80,29 +80,29 @@ export function CompanySwitcher() {
                                     }}
                                     disabled={isLoading}
                                     className={cn(
-                                        "w-full flex items-center gap-3 p-3 rounded-2xl transition-all text-left group",
+                                        "w-full flex items-center gap-2.5 p-2 rounded-lg transition-all text-left",
                                         isSelected
-                                            ? "bg-brand-50 text-brand-600 shadow-sm"
-                                            : "hover:bg-slate-50 text-slate-600 hover:text-slate-900"
+                                            ? "bg-blue-50 text-[#1E40AF]"
+                                            : "hover:bg-slate-50 text-slate-600"
                                     )}
                                 >
                                     <div className={cn(
-                                        "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border transition-all",
+                                        "w-7 h-7 rounded-md flex items-center justify-center shrink-0 border",
                                         isSelected
-                                            ? "bg-white border-brand-200 shadow-sm"
-                                            : "bg-slate-50 border-transparent group-hover:bg-white group-hover:border-slate-200"
-                                    )}>
-                                        <Building size={16} className={isSelected ? "text-brand-500" : "text-slate-400"} />
+                                            ? "bg-white border-blue-200"
+                                            : "bg-slate-50 border-transparent"
+                                    )} style={{ borderWidth: '0.5px' }}>
+                                        <Building size={12} className={isSelected ? "text-[#1E40AF]" : "text-slate-400"} />
                                     </div>
 
                                     <div className="flex-1 overflow-hidden">
-                                        <p className="text-xs font-black truncate">{link.empresa?.nome || "Empresa sem nome"}</p>
-                                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{link.papel === 'admin' ? 'Administrador' : 'Colaborador'}</p>
+                                        <p className="text-[11px] font-medium truncate">{link.empresa?.nome || "Empresa sem nome"}</p>
+                                        <p className="text-[9px] text-slate-400 font-medium uppercase tracking-wider">{link.papel === 'admin' ? 'Admin' : 'Colaborador'}</p>
                                     </div>
 
                                     {isSelected && (
-                                        <div className="w-5 h-5 rounded-full bg-brand-500 text-white flex items-center justify-center scale-90 shadow-lg shadow-brand-500/30">
-                                            <Check size={12} strokeWidth={4} />
+                                        <div className="w-4 h-4 rounded-full bg-[#1E40AF] text-white flex items-center justify-center">
+                                            <Check size={10} strokeWidth={3} />
                                         </div>
                                     )}
                                 </button>
@@ -110,13 +110,13 @@ export function CompanySwitcher() {
                         })}
                     </div>
 
-                    <div className="mt-2 pt-2 border-t border-slate-50 space-y-1">
+                    <div className="mt-1 pt-1 border-t border-slate-50 space-y-0.5">
                         <Link
                             href="/configuracoes/empresas"
                             onClick={() => setIsOpen(false)}
-                            className="w-full h-11 flex items-center gap-3 px-4 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all font-black text-[10px] uppercase tracking-widest"
+                            className="w-full h-9 flex items-center gap-2.5 px-3 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-all text-[10px] font-medium"
                         >
-                            <Settings size={14} />
+                            <Settings size={12} />
                             Gestão de Empresas
                         </Link>
                         
@@ -126,9 +126,9 @@ export function CompanySwitcher() {
                                     setIsModalOpen(true);
                                     setIsOpen(false);
                                 }}
-                                className="w-full h-11 flex items-center gap-3 px-4 rounded-xl text-brand-500 hover:text-brand-600 hover:bg-brand-50 transition-all font-black text-[10px] uppercase tracking-widest"
+                                className="w-full h-9 flex items-center gap-2.5 px-3 rounded-lg text-[#1E40AF] hover:bg-blue-50 transition-all text-[10px] font-medium"
                             >
-                                <Plus size={14} strokeWidth={3} />
+                                <Plus size={12} strokeWidth={2.5} />
                                 Nova Empresa
                             </button>
                         )}
