@@ -518,18 +518,18 @@ export default function ImportacaoPage() {
             const usdValues = getProductUsdValues(item.custoUsd, calc.impostoBrl, calc.freteEuaBrl, calc.freteBrasilBrl, calc.custoFinalBrl, params.dolarCompra, item.precoVendaUsdCustom);
 
             const varejo = calc.precoSugeridoPix > 0
-                ? `R$ ${calc.precoSugeridoPix.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                ? `R$ ${(Math.round(calc.precoSugeridoPix * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                 : null;
             const atacado = usdValues.vendaUsd > 0
-                ? `US$ ${(usdValues.vendaUsd / 100).toFixed(2)}`
-                : null;
+                ? ` | US$ ${(Math.round(usdValues.vendaUsd / 100 * 100) / 100).toFixed(2)}`
+                : '';
 
             const cond = item.condicao !== 'novo_lacrado' && item.saudeBateria ? ` (Bat ${item.saudeBateria}%)` : '';
-            const precos = [varejo, atacado].filter(Boolean).join(' | ');
-            if (item.quantidade > 1) {
-                return `${item.quantidade}x ${item.label}${cond} — ${precos}`;
-            }
-            return `${item.label}${cond} — ${precos}`;
+            
+            const lucroRealBrl = calc.precoSugeridoPix - calc.custoFinalBrl;
+            const margemReal = ((lucroRealBrl / calc.custoFinalBrl) * 100).toFixed(1);
+            
+            return `${item.label}${cond} — ${varejo}${atacado} (margem: ${margemReal}%)`;
         });
 
         const text = lines.join('\n');
@@ -548,10 +548,10 @@ export default function ImportacaoPage() {
             const usdValues = getProductUsdValues(item.custoUsd, calc.impostoBrl, calc.freteEuaBrl, calc.freteBrasilBrl, calc.custoFinalBrl, params.dolarCompra, item.precoVendaUsdCustom);
 
             if (viewCurrency === 'BRL') {
-                const total = (calc.custoFinalBrl * (item.quantidade || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                const total = (Math.round(calc.custoFinalBrl * (item.quantidade || 1) * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 return item.quantidade > 1 ? `${item.quantidade}x ${item.label} — R$ ${total}` : `${item.label} — R$ ${total}`;
             } else {
-                const total = (usdValues.totalUsd * (item.quantidade || 1) / 100).toFixed(2);
+                const total = (Math.round((usdValues.totalUsd * (item.quantidade || 1) / 100) * 100) / 100).toFixed(2);
                 return item.quantidade > 1 ? `${item.quantidade}x ${item.label} — $ ${total}` : `${item.label} — $ ${total}`;
             }
         });
@@ -560,15 +560,16 @@ export default function ImportacaoPage() {
             const totalGeralBrl = items.reduce((acc, it) => {
                 const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
                 return acc + (calc.custoFinalBrl * (it.quantidade || 0));
-            }, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-            lines.push(`\nTOTAL LOTE (${items.length} produtos) — R$ ${totalGeralBrl}`);
+            }, 0);
+            const totalFormatado = (Math.round(totalGeralBrl * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            lines.push(`\nTOTAL LOTE (${items.length} produtos) — R$ ${totalFormatado}`);
         } else {
             const totalGeralUsd = items.reduce((acc, it) => {
                 const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
                 const usdValues = getProductUsdValues(it.custoUsd, calc.impostoBrl, calc.freteEuaBrl, calc.freteBrasilBrl, calc.custoFinalBrl, params.dolarCompra, it.precoVendaUsdCustom);
                 return acc + (usdValues.totalUsd * (it.quantidade || 0));
             }, 0);
-            lines.push(`\nTOTAL LOTE (${items.length} produtos) — $ ${(totalGeralUsd / 100).toFixed(2)}`);
+            lines.push(`\nTOTAL LOTE (${items.length} produtos) — $ ${(Math.round(totalGeralUsd / 100 * 100) / 100).toFixed(2)}`);
         }
 
         const text = lines.join('\n');
@@ -945,7 +946,7 @@ export default function ImportacaoPage() {
                                                             <span className="text-xs font-black text-slate-800">
                                                                 {formatCurrency(Math.round(calc.custoFinalBrl * 100))}
                                                             </span>
-                                                            <CopyButton value={`${item.quantidade > 1 ? `${item.quantidade}x ` : ''}${item.label} — R$ ${(calc.custoFinalBrl * (item.quantidade || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} label="custo total em R$" />
+                                                            <CopyButton value={`${item.quantidade > 1 ? `${item.quantidade}x ` : ''}${item.label} — R$ ${(Math.round(calc.custoFinalBrl * (item.quantidade || 1) * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} label="custo total em R$" />
                                                         </div>
                                                     </td>
                                                 </>
@@ -968,7 +969,7 @@ export default function ImportacaoPage() {
                                                             <span className="text-xs font-black text-slate-800">
                                                                 {formatUsd(usdValues.totalUsd)}
                                                             </span>
-                                                            <CopyButton value={`${item.quantidade > 1 ? `${item.quantidade}x ` : ''}${item.label} — $ ${(usdValues.totalUsd * (item.quantidade || 1) / 100).toFixed(2)}`} label="custo total em US$" />
+                                                            <CopyButton value={`${item.quantidade > 1 ? `${item.quantidade}x ` : ''}${item.label} — $ ${(Math.round((usdValues.totalUsd * (item.quantidade || 1) / 100) * 100) / 100).toFixed(2)}`} label="custo total em US$" />
                                                         </div>
                                                     </td>
                                                     <td className="px-2 py-2 text-right text-[10px]">
@@ -1046,10 +1047,10 @@ export default function ImportacaoPage() {
                                                                     return acc + (calc.custoFinalBrl * (it.quantidade || 0));
                                                                 }, 0) * 100))}
                                                             </span>
-                                                            <CopyButton value={`TOTAL LOTE (${items.length} produtos) — R$ ${items.reduce((acc, it) => {
+                                                            <CopyButton value={`TOTAL LOTE (${items.length} produtos) — R$ ${(Math.round(items.reduce((acc, it) => {
                                                                 const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
                                                                 return acc + (calc.custoFinalBrl * (it.quantidade || 0));
-                                                            }, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} label="custo total do lote em R$" />
+                                                            }, 0) * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} label="custo total do lote em R$" />
                                                         </div>
                                                     </td>
                                                 </>
@@ -1096,7 +1097,7 @@ export default function ImportacaoPage() {
                                                                     <span className="text-xs font-black text-brand-600">
                                                                         {formatUsd(totals.totalGeralUsd)}
                                                                     </span>
-                                                                    <CopyButton value={`TOTAL LOTE (${items.length} produtos) — $ ${(totals.totalGeralUsd / 100).toFixed(2)}`} label="custo total do lote em US$" />
+                                                                    <CopyButton value={`TOTAL LOTE (${items.length} produtos) — $ ${(Math.round((totals.totalGeralUsd / 100) * 100) / 100).toFixed(2)}`} label="custo total do lote em US$" />
                                                                 </div>
                                                             </td>
                                                             <td className="px-2 py-3 text-right text-[10px]">
@@ -1150,15 +1151,25 @@ export default function ImportacaoPage() {
                                             {params.margemTipo === 'percentual' && <span className="font-black text-xs ml-1">%</span>}
                                         </div>
                                         
-                                        <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                                        <div className="flex bg-slate-200 p-0.5 rounded-lg border border-slate-300">
                                             <button 
                                                 onClick={() => applyGlobalMargin(params.margemPadrao, 'percentual')}
-                                                className={cn("px-2 py-1 text-[10px] font-black rounded-md transition-all", params.margemTipo === 'percentual' ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-slate-600")}>
+                                                className={cn(
+                                                    "px-2.5 py-1 text-[10px] font-black rounded-md transition-all uppercase tracking-tighter", 
+                                                    params.margemTipo === 'percentual' 
+                                                        ? "bg-slate-800 text-white shadow-sm ring-1 ring-slate-900" 
+                                                        : "text-slate-500 hover:text-slate-700 hover:bg-slate-300/50"
+                                                )}>
                                                 %
                                             </button>
                                             <button 
                                                 onClick={() => applyGlobalMargin(params.margemPadrao, 'fixa')}
-                                                className={cn("px-2 py-1 text-[10px] font-black rounded-md transition-all", params.margemTipo === 'fixa' ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-slate-600")}>
+                                                className={cn(
+                                                    "px-2.5 py-1 text-[10px] font-black rounded-md transition-all uppercase tracking-tighter", 
+                                                    params.margemTipo === 'fixa' 
+                                                        ? "bg-slate-800 text-white shadow-sm ring-1 ring-slate-900" 
+                                                        : "text-slate-500 hover:text-slate-700 hover:bg-slate-300/50"
+                                                )}>
                                                 R$
                                             </button>
                                         </div>
@@ -1346,10 +1357,15 @@ export default function ImportacaoPage() {
                                                             )} 
                                                                 value={valorMargemExibicao} 
                                                                 onChange={e => {
+                                                                    const val = Number(e.target.value);
                                                                     const newItems = [...items];
-                                                                    newItems[i].margemCustom = Number(e.target.value);
+                                                                    newItems[i].margemCustom = val;
                                                                     newItems[i].margemTipoCustom = tipoMargemExibicao;
-                                                                    newItems[i].precoCustomPix = undefined; // Limpa preço manual se editar margem
+                                                                    
+                                                                    // Recalcular preço Pix reativamente
+                                                                    const novoPreco = calcularPrecoVenda(custoFinalBrl * 100, val, tipoMargemExibicao) / 100;
+                                                                    newItems[i].precoCustomPix = novoPreco;
+                                                                    
                                                                     setItems(newItems);
                                                                     setProdutosEditados(prev => new Set(prev).add(item.id));
                                                                 }} />
@@ -1382,10 +1398,10 @@ export default function ImportacaoPage() {
                                                                         }}
                                                                     />
                                                                 </div>
-                                                                <CopyButton value={precoSugeridoPix.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} label="Preço Pix (BRL)" />
+                                                                <CopyButton value={(Math.round(precoSugeridoPix * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} label="Preço Pix (BRL)" />
                                                             </div>
-                                                            <div className={cn("text-[9px] font-black uppercase tracking-tighter", temPrejuizo ? "text-red-500" : "text-slate-400")}>
-                                                                lucro real: {margemRealPct.toFixed(1)}% ({formatCurrency(Math.round(lucroRealBrl * 100))})
+                                                            <div className={cn("text-[11px] font-bold mt-1 tracking-tight", temPrejuizo ? "text-red-600" : "text-emerald-700")}>
+                                                                Lucro: {margemRealPct.toFixed(1)}% · R$ {(Math.round(lucroRealBrl * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                                 {temPrejuizo && " ! PREJUÍZO"}
                                                             </div>
                                                         </div>
@@ -1413,7 +1429,7 @@ export default function ImportacaoPage() {
                                                                     }}
                                                                 />
                                                             </div>
-                                                            <CopyButton value={(usdValues.vendaUsd / 100).toFixed(2)} label="Preço Atacado (USD)" />
+                                                            <CopyButton value={(Math.round(usdValues.vendaUsd / 100 * 100) / 100).toFixed(2)} label="Preço Atacado (USD)" />
                                                         </div>
                                                     </td>
                                                     <td className="px-3 py-4 text-center">
