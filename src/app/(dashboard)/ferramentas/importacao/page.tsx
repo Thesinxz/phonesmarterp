@@ -35,6 +35,7 @@ import { toast } from "sonner";
 import { cn } from "@/utils/cn";
 import { createClient } from "@/lib/supabase/client";
 import { type ProductType, type Brand, type PricingSegment, type PaymentGatewayTable } from "@/types/database";
+import { CopyButton } from "@/components/ui/CopyButton";
 
 export default function ImportacaoPage() {
     const { config, defaultGateway, loading: configLoading } = useFinanceConfig();
@@ -497,6 +498,36 @@ export default function ImportacaoPage() {
         });
     };
 
+    const copyAllPrices = async () => {
+        const lines = items.map(item => {
+            const calc = calculateItem(item.custoUsd, item.pricing_segment_id, item.margemCustom, item.margemTipoCustom, item.precoCustomPix);
+            const usdValues = getProductUsdValues(item.custoUsd, calc.impostoBrl, calc.freteEuaBrl, calc.freteBrasilBrl, calc.custoFinalBrl, params.dolarCompra, item.precoVendaUsdCustom);
+
+            const varejo = calc.precoSugeridoPix > 0
+                ? `R$ ${calc.precoSugeridoPix.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                : null;
+            const atacado = usdValues.vendaUsd > 0
+                ? `US$ ${usdValues.vendaUsd.toFixed(2)}`
+                : null;
+
+            const cond = item.condicao !== 'novo_lacrado' && item.saudeBateria ? ` (Bat ${item.saudeBateria}%)` : '';
+            const precos = [varejo, atacado].filter(Boolean).join(' | ');
+            if (item.quantidade > 1) {
+                return `${item.quantidade}x ${item.label}${cond} — ${precos}`;
+            }
+            return `${item.label}${cond} — ${precos}`;
+        });
+
+        const text = lines.join('\n');
+        try {
+            await navigator.clipboard.writeText(text);
+            toast.success('Lista de preços copiada com sucesso!');
+        } catch (err) {
+            console.error("Failed to copy:", err);
+            toast.error("Erro ao copiar.");
+        }
+    };
+
     if (!mounted) return null;
 
     const isLoadingConfig = configLoading && !config;
@@ -849,9 +880,12 @@ export default function ImportacaoPage() {
                                                         {formatCurrency(Math.round(calc.freteBrasilBrl * 100))}
                                                     </td>
                                                     <td className="px-2 py-2 text-right">
-                                                        <span className="text-xs font-black text-slate-800">
-                                                            {formatCurrency(Math.round(calc.custoFinalBrl * 100))}
-                                                        </span>
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <span className="text-xs font-black text-slate-800">
+                                                                {formatCurrency(Math.round(calc.custoFinalBrl * 100))}
+                                                            </span>
+                                                            <CopyButton value={calc.custoFinalBrl.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} label="custo total em R$" />
+                                                        </div>
                                                     </td>
                                                 </>
                                             ) : (
@@ -869,9 +903,12 @@ export default function ImportacaoPage() {
                                                         {formatUsd(usdValues.freteBrUsd)}
                                                     </td>
                                                     <td className="px-2 py-2 text-right">
-                                                        <span className="text-xs font-black text-slate-800">
-                                                            {formatUsd(usdValues.totalUsd)}
-                                                        </span>
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <span className="text-xs font-black text-slate-800">
+                                                                {formatUsd(usdValues.totalUsd)}
+                                                            </span>
+                                                            <CopyButton value={usdValues.totalUsd.toFixed(2)} label="custo total em US$" />
+                                                        </div>
                                                     </td>
                                                     <td className="px-2 py-2 text-right text-[10px]">
                                                         <span className={cn("font-bold", usdValues.margemUsd && usdValues.margemUsd > 0 ? "text-emerald-600" : (usdValues.margemUsd && usdValues.margemUsd < 0 ? "text-red-600" : "text-slate-400"))}>
@@ -940,11 +977,19 @@ export default function ImportacaoPage() {
                                                             return acc + (calc.freteBrasilBrl * (it.quantidade || 0));
                                                         }, 0) * 100))}
                                                     </td>
-                                                    <td className="px-2 py-3 text-right text-xs text-brand-600">
-                                                        {formatCurrency(Math.round(items.reduce((acc, it) => {
-                                                            const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
-                                                            return acc + (calc.custoFinalBrl * (it.quantidade || 0));
-                                                        }, 0) * 100))}
+                                                    <td className="px-2 py-3 text-right">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <span className="text-xs font-black text-brand-600">
+                                                                {formatCurrency(Math.round(items.reduce((acc, it) => {
+                                                                    const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
+                                                                    return acc + (calc.custoFinalBrl * (it.quantidade || 0));
+                                                                }, 0) * 100))}
+                                                            </span>
+                                                            <CopyButton value={items.reduce((acc, it) => {
+                                                                const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
+                                                                return acc + (calc.custoFinalBrl * (it.quantidade || 0));
+                                                            }, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} label="custo total do lote em R$" />
+                                                        </div>
                                                     </td>
                                                 </>
                                             ) : (
@@ -985,8 +1030,13 @@ export default function ImportacaoPage() {
                                                             <td className="px-2 py-3 text-right text-[10px]">
                                                                 {formatUsd(totals.totalFreteBrUsd)}
                                                             </td>
-                                                            <td className="px-2 py-3 text-right text-xs text-brand-600">
-                                                                {formatUsd(totals.totalGeralUsd)}
+                                                            <td className="px-2 py-3 text-right">
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    <span className="text-xs font-black text-brand-600">
+                                                                        {formatUsd(totals.totalGeralUsd)}
+                                                                    </span>
+                                                                    <CopyButton value={totals.totalGeralUsd.toFixed(2)} label="custo total do lote em US$" />
+                                                                </div>
                                                             </td>
                                                             <td className="px-2 py-3 text-right text-[10px]">
                                                                 <span className={cn("font-bold", totals.totalMargemUsd > 0 ? "text-emerald-600" : (totals.totalMargemUsd < 0 ? "text-red-600" : "text-slate-400"))}>
@@ -1124,7 +1174,14 @@ export default function ImportacaoPage() {
                     
                     {/* Tabela de Preços Full Width */}
                     <div className="space-y-6">
-                        <GlassCard title="Preços Finais de Venda" action={
+                        <GlassCard title={
+                            <div className="flex items-center justify-between w-full h-10">
+                                <span>Preços Finais de Venda</span>
+                                <button className="btn-secondary h-8 px-4 text-[10px] uppercase font-black tracking-widest bg-slate-100 hover:bg-slate-200 text-slate-500 border-none mr-4" onClick={copyAllPrices}>
+                                    ⎘ Copiar Tabela
+                                </button>
+                            </div>
+                        } action={
                             <div className="flex gap-2">
                                 <button onClick={() => setCurrentStep(2)} className="btn-secondary h-10 px-4 text-[11px] font-bold">
                                     <ChevronLeft size={16} className="mr-1" /> Voltar
@@ -1141,14 +1198,16 @@ export default function ImportacaoPage() {
                                             <th className="px-3 py-4 w-[25%]">Produto</th>
                                             <th className="px-3 py-4 text-center w-[12%]">Custo</th>
                                             <th className="px-3 py-4 text-center w-[12%]">Margem (%)</th>
-                                            <th className="px-3 py-4 text-center w-[16%]">A Vista (Pix)</th>
-                                            <th className="px-3 py-4 text-center w-[16%]">Credito 1x</th>
-                                            <th className="px-3 py-4 text-center w-[19%]">12x Sem Juros</th>
+                                            <th className="px-3 py-4 text-center w-[12%]">A Vista (Pix)</th>
+                                            <th className="px-3 py-4 text-center w-[12%]">Atacado (US$)</th>
+                                            <th className="px-3 py-4 text-center w-[14%]">Credito 1x</th>
+                                            <th className="px-3 py-4 text-center w-[15%]">12x Sem Juros</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
                                         {items.map((item, i) => {
-                                            const calc = calculateItem(item.custoUsd, item.categoria, item.margemCustom, item.margemTipoCustom, item.precoCustomPix);
+                                            const calc = calculateItem(item.custoUsd, item.pricing_segment_id, item.margemCustom, item.margemTipoCustom, item.precoCustomPix);
+                                            const usdValues = getProductUsdValues(item.custoUsd, calc.impostoBrl, calc.freteEuaBrl, calc.freteBrasilBrl, calc.custoFinalBrl, params.dolarCompra, item.precoVendaUsdCustom);
                                             const { custoFinalBrl, precoSugeridoPix, precoSugerido1x, precoSugerido12x, taxaNF, taxaPix } = calc;
                                             const tipoMargemEfetivo = item.margemTipoCustom || params.margemTipo;
                                             const valorMargemEfetivo = item.precoCustomPix 
@@ -1207,27 +1266,56 @@ export default function ImportacaoPage() {
                                                         </div>
                                                     </td>
                                                     <td className="px-3 py-4 text-center">
-                                                        <div className={cn(
-                                                            "flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border transition-all",
-                                                            item.precoCustomPix ? "bg-amber-100/30 border-amber-200" : "bg-emerald-100/30 border-emerald-100"
-                                                        )}>
-                                                            <span className={cn("text-[10px] font-black", item.precoCustomPix ? "text-amber-600" : "text-emerald-600")}>R$</span>
-                                                            <input 
-                                                                type="number" 
-                                                                step="0.01" 
-                                                                className={cn(
-                                                                    "bg-transparent border-none outline-none font-black w-24 text-center text-sm",
-                                                                    item.precoCustomPix ? "text-amber-700" : "text-emerald-700"
-                                                                )}
-                                                                value={precoSugeridoPix}
-                                                                onChange={e => {
-                                                                    const newVal = Number(e.target.value);
-                                                                    const newItems = [...items];
-                                                                    newItems[i].precoCustomPix = newVal;
-                                                                    newItems[i].margemCustom = undefined; // Limpa margem se editar preço
-                                                                    setItems(newItems);
-                                                                }}
-                                                            />
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <div className={cn(
+                                                                "flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border transition-all",
+                                                                item.precoCustomPix ? "bg-amber-100/30 border-amber-200" : "bg-emerald-100/30 border-emerald-100"
+                                                            )}>
+                                                                <span className={cn("text-[10px] font-black", item.precoCustomPix ? "text-amber-600" : "text-emerald-600")}>R$</span>
+                                                                <input 
+                                                                    type="number" 
+                                                                    step="0.01" 
+                                                                    className={cn(
+                                                                        "bg-transparent border-none outline-none font-black w-20 text-center text-sm",
+                                                                        item.precoCustomPix ? "text-amber-700" : "text-emerald-700"
+                                                                    )}
+                                                                    value={precoSugeridoPix}
+                                                                    onChange={e => {
+                                                                        const newVal = Number(e.target.value);
+                                                                        const newItems = [...items];
+                                                                        newItems[i].precoCustomPix = newVal;
+                                                                        newItems[i].margemCustom = undefined; // Limpa margem se editar preço
+                                                                        setItems(newItems);
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <CopyButton value={precoSugeridoPix.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} label="Preço Pix (BRL)" />
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-4 text-center">
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <div className={cn(
+                                                                "flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border transition-all",
+                                                                item.precoVendaUsdCustom ? "bg-amber-100/30 border-amber-200" : "bg-white border-slate-200"
+                                                            )}>
+                                                                <span className={cn("text-[10px] font-black", item.precoVendaUsdCustom ? "text-amber-600" : "text-slate-500")}>$</span>
+                                                                <input 
+                                                                    type="number" 
+                                                                    step="0.01" 
+                                                                    className={cn(
+                                                                        "bg-transparent border-none outline-none font-black w-16 text-center text-sm",
+                                                                        item.precoVendaUsdCustom ? "text-amber-700" : "text-slate-700"
+                                                                    )}
+                                                                    value={usdValues.vendaUsd}
+                                                                    onChange={e => {
+                                                                        const newVal = Number(e.target.value);
+                                                                        const newItems = [...items];
+                                                                        newItems[i].precoVendaUsdCustom = newVal || undefined;
+                                                                        setItems(newItems);
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <CopyButton value={usdValues.vendaUsd.toFixed(2)} label="Preço Atacado (USD)" />
                                                         </div>
                                                     </td>
                                                     <td className="px-3 py-4 text-center">
