@@ -1281,20 +1281,7 @@ export default function ImportacaoPage() {
                                 </button>
                             </div>
                         }>
-                            <div className="overflow-x-auto pb-4 hide-scrollbar">
-                                <table className="w-full text-left whitespace-nowrap table-fixed">
-                                    <thead>
-                                        <tr className="border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                            <th className="px-3 py-4 w-[25%]">Produto</th>
-                                            <th className="px-3 py-4 text-center w-[12%]">Custo</th>
-                                            <th className="px-3 py-4 text-center w-[12%]">Margem (%)</th>
-                                            <th className="px-3 py-4 text-center w-[12%]">A Vista (Pix)</th>
-                                            <th className="px-3 py-4 text-center w-[12%]">Atacado (US$)</th>
-                                            <th className="px-3 py-4 text-center w-[14%]">Credito 1x</th>
-                                            <th className="px-3 py-4 text-center w-[15%]">12x Sem Juros</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50">
+                            <div className="space-y-2">
                                         {items.map((item, i) => {
                                             const calc = calculateItem(item.custoUsd, item.pricing_segment_id, item.margemCustom, item.margemTipoCustom, item.precoCustomPix);
                                             const usdValues = getProductUsdValues(item.custoUsd, calc.impostoBrl, calc.freteEuaBrl, calc.freteBrasilBrl, calc.custoFinalBrl, params.dolarCompra, item.precoVendaUsdCustom);
@@ -1305,23 +1292,34 @@ export default function ImportacaoPage() {
                                             const valorMargemExibicao = item.margemCustom !== undefined ? item.margemCustom : params.margemPadrao;
                                             
                                             const lucroRealBrl = precoSugeridoPix - custoFinalBrl;
-                                            const margemRealPct = ((lucroRealBrl / custoFinalBrl) * 100);
+                                            const margemRealPct = custoFinalBrl > 0 ? ((lucroRealBrl / custoFinalBrl) * 100) : 0;
                                             const temPrejuizo = precoSugeridoPix < custoFinalBrl;
 
+                                            // USD margin calculation
+                                            const vendaUsdDisplay = usdValues.vendaUsd / 100;
+                                            const totalUsdDisplay = usdValues.totalUsd / 100;
+                                            const margemUsdPct = totalUsdDisplay > 0 ? (((vendaUsdDisplay - totalUsdDisplay) / totalUsdDisplay) * 100) : 0;
+                                            const vendaUsdEmBrl = vendaUsdDisplay * params.dolarCompra;
+
                                             return (
-                                                <tr key={item.id} className="hover:bg-slate-50/50">
-                                                    <td className="px-3 py-4">
-                                                        <div className="flex flex-col">
-                                                            <span className="font-bold text-slate-800 text-[12px] truncate flex items-center gap-2" title={item.label}>
+                                                <div 
+                                                    key={item.id} 
+                                                    className="bg-white rounded-[10px] p-3.5 transition-all hover:shadow-card"
+                                                    style={{ border: '0.5px solid #E2E8F0' }}
+                                                >
+                                                    {/* ── Card Header: Nome + Badges + Botão remover ── */}
+                                                    <div className="flex items-start justify-between mb-3">
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-[13px] font-medium text-slate-800 leading-snug">
                                                                 {item.label}
                                                                 {isEditado && (
-                                                                    <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[8px] font-black uppercase rounded-full">Editado</span>
+                                                                    <span className="ml-2 px-1.5 py-px bg-amber-100 text-amber-700 text-[8px] font-bold uppercase rounded-full align-middle">editado</span>
                                                                 )}
-                                                            </span>
-                                                            <div className="flex flex-wrap gap-2 mt-1">
-                                                                <span className="text-[9px] font-black bg-amber-100 text-amber-700 px-1 rounded">IMEI: {item.imei || '---'}</span>
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                                                <span className="text-[10px] text-slate-400">IMEI: {item.imei || '———'}</span>
                                                                 {(item.condicao === 'seminovo' || item.condicao === 'usado') && (
-                                                                    <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 px-1 rounded">Bat: {item.saudeBateria || '---'}%</span>
+                                                                    <span className="text-[10px] text-slate-400">Bat: {item.saudeBateria ? `${item.saudeBateria}%` : '——— %'}</span>
                                                                 )}
                                                                 {isEditado && (
                                                                     <button 
@@ -1337,134 +1335,180 @@ export default function ImportacaoPage() {
                                                                             newItems[i].precoCustomPix = undefined;
                                                                             setItems(newItems);
                                                                         }}
-                                                                        className="text-[8px] font-black text-slate-400 hover:text-slate-600 uppercase flex items-center gap-0.5"
+                                                                        className="text-[9px] font-medium text-slate-400 hover:text-slate-600 flex items-center gap-0.5"
                                                                     >
-                                                                        <RotateCcw size={8} /> resetar
+                                                                        <RotateCcw size={9} /> resetar
                                                                     </button>
                                                                 )}
-                                                                 {item.quantidade > 1 && (
-                                                                    <div className="flex flex-col gap-1 w-full">
-                                                                        <span className="text-[9px] font-black bg-red-100 text-red-600 px-1 rounded animate-pulse">
+                                                                {item.quantidade > 1 && (
+                                                                    <>
+                                                                        <span className="text-[9px] font-bold bg-red-100 text-red-600 px-1.5 py-px rounded-full animate-pulse">
                                                                             {item.quantidade} unidades agrupadas!
                                                                         </span>
                                                                         <button 
                                                                             onClick={() => splitItem(i)}
-                                                                            className="text-[8px] font-black bg-brand-600 text-white px-1.5 py-0.5 rounded hover:bg-brand-700 transition-colors uppercase"
+                                                                            className="text-[9px] font-bold bg-brand-600 text-white px-2 py-px rounded-full hover:bg-brand-700 transition-colors"
                                                                         >
-                                                                            Clique aqui para separar
+                                                                            Separar
                                                                         </button>
-                                                                    </div>
+                                                                    </>
                                                                 )}
                                                             </div>
                                                         </div>
-                                                    </td>
-                                                    <td className="px-3 py-4 text-center">
-                                                        <div className="bg-slate-100 px-2 py-1.5 rounded-lg text-slate-500 font-bold text-[10px] inline-block">
-                                                            {formatCurrency(Math.round(custoFinalBrl * 100))}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-3 py-4 text-center">
-                                                        <div className="flex items-center justify-center gap-1">
-                                                            {tipoMargemExibicao === 'fixa' && <span className="text-[10px] font-black text-emerald-600">R$</span>}
-                                                            <input type="number" className={cn(
-                                                                "w-16 px-2 py-1.5 rounded-lg text-center font-black text-xs outline-none border transition-all",
-                                                                isEditado ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-emerald-50 text-emerald-600 border-emerald-100"
-                                                            )} 
-                                                                value={valorMargemExibicao} 
-                                                                onChange={e => {
-                                                                    const val = Number(e.target.value);
-                                                                    const newItems = [...items];
-                                                                    newItems[i].margemCustom = val;
-                                                                    newItems[i].margemTipoCustom = tipoMargemExibicao;
-                                                                    
-                                                                    // Recalcular preço Pix reativamente
-                                                                    const novoPreco = calcularPrecoVenda(custoFinalBrl * 100, val, tipoMargemExibicao) / 100;
-                                                                    newItems[i].precoCustomPix = novoPreco;
-                                                                    
-                                                                    setItems(newItems);
-                                                                    setProdutosEditados(prev => new Set(prev).add(item.id));
-                                                                }} />
-                                                            {tipoMargemExibicao === 'percentual' && <span className="text-[10px] font-black text-emerald-600">%</span>}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-3 py-4 text-center">
-                                                        <div className="flex flex-col items-center gap-1">
-                                                            <div className="flex items-center justify-center gap-2">
-                                                                <div className={cn(
-                                                                    "flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border transition-all",
-                                                                    temPrejuizo ? "bg-red-50 border-red-200" : (isEditado ? "bg-amber-100/30 border-amber-200" : "bg-emerald-100/30 border-emerald-100")
-                                                                )}>
-                                                                    <span className={cn("text-[10px] font-black", temPrejuizo ? "text-red-600" : (isEditado ? "text-amber-600" : "text-emerald-600"))}>R$</span>
-                                                                    <input 
-                                                                        type="number" 
-                                                                        step="0.01" 
-                                                                        className={cn(
-                                                                            "bg-transparent border-none outline-none font-black w-20 text-center text-sm",
-                                                                            temPrejuizo ? "text-red-700" : (isEditado ? "text-amber-700" : "text-emerald-700")
-                                                                        )}
-                                                                        value={precoSugeridoPix}
-                                                                        onChange={e => {
-                                                                            const newVal = Number(e.target.value);
-                                                                            const newItems = [...items];
-                                                                            newItems[i].precoCustomPix = newVal;
-                                                                            newItems[i].margemCustom = undefined; // Limpa margem se editar preço
-                                                                            setItems(newItems);
-                                                                            setProdutosEditados(prev => new Set(prev).add(item.id));
-                                                                        }}
-                                                                    />
-                                                                </div>
-                                                                <CopyButton value={(Math.round(precoSugeridoPix * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} label="Preço Pix (BRL)" />
-                                                            </div>
-                                                            <div className={cn("text-[11px] font-bold mt-1 tracking-tight", temPrejuizo ? "text-red-600" : "text-emerald-700")}>
-                                                                Lucro: {margemRealPct.toFixed(1)}% · R$ {(Math.round(lucroRealBrl * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                {temPrejuizo && " ! PREJUÍZO"}
+                                                        <button 
+                                                            onClick={() => { const newItems = [...items]; newItems.splice(i, 1); setItems(newItems); }}
+                                                            className="ml-3 text-slate-300 hover:text-red-500 transition-colors p-1"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* ── Price Grid Row 1: Custo | Margem | À Vista | 12x ── */}
+                                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                                                        {/* Custo */}
+                                                        <div>
+                                                            <div className="text-[9px] font-medium text-slate-400 uppercase tracking-wider mb-1">Custo</div>
+                                                            <div className="text-[14px] font-semibold text-slate-700">
+                                                                {formatCurrency(Math.round(custoFinalBrl * 100))}
                                                             </div>
                                                         </div>
-                                                    </td>
-                                                    <td className="px-3 py-4 text-center">
-                                                        <div className="flex items-center justify-center gap-2">
-                                                            <div className={cn(
-                                                                "flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border transition-all",
-                                                                item.precoVendaUsdCustom ? "bg-amber-100/30 border-amber-200" : "bg-white border-slate-200"
-                                                            )}>
-                                                                <span className={cn("text-[10px] font-black", item.precoVendaUsdCustom ? "text-amber-600" : "text-slate-500")}>$</span>
+
+                                                        {/* Margem */}
+                                                        <div>
+                                                            <div className="text-[9px] font-medium text-slate-400 uppercase tracking-wider mb-1">Margem</div>
+                                                            <div className="flex items-center gap-1.5">
+                                                                {tipoMargemExibicao === 'fixa' && <span className="text-[10px] font-bold text-emerald-600">R$</span>}
+                                                                <input 
+                                                                    type="number" 
+                                                                    className={cn(
+                                                                        "w-[52px] px-1.5 py-1 rounded-md text-center font-semibold text-[13px] outline-none transition-all",
+                                                                        isEditado 
+                                                                            ? "bg-amber-50 text-amber-600 border border-amber-200" 
+                                                                            : "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                                                                    )}
+                                                                    style={{ borderWidth: '0.5px' }}
+                                                                    value={valorMargemExibicao} 
+                                                                    onChange={e => {
+                                                                        const val = Number(e.target.value);
+                                                                        const newItems = [...items];
+                                                                        newItems[i].margemCustom = val;
+                                                                        newItems[i].margemTipoCustom = tipoMargemExibicao;
+                                                                        const novoPreco = calcularPrecoVenda(custoFinalBrl * 100, val, tipoMargemExibicao) / 100;
+                                                                        newItems[i].precoCustomPix = novoPreco;
+                                                                        setItems(newItems);
+                                                                        setProdutosEditados(prev => new Set(prev).add(item.id));
+                                                                    }} 
+                                                                    min={0}
+                                                                />
+                                                                <span className="text-[11px] font-medium text-slate-500">
+                                                                    {tipoMargemExibicao === 'percentual' ? '%' : ''}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* À Vista (PIX) — destaque */}
+                                                        <div>
+                                                            <div className="text-[9px] font-medium text-slate-400 uppercase tracking-wider mb-1">À Vista (PIX)</div>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className={cn("text-[10px] font-bold", temPrejuizo ? "text-red-600" : "text-emerald-600")}>R$</span>
                                                                 <input 
                                                                     type="number" 
                                                                     step="0.01" 
                                                                     className={cn(
-                                                                        "bg-transparent border-none outline-none font-black w-16 text-center text-sm",
-                                                                        item.precoVendaUsdCustom ? "text-amber-700" : "text-slate-700"
+                                                                        "w-[90px] px-1.5 py-1 rounded-md font-semibold text-[15px] outline-none transition-all",
+                                                                        temPrejuizo 
+                                                                            ? "bg-red-50 text-red-700 border border-red-200" 
+                                                                            : isEditado 
+                                                                                ? "bg-amber-50 text-amber-700 border border-amber-200" 
+                                                                                : "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                                                     )}
-                                                                    value={usdValues.vendaUsd}
+                                                                    style={{ borderWidth: '0.5px' }}
+                                                                    value={precoSugeridoPix}
                                                                     onChange={e => {
                                                                         const newVal = Number(e.target.value);
                                                                         const newItems = [...items];
-                                                                        newItems[i].precoVendaUsdCustom = newVal || undefined;
+                                                                        newItems[i].precoCustomPix = newVal;
+                                                                        newItems[i].margemCustom = undefined;
+                                                                        setItems(newItems);
+                                                                        setProdutosEditados(prev => new Set(prev).add(item.id));
+                                                                    }}
+                                                                />
+                                                                <CopyButton value={`${item.label} — R$ ${(Math.round(precoSugeridoPix * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} label="Preço Pix" />
+                                                            </div>
+                                                            <div className={cn("text-[10px] mt-0.5", temPrejuizo ? "text-red-600" : "text-emerald-700")}>
+                                                                Lucro: {margemRealPct.toFixed(1)}% · R$ {(Math.round(lucroRealBrl * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                {temPrejuizo && " ⚠ PREJUÍZO"}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 12x Sem Juros — destaque */}
+                                                        <div>
+                                                            <div className="text-[9px] font-medium text-slate-400 uppercase tracking-wider mb-1">12x Sem Juros</div>
+                                                            <div className="text-[15px] font-semibold text-[#1E40AF]">
+                                                                {formatCurrency(Math.round(precoSugerido12x * 100))}
+                                                            </div>
+                                                            <div className="text-[10px] text-slate-400 mt-0.5">
+                                                                12x de {formatCurrency(Math.round((precoSugerido12x / 12) * 100))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* ── Price Grid Row 2: Atacado US$ | Crédito 1x ── */}
+                                                    <div 
+                                                        className="grid grid-cols-2 gap-3 pt-3"
+                                                        style={{ borderTop: '0.5px solid #F1F5F9' }}
+                                                    >
+                                                        {/* Atacado US$ — BUG FIX: divide by 100 */}
+                                                        <div>
+                                                            <div className="text-[9px] font-medium text-slate-400 uppercase tracking-wider mb-1">Atacado (US$)</div>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className={cn("text-[10px] font-bold", item.precoVendaUsdCustom ? "text-amber-600" : "text-slate-500")}>$</span>
+                                                                <input 
+                                                                    type="number" 
+                                                                    step="0.01"
+                                                                    min="0"
+                                                                    placeholder="0.00"
+                                                                    className={cn(
+                                                                        "w-[90px] px-1.5 py-1 rounded-md font-semibold text-[14px] outline-none transition-all",
+                                                                        item.precoVendaUsdCustom 
+                                                                            ? "bg-amber-50 text-amber-700 border border-amber-200" 
+                                                                            : "bg-white text-slate-700 border border-slate-200"
+                                                                    )}
+                                                                    style={{ borderWidth: '0.5px' }}
+                                                                    value={vendaUsdDisplay > 0 ? vendaUsdDisplay.toFixed(2) : ''}
+                                                                    onChange={e => {
+                                                                        const val = parseFloat(e.target.value) || 0;
+                                                                        const newItems = [...items];
+                                                                        newItems[i].precoVendaUsdCustom = val > 0 ? val : undefined;
                                                                         setItems(newItems);
                                                                     }}
                                                                 />
+                                                                <CopyButton 
+                                                                    value={vendaUsdDisplay > 0 
+                                                                        ? `${item.label} — $ ${vendaUsdDisplay.toFixed(2)}` 
+                                                                        : ''} 
+                                                                    label="Preço Atacado (USD)" 
+                                                                />
                                                             </div>
-                                                            <CopyButton value={(Math.round(usdValues.vendaUsd / 100 * 100) / 100).toFixed(2)} label="Preço Atacado (USD)" />
+                                                            {vendaUsdDisplay > 0 && (
+                                                                <div className={cn("text-[10px] mt-0.5", margemUsdPct >= 0 ? "text-emerald-700" : "text-red-600")}>
+                                                                    = R$ {vendaUsdEmBrl.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                    {' '}· Lucro: {margemUsdPct.toFixed(1)}%
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    </td>
-                                                    <td className="px-3 py-4 text-center">
-                                                        <div className="bg-brand-50 px-3 py-2 rounded-lg text-brand-600 font-black text-[12px] border border-brand-100">
-                                                            {formatCurrency(Math.round(precoSugerido1x * 100))}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-3 py-4 text-center">
-                                                        <div className="flex flex-col items-center">
-                                                            <div className="bg-slate-900 px-3 py-2 rounded-lg text-white font-black text-[12px] shadow-lg shadow-slate-900/10">
-                                                                {formatCurrency(Math.round(precoSugerido12x * 100))}
+
+                                                        {/* Crédito 1x */}
+                                                        <div>
+                                                            <div className="text-[9px] font-medium text-slate-400 uppercase tracking-wider mb-1">Crédito 1x</div>
+                                                            <div className="text-[14px] font-semibold text-slate-700">
+                                                                {formatCurrency(Math.round(precoSugerido1x * 100))}
                                                             </div>
-                                                            <span className="text-[9px] font-black text-slate-400 mt-1 uppercase">12x de {formatCurrency(Math.round((precoSugerido12x / 12) * 100))}</span>
                                                         </div>
-                                                    </td>
-                                                </tr>
+                                                    </div>
+                                                </div>
                                             );
                                         })}
-                                    </tbody>
-                                </table>
                             </div>
                         </GlassCard>
                     </div>
