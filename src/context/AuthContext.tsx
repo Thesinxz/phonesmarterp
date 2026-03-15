@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { getUsuarioEmpresas, setUltimaEmpresaAcessada, type CompanyLink } from "@/services/empresa_vinculos";
 import { subscribeToPush } from "@/lib/pushNotifications";
 
+const ACTIVE_EMPRESA_KEY = 'phonesmart_active_empresa_id';
+
 interface AuthContextProps {
     user: User | null;
     session: Session | null;
@@ -18,9 +20,14 @@ interface AuthContextProps {
     isLoading: boolean;
     isTrialExpired: boolean;
     trialDaysLeft: number;
+    activeAddons: string[];
+    maxEmpresas: number;
+    canCreateEmpresa: boolean;
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
     switchCompany: (empresaId: string) => Promise<void>;
+    switchUnit: (unitId: string | null) => Promise<void>;
+    profiles: CompanyLink[];
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
@@ -69,32 +76,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const companies = await getUsuarioEmpresas(userId);
             setUserCompanies(companies);
 
-            // 2. Buscar Perfil Base
-            const { data, error } = await (supabase.from("usuarios") as any)
+            // 2. Buscar Perfil(s)
+            const { data: profilesRows, error: profilesError } = await (supabase.from("usuarios") as any)
                 .select("*")
-                .eq("auth_user_id", userId)
-                .maybeSingle();
+                .eq("auth_user_id", userId);
 
-            if (data) {
-                logger.log("[AuthContext] Profile found by auth_user_id:", userId);
-                setProfile(data);
+            if (profilesRows && profilesRows.length > 0) {
+                logger.log("[AuthContext] Profiles found:", profilesRows.length);
+                logger.log("[AuthContext] IDs disponíveis:", profilesRows.map((p: any) => p.empresa_id));
+                
+                // Determinar qual empresa carregar
+                // Prioridade: 1. LocalStorage (Ação do usuário) 2. DB (Ultimo acesso) 3. Primeiro da lista
+                const savedEmpresaId = typeof window !== 'undefined' ? localStorage.getItem(ACTIVE_EMPRESA_KEY) : null;
+                logger.log("[AuthContext] savedEmpresaId from localStorage:", savedEmpresaId);
 
-                // Determinar qual empresa carregar inicialmente
-                const preferredId = data.ultimo_acesso_empresa_id;
-                const activeLink = companies.find(c => c.empresa_id === preferredId) || companies[0];
-
-                if (activeLink) {
-                    setEmpresa(activeLink.empresa);
-                } else if (data.empresa_id) {
-                    await fetchEmpresa(data.empresa_id);
+                // IMPORTANTE: Procuramos o vínculo (link) correspondente à empresa salva
+                let activeLink = savedEmpresaId ? companies.find(c => c.empresa_id === savedEmpresaId) : null;
+                
+                // Se não encontrou pelo localStorage, tenta pelo DB
+                if (!activeLink) {
+                    const dbLastCompanyId = profilesRows[0].ultimo_acesso_empresa_id;
+                    logger.log("[AuthContext] dbLastCompanyId:", dbLastCompanyId);
+                    activeLink = companies.find(c => c.empresa_id === dbLastCompanyId);
                 }
 
-                // IMPORTANTE: Se achou o perfil, temos que sair do try/finally do fetchProfile aqui
-                // mas deixando o finally original cuidar do setIsLoading.
+                // Fallback final: primeira empresa da lista
+                if (!activeLink) {
+                    activeLink = companies[0];
+                }
+
+                if (activeLink) {
+                    logger.log("[AuthContext] Selecionado activeLink:", activeLink.empresa_id);
+                    if (typeof window !== 'undefined') localStorage.setItem(ACTIVE_EMPRESA_KEY, activeLink.empresa_id);
+                    
+                    setEmpresa(activeLink.empresa);
+                    const activeProfile = (profilesRows as any[]).find(p => p.empresa_id === activeLink.empresa_id) || profilesRows[0];
+                    setProfile(activeProfile);
+                } else {
+                    logger.warn("[AuthContext] Nenhum activeLink resolvido, usando fallback profilesRows[0]");
+                    setProfile(profilesRows[0]);
+                    if (profilesRows[0].empresa_id) {
+                        await fetchEmpresa(profilesRows[0].empresa_id);
+                    }
+                }
                 return;
             }
 
-            if (!data && userEmail) {
+            if ((!profilesRows || profilesRows.length === 0) && userEmail) {
                 // 1. Tentar reivindicar um convite pendente legado por e-mail (fallback para quem não usou link)
                 try {
                     const { data: claimData, error: claimError } = await (supabase as any).rpc('claim_user_profile', {
@@ -154,8 +182,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                 }
             }
-        } catch (error) {
-            logger.error("[AuthContext] Error fetching profile:", error);
         } finally {
             if (isTopLevel) {
                 setIsLoading(false);
@@ -238,6 +264,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const switchCompany = async (empresaId: string) => {
+        console.log('[AuthContext] switchCompany chamado com:', empresaId);
         const targetLink = userCompanies.find(c => c.empresa_id === empresaId);
         if (!targetLink || !user) {
             toast.error("Você não tem acesso a esta empresa.");
@@ -246,54 +273,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setIsLoading(true);
         try {
-            // 1. Atualizar persistência de última empresa
+            logger.log("[AuthContext] Switching to empresa:", empresaId);
+            
+            // 1. Salvar no localStorage (fonte de verdade para o próximo load)
+            if (typeof window !== 'undefined') {
+                localStorage.setItem(ACTIVE_EMPRESA_KEY, empresaId);
+            }
+
+            // 2. Atualizar persistência no DB para outros dispositivos
             await setUltimaEmpresaAcessada(user.id, empresaId);
 
-            // 2. Atualizar estado local
-            setEmpresa(targetLink.empresa);
-
-            // 3. Opcional: Recarregar perfil para garantir que campos fixos (como papel)
-            // reflitam o vínculo desta empresa se necessário.
-            // Por enquanto atualizamos apenas a empresa ativa.
-
-            toast.success(`Contexto alterado para: ${targetLink.empresa.nome}`);
-
-            // Redirecionar para dashboard para "limpar" estados de páginas anteriores
+            // 3. Forçar reload completo da página para garantir que
+            //    todos os contextos (Realtime, Onboarding, etc.) reinicializam
+            //    com a empresa correta.
             window.location.href = "/dashboard";
         } catch (e) {
+            console.error("[AuthContext] Error switching company:", e);
             toast.error("Erro ao trocar de empresa.");
-        } finally {
             setIsLoading(false);
         }
     };
 
-    // Lógica de Trial (14 dias ou data manual)
+    // Lógica de Trial baseada no PLANO DO USUÁRIO (profile), não da empresa
     let isTrialExpired = false;
     let trialDaysLeft = 0;
 
-    if (empresa && empresa.plano === 'starter') {
+    const profilePlano = profile?.plano || 'starter';
+    const maxEmpresas = profile?.max_empresas || 1;
+    const canCreateEmpresa = !isTrialExpired || userCompanies.length < maxEmpresas;
+
+    if (profilePlano === 'starter') {
         const now = new Date();
         let expirationDate: Date;
 
-        if (empresa.trial_ends_at) {
-            expirationDate = new Date(empresa.trial_ends_at);
-            logger.log("[AuthContext] Usando data de expiração manual:", expirationDate.toISOString());
+        if (profile?.trial_end) {
+            expirationDate = new Date(profile.trial_end);
+        } else if (profile?.plano_expira_em) {
+            expirationDate = new Date(profile.plano_expira_em);
         } else {
-            const creationDate = new Date(empresa.created_at);
+            // Fallback para criação do perfil se não houver expiração manual
+            const creationDate = profile?.created_at ? new Date(profile.created_at) : new Date();
             expirationDate = new Date(creationDate.getTime() + (14 * 24 * 60 * 60 * 1000));
-            logger.log("[AuthContext] Usando data de expiração padrão (14 dias):", expirationDate.toISOString());
         }
 
         trialDaysLeft = Math.max(0, Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
         isTrialExpired = now > expirationDate;
 
-        logger.log("[AuthContext] Trial Status:", {
-            isTrialExpired,
-            trialDaysLeft,
-            now: now.toISOString(),
-            empresaPlano: empresa.plano
-        });
+        // Log apenas se estiver em ambiente de debug ou mudar estado
+        if (profile) {
+            logger.log("[AuthContext] Subscription Status:", {
+                profilePlano,
+                isTrialExpired,
+                trialDaysLeft,
+                expiresAt: expirationDate.toISOString(),
+                maxEmpresas,
+                companiesCount: userCompanies.length
+            });
+        }
     }
+
+    const switchUnit = async (unitId: string | null) => {
+        if (!profile || !user) return;
+
+        setIsLoading(true);
+        try {
+            const { error } = await (supabase.from("usuarios") as any)
+                .update({ unit_id: unitId })
+                .eq("id", profile.id);
+
+            if (error) throw error;
+
+            await refreshProfile();
+            toast.success("Unidade alterada com sucesso!");
+        } catch (error) {
+            console.error("Error switching unit:", error);
+            toast.error("Erro ao mudar de unidade.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const value = {
         user,
@@ -304,9 +362,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isTrialExpired,
         trialDaysLeft,
+        activeAddons: [],
+        maxEmpresas,
+        canCreateEmpresa,
         signOut,
         refreshProfile,
-        switchCompany
+        switchCompany,
+        switchUnit,
+        profiles: userCompanies
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

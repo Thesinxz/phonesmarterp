@@ -8,6 +8,7 @@ import { getProgressoMetas, type MetaProgresso } from "@/services/metas";
 import { GlassCard } from "@/components/ui/GlassCard";
 import MetaModal from "@/components/equipe/MetaModal";
 import MetaProgressCard from "@/components/equipe/MetaProgressCard";
+import { FeatureGate } from "@/components/plans/FeatureGate";
 
 const MESES = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -53,7 +54,8 @@ export default function MetasPage() {
     const metasBatidas = progressos.filter(p => p.percentual_faturamento >= 100).length;
 
     return (
-        <div className="space-y-6 animate-fade-in">
+        <FeatureGate feature="gestao_equipe" featureName="Metas de Equipe">
+            <div className="space-y-6 animate-fade-in">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
@@ -163,6 +165,7 @@ export default function MetasPage() {
                     onSaved={loadData}
                 />
             )}
-        </div>
+            </div>
+        </FeatureGate>
     );
 }

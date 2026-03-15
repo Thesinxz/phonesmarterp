@@ -3,11 +3,13 @@
 import { checkAdmin } from "@/lib/auth-guards";
 import { logAuditEvent } from "@/lib/audit-logger";
 import { revalidatePath } from "next/cache";
+import { requireFeature } from "@/lib/plans/guard";
 
 /**
  * Atualiza um membro da equipe com verificação server-side de Admin.
  */
 export async function updateMembroEquipeAction(id: string, updates: any) {
+    await requireFeature('gestao_equipe');
     try {
         const { profile, supabase } = await checkAdmin();
 
@@ -50,6 +52,7 @@ export async function updateMembroEquipeAction(id: string, updates: any) {
  * Exclui (Soft Delete) um membro da equipe com verificação server-side de Admin.
  */
 export async function deleteMembroEquipeAction(id: string) {
+    await requireFeature('gestao_equipe');
     try {
         const { profile, supabase } = await checkAdmin();
 

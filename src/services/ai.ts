@@ -1,8 +1,10 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { requireFeature } from "@/lib/plans/guard";
 
 export async function generateProductDescription(productName: string, category: string, grade?: string) {
+    await requireFeature('ia_ocr');
     try {
         const supabase = await createClient();
 

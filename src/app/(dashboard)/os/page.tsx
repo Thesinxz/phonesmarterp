@@ -31,7 +31,8 @@ import { cn } from "@/utils/cn";
 
 const STAGES: { label: string; status: OsStatus; color: string }[] = [
     { label: "Abertas", status: "aberta", color: "bg-slate-500" },
-    { label: "Em Análise", status: "em_analise", color: "bg-blue-500" },
+    { label: "Em Trânsito", status: "em_transito", color: "bg-blue-500" },
+    { label: "Em Análise", status: "em_analise", color: "bg-blue-400" },
     { label: "Aguardando Peça", status: "aguardando_peca", color: "bg-amber-500" },
     { label: "Em Execução", status: "em_execucao", color: "bg-purple-500" },
     { label: "Finalizadas", status: "finalizada", color: "bg-emerald-500" },

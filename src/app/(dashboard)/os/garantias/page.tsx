@@ -11,6 +11,7 @@ import {
 import { formatDate } from "@/utils/formatDate";
 import { cn } from "@/utils/cn";
 import { toast } from "sonner";
+import { FeatureGate } from "@/components/plans/FeatureGate";
 
 const supabase = createClient();
 
@@ -108,7 +109,8 @@ export default function GarantiasPage() {
     const countVencida = filtered.filter(os => getDiasRestantes(os.data_conclusao) <= 0).length;
 
     return (
-        <div className="space-y-6 page-enter pb-12">
+        <FeatureGate feature="os_garantias" featureName="Garantia de Equipamentos">
+            <div className="space-y-6 page-enter pb-12">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
@@ -225,6 +227,7 @@ export default function GarantiasPage() {
                     </table>
                 </div>
             </GlassCard>
-        </div>
+            </div>
+        </FeatureGate>
     );
 }

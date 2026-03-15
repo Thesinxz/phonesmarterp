@@ -16,7 +16,10 @@ import {
     DollarSign,
     ChevronRight,
     ChevronLeft,
-    FileSearch
+    FileSearch,
+    Building2,
+    Layers,
+    Tag
 } from "lucide-react";
 import Link from "next/link";
 import Tesseract from 'tesseract.js';
@@ -30,6 +33,8 @@ import { createProdutos } from "@/services/estoque";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/utils/cn";
+import { createClient } from "@/lib/supabase/client";
+import { type ProductType, type Brand, type PricingSegment, type PaymentGatewayTable } from "@/types/database";
 
 export default function ImportacaoPage() {
     const { config, defaultGateway, loading: configLoading } = useFinanceConfig();
@@ -40,8 +45,14 @@ export default function ImportacaoPage() {
     }, []);
     const { profile } = useAuth();
     const router = useRouter();
-    const [selectedGateway, setSelectedGateway] = useState<PaymentGateway | null>(null);
+    const [selectedGateway, setSelectedGateway] = useState<PaymentGatewayTable | null>(null);
     const [currentStep, setCurrentStep] = useState(1);
+    
+    // Novas entidades
+    const [productTypes, setProductTypes] = useState<ProductType[]>([]);
+    const [brands, setBrands] = useState<Brand[]>([]);
+    const [pricingSegments, setPricingSegments] = useState<PricingSegment[]>([]);
+    const [gatewaysData, setGatewaysData] = useState<PaymentGatewayTable[]>([]);
 
     // GLOBAL PARAMS
     const [params, setParams] = useState({
@@ -71,10 +82,68 @@ export default function ImportacaoPage() {
         margemCustom?: number, 
         margemTipoCustom?: 'percentual' | 'fixa',
         precoCustomPix?: number,
+        precoVendaUsdCustom?: number,
         imei?: string,
-        saudeBateria?: number
+        saudeBateria?: number,
+        // Novos campos
+        product_type_id: string,
+        brand_id: string,
+        pricing_segment_id: string
     }[]>([]);
     const [ocrStatus, setOcrStatus] = useState("");
+    const [viewCurrency, setViewCurrency] = useState<'BRL' | 'USD'>('BRL');
+
+    const brlToUsd = (brlCents: number, rate: number): number => {
+        if (!rate || rate <= 0) return 0;
+        return Math.round((brlCents / 100) / rate * 100);
+    };
+
+    const formatUsd = (usdCents: number): string => {
+        return `$ ${(usdCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    const getProductUsdValues = (itemCustoUsd: number, impostoBrl: number, freteEuaBrl: number, freteBrasilBrl: number, totalBrl: number, dolarCompra: number, precoSugeridoUsd?: number) => {
+        const taxaImpUsd = brlToUsd(impostoBrl * 100, dolarCompra);
+        const freteEuaUsd = brlToUsd(freteEuaBrl * 100, dolarCompra);
+        const freteBrUsd = brlToUsd(freteBrasilBrl * 100, dolarCompra);
+        const totalUsd = brlToUsd(totalBrl * 100, dolarCompra);
+        const vendaUsd = precoSugeridoUsd !== undefined ? Math.round(precoSugeridoUsd * 100) : 0;
+        const margemUsd = (vendaUsd > 0 && totalUsd > 0) ? vendaUsd - totalUsd : null;
+
+        return {
+            custoUsd: Math.round(itemCustoUsd * 100),
+            taxaImpUsd,
+            freteEuaUsd,
+            freteBrUsd,
+            totalUsd,
+            vendaUsd,
+            margemUsd
+        };
+    };
+
+    useEffect(() => {
+        if (!profile?.empresa_id) return;
+        const fetchRelationalData = async () => {
+            const supabase = createClient();
+            const [types, segments, brandsList, gateways] = await Promise.all([
+                supabase.from('product_types').select('*').eq('empresa_id', profile.empresa_id).order('name'),
+                supabase.from('pricing_segments').select('*').eq('empresa_id', profile.empresa_id).order('name'),
+                supabase.from('brands').select('*').eq('empresa_id', profile.empresa_id).order('name'),
+                supabase.from('payment_gateways').select('*').eq('empresa_id', profile.empresa_id).order('nome'),
+            ]);
+
+            if (types.data) setProductTypes(types.data as any);
+            if (segments.data) setPricingSegments(segments.data as any);
+            if (brandsList.data) setBrands(brandsList.data as any);
+            if (gateways.data) {
+                setGatewaysData(gateways.data as any);
+                if (!selectedGateway && gateways.data.length > 0) {
+                    setSelectedGateway(gateways.data[0] as any);
+                }
+            }
+        };
+        fetchRelationalData();
+    }, [profile?.empresa_id]);
 
     useEffect(() => {
         if (config) {
@@ -83,11 +152,8 @@ export default function ImportacaoPage() {
                 dolarCompra: config.cotacao_dolar_paraguai || 5.15,
                 dolarTaxaImportacao: Number(((config.cotacao_dolar_paraguai || 5.15) + 0.10).toFixed(2))
             }));
-            if (defaultGateway && !selectedGateway) {
-                setSelectedGateway(defaultGateway);
-            }
         }
-    }, [config, defaultGateway, selectedGateway]);
+    }, [config]);
 
     // Sem retorno precoce para evitar erros de Hook order
     const isLoading = !mounted || configLoading;
@@ -222,7 +288,7 @@ export default function ImportacaoPage() {
 
     const calculateItem = (
         itemCustoUsd: number, 
-        categoriaNome?: string, 
+        pricingSegmentId?: string, 
         margemCustom?: number, 
         margemTipoCustom?: 'percentual' | 'fixa',
         precoCustomPix?: number
@@ -250,12 +316,13 @@ export default function ImportacaoPage() {
 
         const custoFinalBrl = custoMoedaBrl + impostoBrl + freteEuaBrl + freteBrasilBrl + taxaFixaDiluida + extrasInvoiceBrl;
 
-        const cat = config?.categorias.find(c => c.nome === categoriaNome);
-        const exigeNF = cat ? cat.nf_obrigatoria : true;
-        const taxaNF = (exigeNF ? (config?.taxa_nota_fiscal_pct || 0) : 0) / 100;
+        const segment = pricingSegments.find(s => s.id === pricingSegmentId);
+        const exigeNF = true; // Por padrão agora
+        const taxaNF = (config?.taxa_nota_fiscal_pct || 0) / 100;
         const taxaPix = (selectedGateway?.taxa_pix_pct || 0) / 100;
-        const taxaCredito1x = (selectedGateway?.taxas_credito?.[0]?.taxa || 0) / 100;
-        const taxaCredito12x = (selectedGateway?.taxas_credito?.[11]?.taxa || 0) / 100;
+        const gateTaxas = (selectedGateway as any)?.taxas_credito || (selectedGateway as any)?.taxas_credito_json || [];
+        const taxaCredito1x = (gateTaxas?.[0]?.taxa || 0) / 100;
+        const taxaCredito12x = (gateTaxas?.[11]?.taxa || 0) / 100;
 
         const tipoMargem = margemTipoCustom || params.margemTipo;
         const valorMargem = margemCustom !== undefined ? margemCustom : params.margemPadrao;
@@ -265,39 +332,19 @@ export default function ImportacaoPage() {
         let precoSugerido12x = 0;
 
         if (precoCustomPix && precoCustomPix > 0) {
-            // PRIORIDADE: Preço manual definido pelo usuário
             precoSugeridoPix = precoCustomPix;
-            
-            // Calculamos o lucro líquido (em R$) que esse preço gera
-            // Lucro = Preco * (1 - NF - Gateway) - Custo
             const lucroEfetivoBrl = (precoSugeridoPix * (1 - taxaNF - taxaPix)) - custoFinalBrl;
-            
-            // Calculamos os outros preços para que o lucro líquido seja O MESMO do PIX (Paridade)
             precoSugerido1x = (custoFinalBrl + lucroEfetivoBrl) / (1 - taxaNF - taxaCredito1x);
             precoSugerido12x = (custoFinalBrl + lucroEfetivoBrl) / (1 - taxaNF - taxaCredito12x);
         } else {
-            // Lógica baseada em Margem (% ou R$)
-            if (tipoMargem === 'percentual') {
-                const taxaMargem = valorMargem / 100;
-                const divisorPix = 1 - taxaMargem - taxaNF - taxaPix;
-                precoSugeridoPix = divisorPix > 0 ? custoFinalBrl / divisorPix : custoFinalBrl * (1 + taxaMargem + taxaNF + taxaPix);
-
-                const divisor1x = 1 - taxaMargem - taxaNF - taxaCredito1x;
-                precoSugerido1x = divisor1x > 0 ? custoFinalBrl / divisor1x : custoFinalBrl * (1 + taxaMargem + taxaNF + taxaCredito1x);
-
-                const divisor12x = 1 - taxaMargem - taxaNF - taxaCredito12x;
-                precoSugerido12x = divisor12x > 0 ? custoFinalBrl / divisor12x : custoFinalBrl * (1 + taxaMargem + taxaNF + taxaCredito12x);
-            } else {
-                // Lucro Fixo (R$)
-                const divisorPix = 1 - taxaNF - taxaPix;
-                precoSugeridoPix = (custoFinalBrl + valorMargem) / (divisorPix > 0 ? divisorPix : 1);
-
-                const divisor1x = 1 - taxaNF - taxaCredito1x;
-                precoSugerido1x = (custoFinalBrl + valorMargem) / (divisor1x > 0 ? divisor1x : 1);
-
-                const divisor12x = 1 - taxaNF - taxaCredito12x;
-                precoSugerido12x = (custoFinalBrl + valorMargem) / (divisor12x > 0 ? divisor12x : 1);
-            }
+            // Lógica baseada em Segmento ou Margem customizada
+            const marginBrl = margemCustom !== undefined ? (margemCustom * 100) : (segment?.default_margin || 0);
+            
+            // Preço Base = (Custo + Margem Fixa) / (1 - Impostos)
+            const divisor = 1 - taxaNF;
+            precoSugeridoPix = Math.ceil((custoFinalBrl + marginBrl) / (divisor - taxaPix));
+            precoSugerido1x = Math.ceil((custoFinalBrl + marginBrl) / (divisor - taxaCredito1x));
+            precoSugerido12x = Math.ceil((custoFinalBrl + marginBrl) / (divisor - taxaCredito12x));
         }
 
         return {
@@ -391,21 +438,25 @@ export default function ImportacaoPage() {
                 finalItemsList.forEach(item => {
                     const calc = calculateItem(
                         item.custoUsd, 
-                        item.categoria, 
+                        item.pricing_segment_id, 
                         item.margemCustom, 
                         item.margemTipoCustom, 
                         item.precoCustomPix
                     );
                     
                     const { custoFinalBrl, precoSugeridoPix } = calc;
+                    const type = productTypes.find(t => t.id === item.product_type_id);
                     
                     produtosParaInserir.push({
                         empresa_id: profile.empresa_id,
                         nome: item.label,
-                        categoria: item.categoria,
+                        product_type_id: item.product_type_id || null,
+                        brand_id: item.brand_id || null,
+                        pricing_segment_id: item.pricing_segment_id || null,
+                        categoria: type?.name || item.categoria,
                         subcategoria: item.subcategoria || null,
-                        preco_custo_centavos: Math.round(custoFinalBrl * 100),
-                        preco_venda_centavos: Math.round(precoSugeridoPix * 100),
+                        preco_custo_centavos: Math.round(custoFinalBrl),
+                        preco_venda_centavos: Math.round(precoSugeridoPix),
                         estoque_qtd: 1, 
                         estoque_minimo: 1,
                         condicao: item.condicao || 'novo_lacrado',
@@ -414,7 +465,7 @@ export default function ImportacaoPage() {
                         ncm: "85171231",
                         cfop: "5102",
                         origem: "1",
-                        descricao: "Importado via Calculadora",
+                        descricao: "Importado via Calculadora Pro",
                         exibir_vitrine: true
                     });
                 });
@@ -581,38 +632,84 @@ export default function ImportacaoPage() {
             {/* Step 2: Produtos */}
             {currentStep === 2 && (
                 <div className="animate-in fade-in slide-in-from-right-8 space-y-6">
-                    <GlassCard title={`Tabela de Produtos (${items.length})`} icon={List} action={
+                    <GlassCard title={
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                            <span>Tabela de Produtos ({items.length})</span>
+                            <div className="flex bg-slate-100/50 p-1 rounded-lg border border-slate-200">
+                                <button
+                                    onClick={() => setViewCurrency('BRL')}
+                                    className={cn(
+                                        "px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all",
+                                        viewCurrency === 'BRL' ? "bg-white text-slate-800 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                                    )}
+                                >
+                                    R$ Reais
+                                </button>
+                                <button
+                                    onClick={() => setViewCurrency('USD')}
+                                    className={cn(
+                                        "px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all",
+                                        viewCurrency === 'USD' ? "bg-[#185FA5] text-white shadow-sm shadow-brand-500/30" : "text-slate-400 hover:text-slate-600"
+                                    )}
+                                >
+                                    US$ Dólar
+                                </button>
+                            </div>
+                        </div>
+                    } icon={List} action={
                         <div className="flex gap-2">
                             <button onClick={() => setCurrentStep(1)} className="btn-secondary h-10 px-6 text-sm"><ChevronLeft size={16} /> Voltar</button>
                             <button onClick={() => setItems([])} className="text-xs font-bold text-red-500 hover:text-red-600 uppercase ml-2">Limpar tudo</button>
                             <button onClick={() => setCurrentStep(3)} className="btn-primary h-10 px-6 text-sm ml-2">Avançar <ChevronRight size={16} /></button>
                         </div>
                     }>
+                        {viewCurrency === 'USD' && (
+                            <div className="text-right text-[11px] text-slate-400 font-medium mb-4 pr-4">
+                                Conversão baseada em US$ 1 = R$ {params.dolarCompra.toFixed(2)} (Passo 1)
+                            </div>
+                        )}
                         <div className="overflow-x-auto pb-4">
                             <table className="w-full text-left whitespace-nowrap">
                                 <thead>
-                                    <tr className="border-b border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-tighter">
-                                        <th className="px-2 py-3 min-w-[250px]">Produto (Descrição)</th>
-                                        <th className="px-2 py-3 text-center">Cat / Cond.</th>
-                                        <th className="px-2 py-3 text-center w-12">Qtd</th>
-                                        <th className="px-2 py-3 text-right">USD</th>
-                                        <th className="px-2 py-3 text-right">Compra</th>
-                                        <th className="px-2 py-3 text-right">Taxa Imp.</th>
-                                        <th className="px-2 py-3 text-right">Frete EUA</th>
-                                        <th className="px-2 py-3 text-right">Frete BR</th>
-                                        <th className="px-2 py-3 text-right font-bold text-slate-800">Total</th>
-                                        <th className="px-2 py-3"></th>
-                                    </tr>
+                                    {viewCurrency === 'BRL' ? (
+                                        <tr className="border-b border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-tighter">
+                                            <th className="px-2 py-3 min-w-[250px]">Produto (Descrição)</th>
+                                            <th className="px-2 py-3 text-center">Cat / Cond.</th>
+                                            <th className="px-2 py-3 text-center w-12">Qtd</th>
+                                            <th className="px-2 py-3 text-right">USD</th>
+                                            <th className="px-2 py-3 text-right">Compra</th>
+                                            <th className="px-2 py-3 text-right">Taxa Imp.</th>
+                                            <th className="px-2 py-3 text-right">Frete EUA</th>
+                                            <th className="px-2 py-3 text-right">Frete BR</th>
+                                            <th className="px-2 py-3 text-right font-bold text-slate-800">Total</th>
+                                            <th className="px-2 py-3"></th>
+                                        </tr>
+                                    ) : (
+                                        <tr className="border-b border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-tighter">
+                                            <th className="px-2 py-3 min-w-[250px]">Produto (Descrição)</th>
+                                            <th className="px-2 py-3 text-center">Cat / Cond.</th>
+                                            <th className="px-2 py-3 text-center w-12">Qtd</th>
+                                            <th className="px-2 py-3 text-right">Custo US$</th>
+                                            <th className="px-2 py-3 text-right">Taxa Imp US$</th>
+                                            <th className="px-2 py-3 text-right">Frete EUA US$</th>
+                                            <th className="px-2 py-3 text-right">Frete BR US$</th>
+                                            <th className="px-2 py-3 text-right font-bold text-slate-800">Total US$</th>
+                                            <th className="px-2 py-3 text-right">Margem US$</th>
+                                            <th className="px-2 py-3 text-right">Venda US$</th>
+                                            <th className="px-2 py-3"></th>
+                                        </tr>
+                                    )}
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
                                     {items.length === 0 ? (
                                         <tr>
-                                            <td colSpan={5} className="py-20 text-center">
+                                            <td colSpan={10} className="py-20 text-center">
                                                 <p className="text-slate-400 font-bold">Nenhum produto lido.</p>
                                             </td>
                                         </tr>
                                     ) : items.map((item, i) => {
-                                        const calc = calculateItem(item.custoUsd, item.categoria, item.margemCustom);
+                                        const calc = calculateItem(item.custoUsd, item.pricing_segment_id, item.margemCustom, item.margemTipoCustom, item.precoCustomPix);
+                                        const usdValues = getProductUsdValues(item.custoUsd, calc.impostoBrl, calc.freteEuaBrl, calc.freteBrasilBrl, calc.custoFinalBrl, params.dolarCompra, item.precoVendaUsdCustom);
                                         return (
                                         <tr key={item.id} className="hover:bg-slate-50/50">
                                             <td className="px-2 py-2">
@@ -662,33 +759,49 @@ export default function ImportacaoPage() {
                                                 </div>
                                             </td>
                                             <td className="px-2 py-2 text-center">
-                                                <div className="flex justify-center gap-1">
+                                                <div className="flex flex-col gap-1 w-32">
                                                     <select 
-                                                        className="bg-slate-100 px-1 py-1.5 rounded-lg text-[10px] font-bold w-24 outline-none border-none" 
-                                                        value={item.categoria} 
+                                                        className="bg-slate-100 px-1 py-1.5 rounded-lg text-[10px] font-bold outline-none border-none" 
+                                                        value={item.product_type_id} 
                                                         onChange={e => {
-                                                            const newCatName = e.target.value;
-                                                            const catConfig = config?.categorias?.find(c => c.nome === newCatName);
-                                                            const newItems = [...items]; 
-                                                            newItems[i].categoria = newCatName; 
-                                                            
-                                                            // Se a categoria tem margem padrão, aplica ela
-                                                            if (catConfig && catConfig.margem_padrao) {
-                                                                newItems[i].margemCustom = catConfig.margem_padrao;
-                                                            }
-                                                            
-                                                            setItems(newItems);
+                                                            const n = [...items]; 
+                                                            n[i].product_type_id = e.target.value; 
+                                                            setItems(n);
                                                         }}
                                                     >
-                                                        {config?.categorias?.map(cat => (
-                                                            <option key={cat.nome} value={cat.nome}>{cat.nome}</option>
-                                                        ))}
-                                                        {/* Opção fallback caso o OCR tenha pegado algo diferente */}
-                                                        {item.categoria && config?.categorias && !config.categorias.some(c => c.nome === item.categoria) && (
-                                                            <option value={item.categoria}>{item.categoria}</option>
-                                                        )}
+                                                        <option value="">Tipo?</option>
+                                                        {productTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                                     </select>
-                                                    <select className="bg-slate-100 px-1 py-1.5 rounded-lg text-[10px] font-bold w-14 outline-none border-none" value={item.condicao} onChange={e => {
+                                                    <select 
+                                                        className="bg-slate-200/50 px-1 py-1 rounded-lg text-[9px] font-bold outline-none border-none" 
+                                                        value={item.brand_id} 
+                                                        onChange={e => {
+                                                            const bId = e.target.value;
+                                                            const brand = brands.find(b => b.id === bId);
+                                                            const n = [...items]; 
+                                                            n[i].brand_id = bId; 
+                                                            if (brand?.default_pricing_segment_id) {
+                                                                n[i].pricing_segment_id = brand.default_pricing_segment_id;
+                                                            }
+                                                            setItems(n);
+                                                        }}
+                                                    >
+                                                        <option value="">Marca?</option>
+                                                        {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                                    </select>
+                                                    <select 
+                                                        className="bg-indigo-50 px-1 py-1 rounded-lg text-[9px] font-bold text-indigo-700 outline-none border-none" 
+                                                        value={item.pricing_segment_id} 
+                                                        onChange={e => {
+                                                            const n = [...items]; 
+                                                            n[i].pricing_segment_id = e.target.value; 
+                                                            setItems(n);
+                                                        }}
+                                                    >
+                                                        <option value="">Segmento?</option>
+                                                        {pricingSegments.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                                    </select>
+                                                    <select className="bg-slate-100 px-1 py-1 rounded-lg text-[9px] font-bold outline-none border-none" value={item.condicao} onChange={e => {
                                                         const newItems = [...items]; newItems[i].condicao = e.target.value; setItems(newItems);
                                                     }}>
                                                         <option value="novo_lacrado">Novo</option>
@@ -721,23 +834,68 @@ export default function ImportacaoPage() {
                                                     }} />
                                                 </div>
                                             </td>
-                                            <td className="px-2 py-2 text-right text-[10px] font-bold text-slate-500">
-                                                {formatCurrency(Math.round(calc.custoMoedaBrl * 100))}
-                                            </td>
-                                            <td className="px-2 py-2 text-right text-[10px] font-bold text-amber-600">
-                                                {formatCurrency(Math.round(calc.impostoBrl * 100))}
-                                            </td>
-                                            <td className="px-2 py-2 text-right text-[10px] font-bold text-slate-400">
-                                                {formatCurrency(Math.round(calc.freteEuaBrl * 100))}
-                                            </td>
-                                            <td className="px-2 py-2 text-right text-[10px] font-bold text-slate-400">
-                                                {formatCurrency(Math.round(calc.freteBrasilBrl * 100))}
-                                            </td>
-                                            <td className="px-2 py-2 text-right">
-                                                <span className="text-xs font-black text-slate-800">
-                                                    {formatCurrency(Math.round(calc.custoFinalBrl * 100))}
-                                                </span>
-                                            </td>
+                                            {viewCurrency === 'BRL' ? (
+                                                <>
+                                                    <td className="px-2 py-2 text-right text-[10px] font-bold text-slate-500">
+                                                        {formatCurrency(Math.round(calc.custoMoedaBrl * 100))}
+                                                    </td>
+                                                    <td className="px-2 py-2 text-right text-[10px] font-bold text-amber-600">
+                                                        {formatCurrency(Math.round(calc.impostoBrl * 100))}
+                                                    </td>
+                                                    <td className="px-2 py-2 text-right text-[10px] font-bold text-slate-400">
+                                                        {formatCurrency(Math.round(calc.freteEuaBrl * 100))}
+                                                    </td>
+                                                    <td className="px-2 py-2 text-right text-[10px] font-bold text-slate-400">
+                                                        {formatCurrency(Math.round(calc.freteBrasilBrl * 100))}
+                                                    </td>
+                                                    <td className="px-2 py-2 text-right">
+                                                        <span className="text-xs font-black text-slate-800">
+                                                            {formatCurrency(Math.round(calc.custoFinalBrl * 100))}
+                                                        </span>
+                                                    </td>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <td className="px-2 py-2 text-right text-[10px] font-bold text-slate-500">
+                                                        {formatUsd(usdValues.custoUsd)}
+                                                    </td>
+                                                    <td className="px-2 py-2 text-right text-[10px] font-bold text-amber-600">
+                                                        {formatUsd(usdValues.taxaImpUsd)}
+                                                    </td>
+                                                    <td className="px-2 py-2 text-right text-[10px] font-bold text-slate-400">
+                                                        {formatUsd(usdValues.freteEuaUsd)}
+                                                    </td>
+                                                    <td className="px-2 py-2 text-right text-[10px] font-bold text-slate-400">
+                                                        {formatUsd(usdValues.freteBrUsd)}
+                                                    </td>
+                                                    <td className="px-2 py-2 text-right">
+                                                        <span className="text-xs font-black text-slate-800">
+                                                            {formatUsd(usdValues.totalUsd)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-2 py-2 text-right text-[10px]">
+                                                        <span className={cn("font-bold", usdValues.margemUsd && usdValues.margemUsd > 0 ? "text-emerald-600" : (usdValues.margemUsd && usdValues.margemUsd < 0 ? "text-red-600" : "text-slate-400"))}>
+                                                            {usdValues.margemUsd !== null 
+                                                                ? `${formatUsd(usdValues.margemUsd)} (${((usdValues.margemUsd / usdValues.totalUsd) * 100).toFixed(1)}%)` 
+                                                                : '—'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-2 py-2 text-right">
+                                                        <div className="flex items-center justify-end">
+                                                            <span className="text-[10px] text-brand-400 mr-0.5">$</span>
+                                                            <input type="number" step="0.01" className="w-16 bg-white border border-slate-200 px-1 py-1 rounded-lg text-right font-bold text-xs outline-none focus:border-brand-500" 
+                                                                value={item.precoVendaUsdCustom} 
+                                                                placeholder={(calc.precoSugeridoPix / params.dolarCompra).toFixed(2)}
+                                                                onChange={e => {
+                                                                    const newItems = [...items]; 
+                                                                    newItems[i].precoVendaUsdCustom = e.target.value === '' ? undefined : Number(e.target.value); 
+                                                                    setItems(newItems);
+                                                                }} 
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                </>
+                                            )}
                                             <td className="px-2 py-2 text-right">
                                                 <button onClick={() => setItems(items.filter(it => it.id !== item.id))} className="text-slate-300 hover:text-red-500 p-1">
                                                     <Trash2 size={14} />
@@ -753,39 +911,96 @@ export default function ImportacaoPage() {
                                             <td className="px-2 py-3 text-center text-xs">
                                                 {items.reduce((acc, it) => acc + (it.quantidade || 0), 0)}
                                             </td>
-                                            <td className="px-2 py-3 text-right text-xs">
-                                                ${items.reduce((acc, it) => acc + (it.custoUsd * (it.quantidade || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                            </td>
-                                            <td className="px-2 py-3 text-right text-[10px]">
-                                                {formatCurrency(Math.round(items.reduce((acc, it) => {
-                                                    const calc = calculateItem(it.custoUsd, it.categoria, it.margemCustom, it.margemTipoCustom);
-                                                    return acc + (calc.custoMoedaBrl * (it.quantidade || 0));
-                                                }, 0) * 100))}
-                                            </td>
-                                            <td className="px-2 py-3 text-right text-[10px] text-amber-600">
-                                                {formatCurrency(Math.round(items.reduce((acc, it) => {
-                                                    const calc = calculateItem(it.custoUsd, it.categoria, it.margemCustom, it.margemTipoCustom);
-                                                    return acc + (calc.impostoBrl * (it.quantidade || 0));
-                                                }, 0) * 100))}
-                                            </td>
-                                            <td className="px-2 py-3 text-right text-[10px]">
-                                                {formatCurrency(Math.round(items.reduce((acc, it) => {
-                                                    const calc = calculateItem(it.custoUsd, it.categoria, it.margemCustom, it.margemTipoCustom);
-                                                    return acc + (calc.freteEuaBrl * (it.quantidade || 0));
-                                                }, 0) * 100))}
-                                            </td>
-                                            <td className="px-2 py-3 text-right text-[10px]">
-                                                {formatCurrency(Math.round(items.reduce((acc, it) => {
-                                                    const calc = calculateItem(it.custoUsd, it.categoria, it.margemCustom, it.margemTipoCustom);
-                                                    return acc + (calc.freteBrasilBrl * (it.quantidade || 0));
-                                                }, 0) * 100))}
-                                            </td>
-                                            <td className="px-2 py-3 text-right text-xs text-brand-600">
-                                                {formatCurrency(Math.round(items.reduce((acc, it) => {
-                                                    const calc = calculateItem(it.custoUsd, it.categoria, it.margemCustom, it.margemTipoCustom);
-                                                    return acc + (calc.custoFinalBrl * (it.quantidade || 0));
-                                                }, 0) * 100))}
-                                            </td>
+                                            {viewCurrency === 'BRL' ? (
+                                                <>
+                                                    <td className="px-2 py-3 text-right text-xs">
+                                                        ${items.reduce((acc, it) => acc + (it.custoUsd * (it.quantidade || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                    </td>
+                                                    <td className="px-2 py-3 text-right text-[10px]">
+                                                        {formatCurrency(Math.round(items.reduce((acc, it) => {
+                                                            const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
+                                                            return acc + (calc.custoMoedaBrl * (it.quantidade || 0));
+                                                        }, 0) * 100))}
+                                                    </td>
+                                                    <td className="px-2 py-3 text-right text-[10px] text-amber-600">
+                                                        {formatCurrency(Math.round(items.reduce((acc, it) => {
+                                                            const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
+                                                            return acc + (calc.impostoBrl * (it.quantidade || 0));
+                                                        }, 0) * 100))}
+                                                    </td>
+                                                    <td className="px-2 py-3 text-right text-[10px]">
+                                                        {formatCurrency(Math.round(items.reduce((acc, it) => {
+                                                            const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
+                                                            return acc + (calc.freteEuaBrl * (it.quantidade || 0));
+                                                        }, 0) * 100))}
+                                                    </td>
+                                                    <td className="px-2 py-3 text-right text-[10px]">
+                                                        {formatCurrency(Math.round(items.reduce((acc, it) => {
+                                                            const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
+                                                            return acc + (calc.freteBrasilBrl * (it.quantidade || 0));
+                                                        }, 0) * 100))}
+                                                    </td>
+                                                    <td className="px-2 py-3 text-right text-xs text-brand-600">
+                                                        {formatCurrency(Math.round(items.reduce((acc, it) => {
+                                                            const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
+                                                            return acc + (calc.custoFinalBrl * (it.quantidade || 0));
+                                                        }, 0) * 100))}
+                                                    </td>
+                                                </>
+                                            ) : (
+                                                (() => {
+                                                    const totals = items.reduce((acc, it) => {
+                                                        const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
+                                                        const usdValues = getProductUsdValues(it.custoUsd, calc.impostoBrl, calc.freteEuaBrl, calc.freteBrasilBrl, calc.custoFinalBrl, params.dolarCompra, it.precoVendaUsdCustom);
+                                                        return {
+                                                            totalCustoUsd: acc.totalCustoUsd + usdValues.custoUsd * (it.quantidade || 0),
+                                                            totalTaxaUsd: acc.totalTaxaUsd + usdValues.taxaImpUsd * (it.quantidade || 0),
+                                                            totalFreteEuaUsd: acc.totalFreteEuaUsd + usdValues.freteEuaUsd * (it.quantidade || 0),
+                                                            totalFreteBrUsd: acc.totalFreteBrUsd + usdValues.freteBrUsd * (it.quantidade || 0),
+                                                            totalGeralUsd: acc.totalGeralUsd + usdValues.totalUsd * (it.quantidade || 0),
+                                                            totalVendaUsd: acc.totalVendaUsd + usdValues.vendaUsd * (it.quantidade || 0),
+                                                            totalMargemUsd: acc.totalMargemUsd + (usdValues.margemUsd ?? 0) * (it.quantidade || 0)
+                                                        };
+                                                    }, { 
+                                                        totalCustoUsd: 0, 
+                                                        totalTaxaUsd: 0, 
+                                                        totalFreteEuaUsd: 0, 
+                                                        totalFreteBrUsd: 0, 
+                                                        totalGeralUsd: 0, 
+                                                        totalVendaUsd: 0, 
+                                                        totalMargemUsd: 0 
+                                                    });
+
+                                                    return (
+                                                        <>
+                                                            <td className="px-2 py-3 text-right text-xs">
+                                                                {formatUsd(totals.totalCustoUsd)}
+                                                            </td>
+                                                            <td className="px-2 py-3 text-right text-[10px] text-amber-600">
+                                                                {formatUsd(totals.totalTaxaUsd)}
+                                                            </td>
+                                                            <td className="px-2 py-3 text-right text-[10px]">
+                                                                {formatUsd(totals.totalFreteEuaUsd)}
+                                                            </td>
+                                                            <td className="px-2 py-3 text-right text-[10px]">
+                                                                {formatUsd(totals.totalFreteBrUsd)}
+                                                            </td>
+                                                            <td className="px-2 py-3 text-right text-xs text-brand-600">
+                                                                {formatUsd(totals.totalGeralUsd)}
+                                                            </td>
+                                                            <td className="px-2 py-3 text-right text-[10px]">
+                                                                <span className={cn("font-bold", totals.totalMargemUsd > 0 ? "text-emerald-600" : (totals.totalMargemUsd < 0 ? "text-red-600" : "text-slate-400"))}>
+                                                                    {formatUsd(totals.totalMargemUsd)}
+                                                                    {totals.totalGeralUsd > 0 && ` (${((totals.totalMargemUsd / totals.totalGeralUsd) * 100).toFixed(1)}%)`}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-2 py-3 text-right text-xs text-brand-600">
+                                                                {totals.totalVendaUsd > 0 ? formatUsd(totals.totalVendaUsd) : '—'}
+                                                            </td>
+                                                        </>
+                                                    );
+                                                })()
+                                            )}
                                             <td className="px-2 py-3"></td>
                                         </tr>
                                     )}
@@ -882,7 +1097,7 @@ export default function ImportacaoPage() {
                                         <GatewaySelector 
                                             gateways={config?.gateways || []} 
                                             selectedId={selectedGateway?.id || null} 
-                                            onSelect={setSelectedGateway} 
+                                            onSelect={(g) => setSelectedGateway(g as any)} 
                                             compact
                                         />
                                     </div>
@@ -894,7 +1109,12 @@ export default function ImportacaoPage() {
                                         <div className="w-px h-4 bg-slate-200" />
                                         <div className="flex flex-col">
                                             <span className="text-[7px] font-bold text-slate-400 uppercase text-right">12x</span>
-                                            <span className="text-[10px] font-black text-slate-700 text-right">{(selectedGateway?.taxas_credito?.[11]?.taxa || 0).toFixed(2)}%</span>
+                                            <span className="text-[10px] font-black text-slate-700 text-right">
+                                                {(() => {
+                                                    const gateTaxas = (selectedGateway as any)?.taxas_credito || (selectedGateway as any)?.taxas_credito_json || [];
+                                                    return (gateTaxas?.[11]?.taxa || 0).toFixed(2);
+                                                })()}%
+                                            </span>
                                         </div>
                                     </div>
                                 </div>

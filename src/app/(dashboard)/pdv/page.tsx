@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, User, Package, CheckCircle2, Printer, History, Percent, Clock, Lock, DollarSign, LogOut, FileCode2, Receipt } from "lucide-react";
-import { getProdutos } from "@/services/estoque";
+import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, User, Package, CheckCircle2, Printer, History, Percent, Clock, Lock, DollarSign, LogOut, FileCode2, Receipt, Smartphone, RefreshCw, Keyboard } from "lucide-react";
 import { finalizarVenda } from "@/services/vendas";
+import { getCatalogItems } from "@/services/catalog";
 import { getClientes } from "@/services/clientes";
 import { getMembrosEquipe, type Usuario } from "@/services/equipe";
 import { notifyVenda } from "@/actions/notifications";
 import { getCaixaAberto, abrirCaixa, fecharCaixa, registrarMovimentacaoCaixa, getMovimentacoesCaixa } from "@/services/caixa";
-import { type Produto, type Cliente, type Caixa } from "@/types/database";
+import { type Cliente, type Caixa, type CatalogItem } from "@/types/database";
 import { useAuth } from "@/context/AuthContext";
 import { useFinanceConfig } from "@/hooks/useFinanceConfig";
 import { useRealtimeSubscription } from "@/hooks/useRealtime";
@@ -18,15 +18,20 @@ import { formatCurrency } from "@/utils/formatCurrency";
 import { toast } from "sonner";
 import { CrediarioModal } from "@/components/financeiro/CrediarioModal";
 import { CadastroRapidoClienteModal } from "@/components/clientes/CadastroRapidoClienteModal";
+import { SaleProductSearch } from "@/components/sales/SaleProductSearch";
+import { TradeInModal } from "@/components/sales/TradeInModal";
+import { confirmTradeIn } from "@/app/actions/trade-in";
 
-interface CartItem extends Produto {
+interface CartItem extends CatalogItem {
     quantity: number;
+    imei_id: string | null;
+    imei: string | null;
 }
 
 export default function PDVPage() {
     const { profile } = useAuth();
     const { defaultGateway } = useFinanceConfig();
-    const [products, setProducts] = useState<Produto[]>([]);
+    const [products, setProducts] = useState<CatalogItem[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [cart, setCart] = useState<CartItem[]>([]);
     const [loading, setLoading] = useState(false);
@@ -60,6 +65,16 @@ export default function PDVPage() {
     const [showFecharCaixa, setShowFecharCaixa] = useState(false);
     const [saldoFinalInput, setSaldoFinalInput] = useState("");
 
+    // Trade-in
+    const [showTradeInModal, setShowTradeInModal] = useState(false);
+    const [tradeIn, setTradeIn] = useState<{ 
+        id: string, 
+        device_name: string, 
+        device_imei?: string, 
+        applied_value: number, 
+        condition: string 
+    } | null>(null);
+
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
@@ -89,7 +104,7 @@ export default function PDVPage() {
 
     // Realtime Sync
     useRealtimeSubscription({
-        table: "produtos",
+        table: "catalog_items",
         filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
         callback: (payload: any) => {
             if (payload.eventType === 'UPDATE') {
@@ -175,10 +190,11 @@ export default function PDVPage() {
     }, [searchTerm]);
 
     async function loadProducts(search?: string, background = false) {
+        if (!profile?.empresa_id) return;
         if (!background) setLoading(true);
         try {
-            const response = await getProdutos(1, 50, { search });
-            setProducts(response.data);
+            const data = await getCatalogItems(profile.empresa_id, { search, stock_status: 'in_stock' });
+            setProducts(data);
         } catch (error) {
             console.error("Erro ao carregar produtos:", error);
         } finally {
@@ -200,40 +216,55 @@ export default function PDVPage() {
         }
     }
 
-    const addToCart = (product: Produto) => {
-        if (product.estoque_qtd <= 0) {
-            toast.error(`"${product.nome}" não possui estoque disponível.`);
-            return;
-        }
+    const addToCart = (product: any) => {
+        // Se for IMEI, a quantidade é sempre 1 e o ID deve ser único (pode ter vários do mesmo catalog_item mas IMEIs diferentes)
+        const cartId = product.imeiId || product.id;
 
         setCart(prev => {
-            const existing = prev.find(item => item.id === product.id);
+            const existing = prev.find(item => (item.imei_id || item.id) === cartId);
+            
             if (existing) {
-                if (existing.quantity >= product.estoque_qtd) {
-                    toast.error(`Apenas ${product.estoque_qtd} unidades de "${product.nome}" disponíveis em estoque.`);
+                if (product.imei) {
+                    toast.error("Este aparelho (IMEI) já está no carrinho.");
                     return prev;
                 }
+                
+                if (existing.quantity >= (product.stockQty || product.stock_qty)) {
+                    toast.error(`Apenas ${product.stockQty || product.stock_qty} unidades disponíveis.`);
+                    return prev;
+                }
+                
                 return prev.map(item =>
                     item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
                 );
             }
-            return [...prev, { ...product, quantity: 1 }];
+            
+            return [...prev, { 
+                ...product, 
+                id: product.id, // catalog_item_id
+                sale_price: product.salePrice || product.sale_price,
+                quantity: 1,
+                imei_id: product.imeiId ?? null,
+                imei: product.imei ?? null
+            } as CartItem];
         });
     };
 
-    const removeFromCart = (productId: string) => {
-        setCart(prev => prev.filter(item => item.id !== productId));
+    const removeFromCart = (cartId: string) => {
+        setCart(prev => prev.filter(item => (item.imei_id || item.id) !== cartId));
     };
 
-    const updateQuantity = (productId: string, delta: number) => {
+    const updateQuantity = (cartId: string, delta: number) => {
         setCart(prev => prev.map(item => {
-            if (item.id === productId) {
-                const maxStock = item.estoque_qtd;
+            if ((item.imei_id || item.id) === cartId) {
+                if (item.imei_id) return item; // IMEI é sempre 1
+
+                const maxStock = item.stock_qty;
                 const newQtd = Math.max(1, item.quantity + delta);
 
                 if (newQtd > maxStock) {
-                    toast.error(`Apenas ${maxStock} unidades disponíveis em estoque.`);
-                    return item; // não atualiza a quantidade
+                    toast.error(`Apenas ${maxStock} unidades disponíveis.`);
+                    return item;
                 }
 
                 return { ...item, quantity: newQtd };
@@ -243,8 +274,9 @@ export default function PDVPage() {
     };
 
     // Cálculo Dinâmico de Totais
-    const subtotal = cart.reduce((acc, item) => acc + (item.preco_venda_centavos * item.quantity), 0);
-    const subtotalComDesconto = Math.max(0, subtotal - (descontoReais * 100));
+    const subtotal = cart.reduce((acc, item) => acc + (item.sale_price * item.quantity), 0);
+    const tradeInValue = tradeIn ? tradeIn.applied_value : 0;
+    const subtotalComDesconto = Math.max(0, subtotal - (descontoReais * 100) - tradeInValue);
 
     // Aplicar taxa do gateway selecionado
     let taxaGatewayCentavos = 0;
@@ -288,11 +320,29 @@ export default function PDVPage() {
                     empresa_id: profile.empresa_id,
                     produto_id: item.id,
                     quantidade: item.quantity,
-                    preco_unitario_centavos: item.preco_venda_centavos,
-                    total_centavos: item.preco_venda_centavos * item.quantity
+                    preco_unitario_centavos: item.sale_price,
+                    total_centavos: item.sale_price * item.quantity,
+                    imei_id: item.imei_id,
+                    imei: item.imei
                 })),
                 usuarioId: profile.id
             });
+
+            // Se houver trade-in, confirmar agora vinculado a esta venda
+            if (tradeIn) {
+                try {
+                    await confirmTradeIn({
+                        tenantId: profile.empresa_id,
+                        tradeInId: tradeIn.id,
+                        saleId: venda.id,
+                        unitId: profile.unit_id || "matriz",
+                        confirmedBy: profile.id
+                    });
+                } catch (e) {
+                    console.error("Erro ao confirmar trade-in:", e);
+                    toast.error("Venda realizada, mas houve um erro ao processar a entrada do aparelho de trade-in.");
+                }
+            }
 
             setCreatedVenda({ id: venda.id, numero: venda.numero });
 
@@ -336,6 +386,8 @@ export default function PDVPage() {
             setSearchClient("");
             setPaymentMethod("dinheiro");
             setParcelas(1);
+            setTradeIn(null);
+            setDescontoReais(0);
 
         } catch (error: any) {
             console.error("Erro ao finalizar venda:", error);
@@ -495,45 +547,40 @@ export default function PDVPage() {
             {/* Passo 2: Seleção de Produtos */}
             {step === 2 && (
                 <div className="flex gap-6 h-full min-h-0">
-                    {/* Lista Produtos */}
-                    <div className="flex-1 flex flex-col gap-4">
-                        <div className="relative">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                            <input
-                                id="product-search"
-                                className="input-glass pl-12 h-14 text-xl font-bold border-brand-200/50 shadow-sm w-full"
-                                placeholder="[F2] Pesquisar produto por nome, código ou ler código de barras..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                            />
+                    {/* Busca Unificada e Lista de Produtos */}
+                    <div className="flex-1 flex flex-col gap-6">
+                        <SaleProductSearch 
+                            tenantId={profile?.empresa_id || ""}
+                            unitId={profile?.unit_id || "matriz"}
+                            userRole={(profile?.papel as string) === 'admin' ? 'owner' : (profile?.papel as string) === 'admin' ? 'admin' : 'attendant'}
+                            onProductSelected={addToCart}
+                        />
+
+                        <div className="flex gap-4">
+                            <button 
+                                onClick={() => setShowTradeInModal(true)}
+                                className={cn(
+                                    "flex-1 h-14 flex items-center justify-center gap-3 rounded-2xl border-2 transition-all font-bold",
+                                    tradeIn 
+                                        ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm"
+                                        : "border-slate-100 bg-white hover:border-brand-200 text-slate-600"
+                                )}
+                            >
+                                <RefreshCw size={20} className={tradeIn ? "text-emerald-500 animate-spin-slow" : "text-slate-400"} />
+                                {tradeIn ? "Trade-in Adicionado" : "Adicionar Trade-in (Entrada)"}
+                            </button>
                         </div>
-                        <div className="flex-1 overflow-y-auto pr-2 grid grid-cols-3 gap-4 pb-4 scrollbar-thin">
-                            {loading ? (
-                                Array.from({ length: 9 }).map((_, i) => (
-                                    <div key={i} className="glass-card h-32 animate-pulse bg-slate-50" />
-                                ))
-                            ) : products.length === 0 ? (
-                                <div className="col-span-3 py-10 flex flex-col items-center justify-center text-slate-400">
-                                    <Package size={48} className="mb-2 opacity-20" />
-                                    <p>Nenhum produto encontrado</p>
-                                </div>
-                            ) : (
-                                products.map(product => (
-                                    <button
-                                        key={product.id}
-                                        onClick={() => addToCart(product)}
-                                        className="glass-card p-4 text-left hover:scale-[1.02] transition-all flex flex-col justify-between h-32 active:scale-95 group hover:border-brand-300"
-                                    >
-                                        <h3 className="font-bold text-slate-800 text-sm line-clamp-2 group-hover:text-brand-600">{product.nome}</h3>
-                                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
-                                            <span className="text-brand-600 font-black">R$ {(product.preco_venda_centavos / 100).toLocaleString('pt-BR')}</span>
-                                            <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded", product.estoque_qtd > 5 ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-600")}>
-                                                Estoque: {product.estoque_qtd}
-                                            </span>
-                                        </div>
-                                    </button>
-                                ))
-                            )}
+                        
+                        {/* Texto de Ajuda */}
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            <span className="flex items-center gap-2">
+                                <Keyboard size={14} className="text-slate-300" />
+                                [F2] FOCO NA BUSCA
+                            </span>
+                            <span className="flex items-center gap-2">
+                                <Plus size={14} className="text-slate-300" />
+                                ADICIONE ITENS ESCANEANDO OU BUSCANDO
+                            </span>
                         </div>
                     </div>
 
@@ -545,19 +592,48 @@ export default function PDVPage() {
                                 <p className="text-xs text-center text-slate-400 py-10">Use a lista ao lado para adicionar produtos.</p>
                             ) : (
                                 cart.map(item => (
-                                    <div key={item.id} className="flex flex-col bg-white p-3 rounded-xl shadow-sm border border-slate-100 relative group">
-                                        <p className="text-xs font-bold text-slate-800 line-clamp-1 pr-6">{item.nome}</p>
+                                    <div key={item.imei_id || item.id} className="flex flex-col bg-white p-3 rounded-xl shadow-sm border border-slate-100 relative group">
+                                        <div className="flex items-start gap-2 pr-6">
+                                            {item.imei_id && <Smartphone size={14} className="text-brand-500 mt-1 shrink-0" />}
+                                            <div className="flex flex-col">
+                                                <p className="text-xs font-bold text-slate-800 line-clamp-1">{item.name}</p>
+                                                {item.imei && <p className="text-[9px] font-mono text-slate-400">IMEI: {item.imei}</p>}
+                                            </div>
+                                        </div>
                                         <div className="flex items-center justify-between mt-2">
                                             <div className="flex items-center bg-slate-100 rounded-lg p-0.5">
-                                                <button onClick={() => updateQuantity(item.id, -1)} className="p-1 hover:bg-white rounded-md text-slate-500"><Minus size={12} /></button>
-                                                <span className="w-8 text-center text-xs font-black text-slate-700">{item.quantity}</span>
-                                                <button onClick={() => updateQuantity(item.id, 1)} className="p-1 hover:bg-white rounded-md text-slate-500"><Plus size={12} /></button>
+                                                {!item.imei_id ? (
+                                                    <>
+                                                        <button onClick={() => updateQuantity(item.id, -1)} className="p-1 hover:bg-white rounded-md text-slate-500"><Minus size={12} /></button>
+                                                        <span className="w-8 text-center text-xs font-black text-slate-700">{item.quantity}</span>
+                                                        <button onClick={() => updateQuantity(item.id, 1)} className="p-1 hover:bg-white rounded-md text-slate-500"><Plus size={12} /></button>
+                                                    </>
+                                                ) : (
+                                                    <span className="px-2 text-[10px] font-black text-slate-400">QTD: 1</span>
+                                                )}
                                             </div>
-                                            <span className="text-sm font-black text-slate-700">R$ {((item.preco_venda_centavos * item.quantity) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                            <span className="text-sm font-black text-slate-700">R$ {((item.sale_price * item.quantity) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                         </div>
-                                        <button onClick={() => removeFromCart(item.id)} className="absolute top-2 right-2 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
+                                        <button onClick={() => removeFromCart(item.imei_id || item.id)} className="absolute top-2 right-2 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
                                     </div>
                                 ))
+                            )}
+
+                            {tradeIn && (
+                                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 relative group animate-in slide-in-from-right-2">
+                                    <div className="flex items-start gap-2 pr-6">
+                                        <RefreshCw size={14} className="text-emerald-600 mt-1 shrink-0" />
+                                        <div className="flex flex-col">
+                                            <p className="text-[10px] font-black text-emerald-800 uppercase tracking-tighter">Entrada (Trade-in)</p>
+                                            <p className="text-xs font-bold text-emerald-900 line-clamp-1">{tradeIn.device_name}</p>
+                                            {tradeIn.device_imei && <p className="text-[9px] font-mono text-emerald-600">IMEI: {tradeIn.device_imei}</p>}
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end mt-1">
+                                        <span className="text-sm font-black text-emerald-700">- R$ {(tradeIn.applied_value / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                    <button onClick={() => setTradeIn(null)} className="absolute top-2 right-2 text-emerald-300 hover:text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
+                                </div>
                             )}
                         </div>
                         <div className="border-t border-slate-200 pt-4 space-y-4">
@@ -684,6 +760,12 @@ export default function PDVPage() {
                                 <div className="flex justify-between items-center text-sm text-red-400 font-bold">
                                     <span>Desconto</span>
                                     <span>- R$ {descontoReais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                </div>
+                            )}
+                            {tradeIn && (
+                                <div className="flex justify-between items-center text-sm text-emerald-400 font-bold">
+                                    <span>Trade-in ({tradeIn.device_name})</span>
+                                    <span>- R$ {(tradeIn.applied_value / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                 </div>
                             )}
                             {taxaGatewayCentavos > 0 && (
@@ -840,6 +922,19 @@ export default function PDVPage() {
                         setSelectedClient(novoCliente);
                         setSearchClient("");
                         setShowNewClientModal(false);
+                    }}
+                />
+            )}
+
+            {showTradeInModal && profile && (
+                <TradeInModal 
+                    tenantId={profile.empresa_id}
+                    unitId={profile.unit_id || "matriz"}
+                    clienteId={selectedClient?.id}
+                    onClose={() => setShowTradeInModal(false)}
+                    onApplied={(data) => {
+                        setTradeIn(data);
+                        setShowTradeInModal(false);
                     }}
                 />
             )}

@@ -103,6 +103,18 @@ export async function POST(request: NextRequest) {
                     hasErrors = true;
                 } else {
                     results.push({ chave, success: true });
+
+                    // 4. Se for a chave de onboarding e estiver completo, atualizar a empresa principal
+                    if (chave === "system_onboarding" && valor?.completed === true) {
+                        const { error: empStatusError } = await supabaseAdmin
+                            .from("empresas")
+                            .update({ onboarding_completed: true })
+                            .eq("id", empresa_id);
+                        
+                        if (empStatusError) {
+                            console.error("[Onboarding API] Erro ao marcar empresa como concluída:", empStatusError);
+                        }
+                    }
                 }
             }
         }

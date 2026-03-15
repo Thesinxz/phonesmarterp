@@ -13,7 +13,7 @@ export interface OnboardingStatus {
 }
 
 export function useOnboardingStatus() {
-    const { profile, isLoading: authLoading } = useAuth();
+    const { profile, empresa, isLoading: authLoading } = useAuth();
     const [status, setStatus] = useState<OnboardingStatus | null>(null);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
@@ -32,6 +32,16 @@ export function useOnboardingStatus() {
 
         const loadStatus = async () => {
             logger.log("[Onboarding] Carregando status remoto para empresa:", profile.empresa_id);
+            
+            // 1. Prioridade: Verificar se a empresa já está marcada como 'onboarding_completed' 
+            // no registro principal (empresas). Isso evita redespacho se for cópia.
+            if (empresa?.onboarding_completed) {
+                logger.log("[Onboarding] Empresa marcada como concluída no registro principal.");
+                setStatus({ completed: true, step: 8, skipped: false });
+                setLoading(false);
+                return;
+            }
+
             try {
                 // SELECT usa o client normal (leitura nunca travou)
                 const { data, error } = await (supabase.from("configuracoes") as any)
@@ -75,7 +85,7 @@ export function useOnboardingStatus() {
 
         loadStatus();
         return () => clearTimeout(timeout);
-    }, [profile?.empresa_id, authLoading]);
+    }, [profile?.empresa_id, authLoading, empresa?.onboarding_completed]);
 
     const updateStatus = useCallback(async (newStatus: Partial<OnboardingStatus>) => {
         if (!profile?.empresa_id) {

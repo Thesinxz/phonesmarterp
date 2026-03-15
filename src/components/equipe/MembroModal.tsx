@@ -84,6 +84,7 @@ export default function MembroModal({ isOpen, onClose, onSuccess, membro }: Memb
                 const result = await criarMembroEquipe({
                     ...form,
                     empresa_id: profile.empresa_id,
+                    unit_id: null,
                     auth_user_id: null
                 }, session?.access_token);
 

@@ -1,0 +1,24 @@
+src/app/(dashboard)/marketing/campanhas/page.tsx(82,17): error TS2554: Expected 1 arguments, but got 0.
+src/app/(dashboard)/marketing/page.tsx(39,35): error TS18047: 'profile' is possibly 'null'.
+src/app/(dashboard)/marketing/page.tsx(40,34): error TS18047: 'profile' is possibly 'null'.
+src/app/(dashboard)/marketing/pos-venda/page.tsx(67,31): error TS18047: 'profile' is possibly 'null'.
+src/app/(dashboard)/marketing/pos-venda/page.tsx(68,30): error TS18047: 'profile' is possibly 'null'.
+src/app/(dashboard)/marketing/templates/page.tsx(64,45): error TS18047: 'profile' is possibly 'null'.
+src/app/(dashboard)/pdv/page.tsx(555,39): error TS2367: This comparison appears to be unintentional because the types '"admin" | "gerente" | "tecnico" | "financeiro" | "atendente" | undefined' and '"dono"' have no overlap.
+src/app/actions/trade-in.ts(28,24): error TS2345: Argument of type '"trade_in"' is not assignable to parameter of type 'Feature'.
+src/app/actions/trade-in.ts(29,26): error TS2304: Cannot find name 'createClient'.
+src/app/actions/trade-in.ts(67,24): error TS2345: Argument of type '"trade_in"' is not assignable to parameter of type 'Feature'.
+src/app/actions/trade-in.ts(68,26): error TS2304: Cannot find name 'createClient'.
+src/app/actions/trade-in.ts(218,24): error TS2345: Argument of type '"trade_in"' is not assignable to parameter of type 'Feature'.
+src/app/actions/trade-in.ts(219,26): error TS2304: Cannot find name 'createClient'.
+src/app/actions/trade-in.ts(238,26): error TS2304: Cannot find name 'createClient'.
+src/components/equipe/MembroModal.tsx(84,56): error TS2345: Argument of type '{ empresa_id: string; unit_id: null; auth_user_id: null; nome: string; email: string; papel: Usuario["papel"]; ativo: boolean; permissoes_json: any; }' is not assignable to parameter of type 'Omit<{ id: string; auth_user_id: string | null; empresa_id: string; unit_id: string | null; nome: string; email: string; papel: "admin" | "gerente" | "tecnico" | "financeiro" | "atendente"; ... 10 more ...; created_at: string; }, "id" | "created_at">'.
+  Type '{ empresa_id: string; unit_id: null; auth_user_id: null; nome: string; email: string; papel: "admin" | "gerente" | "tecnico" | "financeiro" | "atendente"; ativo: boolean; permissoes_json: any; }' is missing the following properties from type 'Omit<{ id: string; auth_user_id: string | null; empresa_id: string; unit_id: string | null; nome: string; email: string; papel: "admin" | "gerente" | "tecnico" | "financeiro" | "atendente"; ... 10 more ...; created_at: string; }, "id" | "created_at">': plano, trial_end, plano_expira_em, trial_start, and 4 more.
+src/components/layout/NovaEmpresaModal.tsx(140,19): error TS2339: Property 'valor' does not exist on type 'never'.
+src/components/layout/NovaEmpresaModal.tsx(141,28): error TS2339: Property 'valor' does not exist on type 'never'.
+src/components/layout/Sidebar.tsx(352,38): error TS18048: 'item.children' is possibly 'undefined'.
+src/lib/plans/features.ts(186,3): error TS2322: Type 'NonNullable<{ maxUsuarios: number | null; maxTecnicos: number | null; maxOsPerMonth: number | null; maxStorageMB: number; maxEmpresas: number | null; maxUnidades: number | null; }[K]> | null' is not assignable to type '{ maxUsuarios: number | null; maxTecnicos: number | null; maxOsPerMonth: number | null; maxStorageMB: number; maxEmpresas: number | null; maxUnidades: number | null; }[K]'.
+  Type 'null' is not assignable to type '{ maxUsuarios: number | null; maxTecnicos: number | null; maxOsPerMonth: number | null; maxStorageMB: number; maxEmpresas: number | null; maxUnidades: number | null; }[K]'.
+    Type 'null' is not assignable to type 'number'.
+src/lib/plans/guard.ts(10,45): error TS2339: Property 'auth' does not exist on type 'Promise<SupabaseClient<Database, "public", { Tables: { empresas: { Row: { id: string; nome: string; cnpj: string | null; subdominio: string; plano: "starter" | "enterprise" | "profissional"; certificado_a1: string | null; ... 5 more ...; updated_at: string; }; Insert: Omit<...>; Update: Partial<...>; }; ... 41 more ...'.
+src/lib/plans/guard.ts(18,6): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<Database, "public", { Tables: { empresas: { Row: { id: string; nome: string; cnpj: string | null; subdominio: string; plano: "starter" | "enterprise" | "profissional"; certificado_a1: string | null; ... 5 more ...; updated_at: string; }; Insert: Omit<...>; Update: Partial<...>; }; ... 41 more ...'.

@@ -189,3 +189,25 @@ export async function notifyPedidoStatus(pedidoId: string, newStatus: string) {
 
     return await sendWhatsAppTemplate(pedido.cliente.telefone, config.status_template, components);
 }
+
+export async function createInternalNotification(params: {
+    tenantId: string;
+    unitId?: string | null;
+    userId?: string | null;
+    message: string;
+    link?: string;
+}) {
+    const supabase = await createClient();
+    
+    const { error } = await (supabase as any)
+        .from('notifications')
+        .insert({
+            tenant_id: params.tenantId,
+            unit_id: params.unitId,
+            user_id: params.userId,
+            message: params.message,
+            link: params.link
+        });
+
+    if (error) console.error("Error creating internal notification:", error);
+}

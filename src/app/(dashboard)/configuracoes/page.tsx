@@ -32,7 +32,8 @@ import {
     Monitor,
     Copy,
     Link2,
-    Loader2
+    Loader2,
+    Layers
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -43,8 +44,11 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
 import { syncConfigToAll } from "@/services/configuracoes";
+import { CatalogoPanel } from "./CatalogoPanel";
+import { UnidadesPanel } from "./UnidadesPanel";
+import { LayoutGrid } from "lucide-react";
 
-type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "ai_config" | "vitrine" | "etiquetas" | "auditoria" | "contador" | "crediario" | "termos_os";
+type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "unidades" | "catalogo" | "ai_config" | "vitrine" | "etiquetas" | "auditoria" | "contador" | "crediario" | "termos_os";
 
 import { type WhatsappConfig, type FinanceiroConfig } from "@/types/configuracoes";
 import { getFiscalConfig, upsertFiscalConfig, ConfiguracaoFiscal } from "@/services/fiscal";
@@ -92,10 +96,13 @@ const codigosUF: Record<string, string> = {
 };
 
 export default function ConfiguracoesPage() {
-    const { user, profile, isLoading } = useAuth();
+    const { user, profile, empresa, isLoading } = useAuth();
     const { refresh: refreshFinanceConfig } = useFinanceConfig();
     const [activeTab, setActiveTab] = useState<Tab>("empresa");
     const [saving, setSaving] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [confirmDeleteName, setConfirmDeleteName] = useState("");
+    const [isDeleting, setIsDeleting] = useState(false);
     const [sefazStatus, setSefazStatus] = useState<"checking" | "online" | "offline" | "unconfigured">("unconfigured");
     const [showSenha, setShowSenha] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
@@ -322,11 +329,19 @@ export default function ConfiguracoesPage() {
         }
     });
 
-    if (isLoading) {
+    if (isLoading || !configsLoaded || !profile?.empresa_id) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
                 <RefreshCw className="animate-spin text-brand-500" size={40} />
                 <p className="text-slate-500 font-medium animate-pulse">Carregando configurações...</p>
+                
+                {/* Fallback para evitar carregamento infinito caso algo trave */}
+                <button 
+                    onClick={() => fetchConfigs()}
+                    className="mt-4 text-xs text-brand-600 font-bold hover:underline"
+                >
+                    Recarregar dados manualmente
+                </button>
             </div>
         );
     }
@@ -535,7 +550,9 @@ export default function ConfiguracoesPage() {
         { id: "fiscal", label: "Configuração Fiscal", icon: FileText, desc: "NF-e / NFC-e / SEFAZ" },
         { id: "certificado", label: "Certificado Digital", icon: Shield, desc: "A1 (.pfx) + CSC" },
         { id: "whatsapp", label: "WhatsApp", icon: MessageSquare, desc: "Notificações automáticas" },
+        { id: "unidades", label: "Unidades", icon: LayoutGrid, desc: "Capacidades das Lojas" },
         { id: "financeiro", label: "Margens & Taxas", icon: DollarSign, desc: "Calculadoras e Lucro" },
+        { id: "catalogo", label: "Catálogo", icon: Layers, desc: "Marcas e Segmentos" },
         { id: "ai_config", label: "IA e OCR", icon: Sparkles, desc: "Gemini 2.5 Flash" },
         { id: "vitrine", label: "Vitrine Online", icon: ShoppingBag, desc: "Catálogo público + TV" },
         { id: "crediario", label: "Crediário & Efíbank", icon: CreditCard, desc: "Fiado e Boletos" },
@@ -607,6 +624,11 @@ export default function ConfiguracoesPage() {
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
+                        {/* ── UNIDADES ── */}
+                        {activeTab === "unidades" && (
+                            <UnidadesPanel />
+                        )}
+
                         {/* ── EMPRESA ── */}
                         {activeTab === "empresa" && (
                             <GlassCard title="Dados do Emitente" icon={Building2}>
@@ -1076,6 +1098,10 @@ export default function ConfiguracoesPage() {
                         )}
 
                         {/* ── FINANCEIRO ── */}
+                        {activeTab === "catalogo" && (
+                            <CatalogoPanel />
+                        )}
+
                         {activeTab === "financeiro" && (
                             <div className="space-y-6">
                                 <GlassCard title="Impostos e Margens Globais" icon={Percent}>
@@ -2084,6 +2110,104 @@ export default function ConfiguracoesPage() {
                         )}
                     </div>
                 </div>
+
+                {/* Zona de Perigo */}
+                {activeTab === "empresa" && profile?.papel === 'admin' && (
+                    <div className="mt-12 pt-8 border-t border-red-100 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <div className="flex items-center gap-2 mb-6 text-red-600">
+                            <AlertTriangle size={20} />
+                            <h2 className="text-lg font-black uppercase tracking-widest">Zona de Perigo</h2>
+                        </div>
+                        
+                        <div className="bg-red-50/50 border border-red-100 rounded-3xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 transition-all hover:bg-red-50">
+                            <div className="max-w-xl">
+                                <h3 className="text-red-900 font-bold text-lg">Excluir Empresa</h3>
+                                <p className="text-red-700/70 text-sm mt-1 leading-relaxed">
+                                    Esta ação é irreversível. Todos os dados desta empresa, incluindo estoque, vendas, clientes e configurações, serão permanentemente removidos.
+                                </p>
+                            </div>
+                            <button 
+                                onClick={() => setShowDeleteModal(true)}
+                                className="w-full md:w-auto px-8 py-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl transition-all shadow-lg shadow-red-200 active:scale-95 flex items-center justify-center gap-2"
+                            >
+                                <Trash2 size={16} />
+                                Excluir Permanentemente
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Exclusão */}
+                {showDeleteModal && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+                        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
+                        
+                        <div className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 md:p-8 overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-1.5 bg-red-600" />
+                            
+                            <div className="flex flex-col items-center text-center gap-4">
+                                <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center animate-bounce">
+                                    <AlertTriangle size={32} />
+                                </div>
+                                
+                                <div>
+                                    <h3 className="text-xl font-bold text-slate-800">Você tem certeza absoluta?</h3>
+                                    <p className="text-slate-500 text-sm mt-2">
+                                        Esta ação não pode ser desfeita. Para confirmar, digite o nome da empresa abaixo:
+                                    </p>
+                                    <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                        <p className="text-xs font-black text-slate-700 uppercase tracking-widest">{empresa?.nome}</p>
+                                    </div>
+                                </div>
+
+                                <div className="w-full space-y-4">
+                                    <input 
+                                        type="text"
+                                        placeholder="Digite o nome da empresa"
+                                        className="w-full input-glass text-center font-bold"
+                                        value={confirmDeleteName}
+                                        onChange={e => setConfirmDeleteName(e.target.value)}
+                                    />
+                                    
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                        <button 
+                                            onClick={() => setShowDeleteModal(false)}
+                                            className="flex-1 px-6 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-50 transition-all border border-slate-100"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button 
+                                            disabled={isDeleting || confirmDeleteName.toLowerCase() !== empresa?.nome.toLowerCase()}
+                                            onClick={async () => {
+                                                if (!profile?.auth_user_id || !empresa?.id) return;
+                                                setIsDeleting(true);
+                                                const { deleteEmpresa } = await import("@/app/actions/companies");
+                                                const result = await deleteEmpresa({
+                                                    empresaId: empresa.id,
+                                                    userId: profile.auth_user_id,
+                                                    confirmationName: confirmDeleteName
+                                                });
+                                                
+                                                if (result.success) {
+                                                    toast.success("Empresa excluída com sucesso!");
+                                                    // Limpar localstorage e redirecionar
+                                                    localStorage.removeItem('phonesmart_active_empresa_id');
+                                                    window.location.href = "/dashboard";
+                                                } else {
+                                                    toast.error(result.error || "Erro ao excluir empresa.");
+                                                    setIsDeleting(false);
+                                                }
+                                            }}
+                                            className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-red-100 disabled:opacity-30 disabled:grayscale"
+                                        >
+                                            {isDeleting ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Excluir Empresa"}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </PermissionGuard>
     );

@@ -40,10 +40,12 @@ export default function NovoFinanceiroPage() {
 
         setLoading(true);
         try {
-            const valorCentavos = Math.round(parseFloat(form.valor.replace(",", ".")) * 100);
+            // Remove pontos de milhar e substitui vírgula por ponto para parsing correto
+            const cleanValue = form.valor.replace(/\./g, '').replace(',', '.');
+            const valorCentavos = Math.round(parseFloat(cleanValue) * 100);
 
-            if (isNaN(valorCentavos)) {
-                throw new Error("Valor inválido");
+            if (isNaN(valorCentavos) || valorCentavos <= 0) {
+                throw new Error("Valor inválido ou menor/igual a zero");
             }
 
             await createMovimentacao({

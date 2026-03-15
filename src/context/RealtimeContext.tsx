@@ -18,12 +18,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     const { profile } = useAuth();
 
     useEffect(() => {
-        if (!profile) return;
+        if (!profile?.empresa_id) return;
 
-        logger.log("[RealtimeProvider] Initializing global subscriptions for profile:", profile.id);
-
-        // Global listeners could be added here
-        // For example, if we want to listen for global system alerts or specific company-wide events
+        logger.log("[RealtimeProvider] Initializing global subscriptions for company:", profile.empresa_id);
 
         const channel = supabase
             .channel(`global-events-${profile.empresa_id}`)

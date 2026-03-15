@@ -21,6 +21,10 @@ import Link from "next/link";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { cn } from "@/utils/cn";
+import { getLowStockParts } from "@/app/actions/parts";
+import { useAuth } from "@/context/AuthContext";
+import { useState, useEffect } from "react";
+import { AlertTriangle, Info } from "lucide-react";
 
 const eventoColors: Record<string, string> = {
     receber: "bg-emerald-100 text-emerald-700",
@@ -30,7 +34,15 @@ const eventoColors: Record<string, string> = {
 };
 
 export default function DashboardPage() {
+    const { profile } = useAuth();
     const { metrics, loading, faturamentoDia, agendaSemana, atividades } = useDashboardMetrics();
+    const [lowStockParts, setLowStockParts] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (profile) {
+            getLowStockParts(profile.empresa_id).then(setLowStockParts);
+        }
+    }, [profile]);
 
     // Calcular trends reais
     const osHojeChange = metrics.osAbertasOntem;
@@ -102,6 +114,40 @@ export default function DashboardPage() {
                     <p className="text-slate-500 text-sm mt-0.5">Visão geral em tempo real</p>
                 </div>
             </div>
+
+            {/* Low Stock Alert */}
+            {lowStockParts.length > 0 && (
+                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 shadow-inner">
+                            <AlertTriangle size={24} />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-slate-800">Possível falta de peças!</h3>
+                            <p className="text-xs text-slate-500">
+                                <span className="font-bold text-amber-600">{lowStockParts.length} peças</span> com estoque no limite ou zerado.
+                            </p>
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                                {lowStockParts.slice(0, 3).map((p, i) => (
+                                    <span key={i} className="text-[10px] text-slate-500">
+                                        • {p.name} <span className="font-bold">({p.unitName}: {p.qty})</span>
+                                    </span>
+                                ))}
+                                {lowStockParts.length > 3 && (
+                                    <span className="text-[10px] text-slate-400 italic">...e mais {lowStockParts.length - 3}</span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <Link 
+                        href="/estoque?filter=baixo_estoque" 
+                        className="bg-white px-4 py-2 rounded-xl text-xs font-bold text-slate-700 border border-slate-200 hover:bg-slate-50 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
+                    >
+                        Ver todos no Estoque
+                        <Info size={14} className="text-slate-400" />
+                    </Link>
+                </div>
+            )}
 
             {/* Metric Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">

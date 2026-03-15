@@ -23,7 +23,7 @@ export async function getMembrosEquipe(empresaId: string) {
     return data as Usuario[];
 }
 
-export async function criarMembroEquipe(data: Omit<Usuario, "id" | "created_at">, explicitToken?: string) {
+export async function criarMembroEquipe(data: Partial<Usuario> & { empresa_id: string, email: string, papel: Usuario["papel"] }, explicitToken?: string) {
     const token = crypto.randomUUID();
     const payload = {
         id: token,

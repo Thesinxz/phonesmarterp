@@ -6,7 +6,7 @@ const supabase = createClient();
 
 interface FinalizarVendaData {
     venda: Database["public"]["Tables"]["vendas"]["Insert"];
-    itens: Omit<Database["public"]["Tables"]["venda_itens"]["Insert"], "venda_id">[];
+    itens: (Omit<Database["public"]["Tables"]["venda_itens"]["Insert"], "venda_id"> & { imei_id?: string | null; imei?: string | null })[];
     usuarioId: string;
 }
 
@@ -98,7 +98,7 @@ export async function finalizarVenda({ venda, itens, usuarioId }: FinalizarVenda
     }
 
     // 4. Baixar estoque dos produtos e Pontos de Fidelidade
-    for (const item of itens) {
+    for (const item of (itens as any)) {
         if (item.produto_id) {
             const { data: prod } = await supabase
                 .from("produtos")
@@ -113,7 +113,41 @@ export async function finalizarVenda({ venda, itens, usuarioId }: FinalizarVenda
                     .update({ estoque_qtd: Math.max(0, estoqueAtual - (item as any).quantidade) })
                     .eq("id", item.produto_id);
 
-                // --- TIMELINE DO PRODUTO ---
+                // --- ATUALIZAR STATUS DO IMEI SE HOUVER ---
+                if (item.imei_id) {
+                    try {
+                        const { error: imeiError } = await (supabase.from("device_imeis") as any)
+                            .update({ 
+                                status: "vendido",
+                                sale_id: vendaData.id,
+                                sold_to_customer_id: venda.cliente_id,
+                                sold_at: new Date().toISOString(),
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq("id", item.imei_id);
+
+                        if (imeiError) console.error("Erro ao atualizar status do IMEI:", imeiError);
+
+                        // Registrar no histórico
+                        const { data: imeiRecord } = await (supabase.from("device_imeis") as any).select("imei").eq("id", item.imei_id).single();
+                        
+                        await (supabase.from("imei_history") as any).insert({
+                            tenant_id: venda.empresa_id,
+                            imei_id: item.imei_id,
+                            imei: imeiRecord?.imei || "Desconhecido",
+                            event_type: "vendido",
+                            from_status: "em_estoque",
+                            to_status: "vendido",
+                            reference_id: vendaData.id,
+                            performed_by: usuarioId,
+                            notes: `Vendido no pedido #${vendaData.numero || vendaData.id.substring(0, 8)}`
+                        });
+                    } catch (e) {
+                        console.error("Erro ao processar IMEI na venda:", e);
+                    }
+                }
+
+                // --- TIMELINE DO PRODUTO (LEGACY) ---
                 try {
                     await addProdutoHistorico(
                         item.produto_id,
@@ -326,9 +360,27 @@ export async function getVendas(page = 1, limit = 50, filters?: { tipo?: "pdv" |
     if (filters?.status) query = query.eq("status_pedido", filters.status);
     if (filters?.search) {
         const cleanSearch = filters.search.trim().replace(/\s+/g, "%");
-        // Nota: para filtrar por campos de tabelas relacionadas no Supabase tipo 'or',
-        // precisamos que o select inclua a relação.
-        query = query.or(`canal_venda.ilike.%${cleanSearch}%,id.ilike.%${cleanSearch}%,cliente_nome_manual.ilike.%${cleanSearch}%`);
+        
+        // Detectar se é um IMEI (15 dígitos)
+        const isImei = /^\d{15}$/.test(cleanSearch.replace(/\D/g, ''));
+
+        if (isImei) {
+            // Se for IMEI, buscamos na tabela de itens e pegamos os IDs das vendas
+            const { data: itemMatches } = await (supabase.from("venda_itens") as any)
+                .select("venda_id")
+                .eq("imei", cleanSearch)
+                .limit(5);
+
+            if (itemMatches && itemMatches.length > 0) {
+                const vendaIds = itemMatches.map((m: any) => m.venda_id);
+                query = query.in("id", vendaIds);
+            } else {
+                // Se não achou por IMEI exato, cai na busca comum
+                query = query.or(`canal_venda.ilike.%${cleanSearch}%,id.ilike.%${cleanSearch}%,cliente_nome_manual.ilike.%${cleanSearch}%`);
+            }
+        } else {
+            query = query.or(`canal_venda.ilike.%${cleanSearch}%,id.ilike.%${cleanSearch}%,cliente_nome_manual.ilike.%${cleanSearch}%`);
+        }
     }
     if (filters?.startDate) query = query.gte("created_at", `${filters.startDate}T00:00:00`);
     if (filters?.endDate) query = query.lte("created_at", `${filters.endDate}T23:59:59`);

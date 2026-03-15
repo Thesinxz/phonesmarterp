@@ -22,6 +22,7 @@ import { cn } from "@/utils/cn";
 import MembroModal from "@/components/equipe/MembroModal";
 import { useRealtimeSubscription } from "@/hooks/useRealtime";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { FeatureGate } from "@/components/plans/FeatureGate";
 
 export default function EquipePage() {
     const { profile } = useAuth();
@@ -80,7 +81,8 @@ export default function EquipePage() {
 
     return (
         <PermissionGuard modulo="equipe" fallback="error">
-            <div className="space-y-6">
+            <FeatureGate feature="gestao_equipe" featureName="Gestão de Equipe">
+                <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <h1 className="text-xl md:text-2xl font-bold text-slate-900">Gestão de Equipe</h1>
@@ -215,7 +217,8 @@ export default function EquipePage() {
                     onSuccess={loadData}
                     membro={selectedMembro}
                 />
-            </div>
+                </div>
+            </FeatureGate>
         </PermissionGuard>
     );
 }

@@ -115,11 +115,18 @@ export function OSKanbanCard({ os, onClick, onMoveStatus, onDelete, onEdit }: OS
             </div>
 
             <div onClick={onClick} className="cursor-pointer space-y-2">
-                <div>
-                    <h4 className="font-bold text-slate-800 text-sm mb-0.5 truncate leading-tight">
-                        {os.equipamento?.modelo || (os as any).modelo_equipamento || "Sem Modelo"}
-                    </h4>
-                    <p className="text-[10px] text-slate-400 truncate uppercase tracking-tight">{os.equipamento?.marca || (os as any).marca_equipamento || "Sem Marca"}</p>
+                <div className="flex items-center justify-between mb-0.5">
+                    <div>
+                        <h4 className="font-bold text-slate-800 text-sm mb-0.5 truncate leading-tight">
+                            {os.equipamento?.modelo || (os as any).modelo_equipamento || "Sem Modelo"}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 truncate uppercase tracking-tight">{os.equipamento?.marca || (os as any).marca_equipamento || "Sem Marca"}</p>
+                    </div>
+                    {os.problema_relatado?.includes("Trade-in:") && (
+                        <div className="bg-brand-50 text-brand-600 px-1.5 py-0.5 rounded-lg border border-brand-100 flex items-center gap-1 shrink-0">
+                            <span className="text-[9px] font-black uppercase tracking-tighter">Trade-in</span>
+                        </div>
+                    )}
                 </div>
 
                 <div className="bg-slate-50/80 rounded-lg p-2 border border-slate-100/50">

@@ -682,7 +682,10 @@ export default function CalculoEmMassa() {
                         cest: null,
                         saude_bateria: null,
                         memoria_ram: null,
-                        imagem_url: null
+                        imagem_url: null,
+                        product_type_id: null,
+                        pricing_segment_id: null,
+                        brand_id: null
                     };
                 });
 
@@ -1097,9 +1100,20 @@ export default function CalculoEmMassa() {
 
             {step === 2 && (
                 <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    {/* Left: Table Column */}
-                    <div className="xl:col-span-8 space-y-6">
-                        <GlassCard title="Passo 2: Conferência Técnica" icon={FileSearch}>
+                    {/* Main Column - Full Width */}
+                    <div className="xl:col-span-12 space-y-6">
+                        <GlassCard title="Passo 2: Conferência Técnica" icon={FileSearch} action={
+                            ocrImages.length > 0 && (
+                                <button
+                                    onClick={() => setShowFullImage(true)}
+                                    className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-brand-500 transition-all flex items-center gap-1.5"
+                                    title="Ver Documento Original"
+                                >
+                                    <Eye size={16} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest leading-none">Ver Documento</span>
+                                </button>
+                            )
+                        }>
                             <div className="p-6 bg-brand-50/30 border-b border-brand-100/50">
                                 <p className="text-xs font-bold text-brand-700">
                                     Verifique se os nomes, categorias e custos foram identificados corretamente. Você pode ajustar qualquer campo nesta tabela.
@@ -1221,96 +1235,6 @@ export default function CalculoEmMassa() {
                                 </button>
                             </div>
                         </GlassCard>
-                    </div>
-
-                    {/* Right: Image Preview Column */}
-                    <div className="xl:col-span-4 space-y-6 sticky top-24 h-fit max-h-[80vh]">
-                        <GlassCard
-                            title={`Doc. Original (${currentImageIndex + 1}/${ocrImages.length})`}
-                            icon={Scan}
-                            action={
-                                <div className="flex items-center gap-2">
-                                    {ocrImages.length > 1 && (
-                                        <div className="flex items-center bg-slate-100 rounded-lg p-1 mr-2">
-                                            <button
-                                                onClick={() => setCurrentImageIndex(prev => Math.max(0, prev - 1))}
-                                                disabled={currentImageIndex === 0}
-                                                className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"
-                                            >
-                                                <ArrowLeft size={14} />
-                                            </button>
-                                            <button
-                                                onClick={() => setCurrentImageIndex(prev => Math.min(ocrImages.length - 1, prev + 1))}
-                                                disabled={currentImageIndex === ocrImages.length - 1}
-                                                className="p-1 hover:bg-white rounded transition-colors disabled:opacity-30"
-                                            >
-                                                <ChevronRight size={14} />
-                                            </button>
-                                        </div>
-                                    )}
-                                    {ocrImages.length > 0 && (
-                                        <button
-                                            onClick={() => setShowFullImage(true)}
-                                            className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-brand-500 transition-all flex items-center gap-1.5"
-                                            title="Expandir Imagem"
-                                        >
-                                            <Maximize2 size={16} />
-                                            <span className="text-[10px] font-black uppercase">Expandir</span>
-                                        </button>
-                                    )}
-                                </div>
-                            }
-                        >
-                            <div className="p-4 bg-slate-900 overflow-hidden relative group">
-                                <div className="absolute top-4 left-4 z-10">
-                                    <span className="bg-brand-500 text-[9px] font-black text-white px-3 py-1.5 rounded-full uppercase tracking-widest flex items-center gap-2 shadow-emerald-glow">
-                                        <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                                        Visualização em Tempo Real
-                                    </span>
-                                </div>
-                                <div className="h-[600px] overflow-y-auto overflow-x-hidden custom-scrollbar bg-slate-800 rounded-2xl border border-white/5 relative">
-                                    {ocrImages.length > 0 ? (
-                                        <img
-                                            src={ocrImages[currentImageIndex]}
-                                            alt="OCR Invoice"
-                                            className="w-full h-auto object-contain opacity-90 group-hover:opacity-100 transition-opacity cursor-zoom-in"
-                                            onClick={() => setShowFullImage(true)}
-                                        />
-                                    ) : (
-                                        <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-4">
-                                            <FileText size={48} className="opacity-20" />
-                                            <p className="text-[10px] uppercase font-black tracking-widest">Aguardando Documento...</p>
-                                        </div>
-                                    )}
-
-                                    {/* Glass Overlay for Depth */}
-                                    <div className="absolute inset-0 pointer-events-none border border-white/10 rounded-2xl shadow-inner" />
-                                </div>
-
-                                <div className="mt-4 flex items-center justify-between">
-                                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                                        Use o scroll para navegar na nota
-                                    </p>
-                                    <div className="flex gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                                        <div className="w-2 h-2 rounded-full bg-slate-700" />
-                                        <div className="w-2 h-2 rounded-full bg-slate-700" />
-                                    </div>
-                                </div>
-                            </div>
-                        </GlassCard>
-
-                        <div className="bg-brand-500/10 border border-brand-500/20 p-6 rounded-[32px] flex items-center gap-4">
-                            <div className="p-2 bg-brand-500 rounded-xl">
-                                <Sparkles size={18} className="text-white" />
-                            </div>
-                            <div>
-                                <h4 className="text-xs font-black text-brand-900 uppercase tracking-tight">Dica de Atalho</h4>
-                                <p className="text-[10px] text-brand-700 leading-relaxed font-medium">
-                                    Os dados acima foram extraídos via IA. Sempre confira o <b>Custo Unitário</b> contra a imagem ao lado.
-                                </p>
-                            </div>
-                        </div>
                     </div>
                 </div>
             )}

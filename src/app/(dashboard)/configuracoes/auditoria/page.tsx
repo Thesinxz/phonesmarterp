@@ -19,6 +19,7 @@ import { getAuditLogs } from "@/services/audit";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { formatDate } from "@/utils/formatDate";
 import { cn } from "@/utils/cn";
+import { FeatureGate } from "@/components/plans/FeatureGate";
 
 export default function AuditoriaPage() {
     const [logs, setLogs] = useState<any[]>([]);
@@ -42,7 +43,8 @@ export default function AuditoriaPage() {
     }
 
     return (
-        <div className="space-y-6 page-enter pb-20">
+        <FeatureGate feature="auditoria_logs" featureName="Logs de Auditoria">
+            <div className="space-y-6 page-enter pb-20">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -192,6 +194,7 @@ export default function AuditoriaPage() {
                     </GlassCard>
                 </div>
             </div>
-        </div>
+            </div>
+        </FeatureGate>
     );
 }

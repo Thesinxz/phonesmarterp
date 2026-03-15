@@ -4,7 +4,7 @@ import { type LucideIcon } from "lucide-react";
 interface GlassCardProps {
     children: React.ReactNode;
     className?: string;
-    title?: string;
+    title?: React.ReactNode;
     icon?: LucideIcon;
     iconColor?: string;
     action?: React.ReactNode;

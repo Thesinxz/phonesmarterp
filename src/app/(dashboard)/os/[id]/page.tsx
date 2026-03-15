@@ -23,7 +23,10 @@ import {
     Edit3,
     Trash2,
     DollarSign,
-    MapPin
+    MapPin,
+    ArrowRightLeft,
+    Loader2,
+    Package
 } from "lucide-react";
 import { getOrdemServicoById, updateOSStatus, gerarTokenTeste, deleteOS, getTecnicoComMenosOS, updateOS } from "@/services/os";
 import { type OsStatus } from "@/types/database";
@@ -40,6 +43,18 @@ import { useRealtimeSubscription } from "@/hooks/useRealtime";
 import { generateSOPDF } from "@/utils/pdfGenerator";
 import { getConfigs } from "@/services/configuracoes";
 import { toast } from "sonner";
+import { PartsSearchModal } from "@/components/os/PartsSearchModal";
+import { TransferRequestModal } from "@/components/os/TransferRequestModal";
+import { 
+    confirmOSTransferSent, 
+    confirmOSTransferReceived, 
+    getOSParts, 
+    requestOSTransfer 
+} from "@/app/actions/parts";
+import { 
+    checkWarrantyValidity, 
+    getWarrantyClaimsByOS 
+} from "@/app/actions/warranty";
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
     aberta: { label: "Aberta", color: "text-slate-700", bg: "bg-slate-100" },
@@ -49,6 +64,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
     finalizada: { label: "Finalizada", color: "text-emerald-700", bg: "bg-emerald-100" },
     entregue: { label: "Entregue", color: "text-indigo-700", bg: "bg-indigo-100" },
     cancelada: { label: "Cancelada", color: "text-red-700", bg: "bg-red-100" },
+    em_transito: { label: "Em Trânsito", color: "text-blue-500", bg: "bg-blue-50" },
 };
 
 export default function OSDetalhePage({ params }: { params: { id: string } }) {
@@ -66,6 +82,11 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
     const [tokenTeste, setTokenTeste] = useState<string | null>(null);
     const [gerandoQR, setGerandoQR] = useState(false);
     const [gerandoPDF, setGerandoPDF] = useState(false);
+    const [showPartsModal, setShowPartsModal] = useState(false);
+    const [showTransferModal, setShowTransferModal] = useState(false);
+    const [transfers, setTransfers] = useState<any[]>([]);
+    const [osParts, setOsParts] = useState<any[]>([]);
+    const [loadingParts, setLoadingParts] = useState(false);
 
     // Billing States
     const [paymentMethod, setPaymentMethod] = useState("dinheiro");
@@ -75,6 +96,10 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
     const [showAdiantamentoModal, setShowAdiantamentoModal] = useState(false);
     const [valorAdiantarRaw, setValorAdiantarRaw] = useState("");
     const [formaPgtoAdiantamento, setFormaPgtoAdiantamento] = useState("dinheiro");
+
+    const [warrantyInfo, setWarrantyInfo] = useState<any>(null);
+    const [warrantyClaims, setWarrantyClaims] = useState<any[]>([]);
+    const [loadingWarranty, setLoadingWarranty] = useState(false);
 
     const [isAutoAssigning, setIsAutoAssigning] = useState(false);
 
@@ -110,8 +135,35 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
     useEffect(() => {
         if (params.id) {
             loadOS();
+            loadTransfers();
+            loadWarranty();
         }
     }, [params.id]);
+
+    async function loadWarranty() {
+        setLoadingWarranty(true);
+        try {
+            const [validity, claims] = await Promise.all([
+                checkWarrantyValidity(params.id),
+                getWarrantyClaimsByOS(params.id)
+            ]);
+            setWarrantyInfo(validity);
+            setWarrantyClaims(claims);
+        } catch (error) {
+            console.error("Erro ao carregar dados de garantia:", error);
+        } finally {
+            setLoadingWarranty(false);
+        }
+    }
+
+    async function loadTransfers() {
+        const supabase = createClient();
+        const { data } = await (supabase.from('os_unit_transfers') as any)
+            .select('*')
+            .eq('os_id', params.id)
+            .order('created_at', { ascending: false });
+        setTransfers(data || []);
+    }
 
     useRealtimeSubscription({
         table: "ordens_servico",
@@ -143,10 +195,24 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
             if (data.token_teste) {
                 setTokenTeste(data.token_teste);
             }
+            // Load parts too
+            loadParts();
         } catch (error) {
             console.error("Erro ao carregar OS:", error);
         } finally {
             if (!background) setLoading(false);
+        }
+    }
+
+    async function loadParts() {
+        setLoadingParts(true);
+        try {
+            const parts = await getOSParts(params.id);
+            setOsParts(parts);
+        } catch (error) {
+            console.error("Erro ao carregar peças:", error);
+        } finally {
+            setLoadingParts(false);
         }
     }
 
@@ -156,7 +222,9 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
         try {
             await updateOSStatus(os.id, novoStatus, profile.id, profile.empresa_id);
             notifyOSStatusChange(os.id, novoStatus).catch(e => console.error("WhatsApp error:", e));
+            if (novoStatus === 'em_execucao') setShowPartsModal(true);
             loadOS();
+            loadTransfers();
         } catch (error) {
             console.error("Erro ao atualizar status:", error);
         } finally {
@@ -327,8 +395,187 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
     const status = statusConfig[os.status] || statusConfig.aberta;
     const checklistEntrada = (os.checklist_entrada_json || os.checklist_json || {}) as ChecklistData;
 
+    const activeTransfer = transfers.find(t => t.status === 'pendente' || t.status === 'em_transito');
+
     return (
         <div className="space-y-6 page-enter pb-12">
+            {/* Banner de Transferência */}
+            {activeTransfer && (
+                <div className={cn(
+                    "p-4 rounded-2xl flex items-center justify-between animate-in slide-in-from-top-4 duration-300 shadow-lg border",
+                    activeTransfer.status === 'pendente' ? "bg-amber-50 border-amber-100" : "bg-blue-50 border-blue-100"
+                )}>
+                    <div className="flex items-center gap-4">
+                        <div className={cn(
+                            "w-10 h-10 rounded-xl flex items-center justify-center",
+                            activeTransfer.status === 'pendente' ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"
+                        )}>
+                            {activeTransfer.status === 'pendente' ? <Clock size={20} /> : <ArrowRightLeft size={20} className="animate-pulse" />}
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-slate-800">
+                                {activeTransfer.status === 'pendente' ? "Transferência Pendente" : "Equipamento em Trânsito"}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                                De unidade {activeTransfer.from_unit_id} para {activeTransfer.to_unit_id}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                        {activeTransfer.status === 'pendente' && profile?.unit_id === activeTransfer.from_unit_id && (
+                            <button
+                                onClick={async () => {
+                                    if (!profile) return;
+                                    await confirmOSTransferSent(activeTransfer.id, profile.id);
+                                    toast.success("Envio confirmado!");
+                                    loadOS();
+                                    loadTransfers();
+                                }}
+                                className="px-4 py-2 rounded-xl bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 transition-all"
+                            >
+                                Confirmar Envio
+                            </button>
+                        )}
+                        {activeTransfer.status === 'em_transito' && profile?.unit_id === activeTransfer.to_unit_id && (
+                            <button
+                                onClick={async () => {
+                                    if (!profile) return;
+                                    await confirmOSTransferReceived(activeTransfer.id, profile.id);
+                                    toast.success("Equipamento recebido na unidade!");
+                                    loadOS();
+                                    loadTransfers();
+                                }}
+                                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all"
+                            >
+                                Confirmar Recebimento
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+            {/* Banners de Transferência */}
+            {(() => {
+                const activeTransfer = os.transfers?.find((t: any) => t.status !== 'recebido');
+                const isOrigin = activeTransfer?.from_unit_id === profile?.unit_id;
+                const isDest = activeTransfer?.to_unit_id === profile?.unit_id;
+
+                // 1. Banner de Envio Pendente (Aguardando Envio)
+                if (activeTransfer?.status === 'pendente' && isOrigin) {
+                    return (
+                        <div className="mb-6 animate-in slide-in-from-top-4 duration-300">
+                            <div className="bg-amber-50 border border-amber-200 rounded-[1.5rem] p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-amber-500 flex items-center justify-center text-white">
+                                        <Wrench size={24} />
+                                    </div>
+                                    <div>
+                                        <p className="font-black text-amber-800">Esta OS precisa ser reparada na {activeTransfer.to_unit?.name}</p>
+                                        <p className="text-sm text-amber-600 font-bold">Envie o aparelho e confirme o envio para atualizar o status.</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={async () => {
+                                        if (window.confirm(`Confirmar envio para ${activeTransfer.to_unit?.name}?`)) {
+                                            setSaving(true);
+                                            try {
+                                                await confirmOSTransferSent(activeTransfer.id, profile?.id || "");
+                                                toast.success(`Envio confirmado. ${activeTransfer.to_unit?.name} foi notificada.`);
+                                                loadOS();
+                                            } catch (e) {
+                                                toast.error("Erro ao confirmar envio");
+                                            } finally {
+                                                setSaving(false);
+                                            }
+                                        }
+                                    }}
+                                    className="h-12 px-6 rounded-xl bg-amber-500 text-white font-black text-xs uppercase hover:bg-amber-600 transition-all flex items-center gap-2"
+                                >
+                                    Confirmar Envio Para {activeTransfer.to_unit?.name.toUpperCase()} <ArrowRight size={14} />
+                                </button>
+                            </div>
+                        </div>
+                    );
+                }
+
+                // 2. Banner de Em Trânsito (Visão Origem)
+                if (os.status === 'em_transito' && isOrigin) {
+                    return (
+                        <div className="mb-6 animate-in slide-in-from-top-4 duration-300">
+                            <div className="bg-blue-50 border border-blue-200 rounded-[1.5rem] p-6 flex items-center gap-4 shadow-sm">
+                                <div className="w-12 h-12 rounded-2xl bg-blue-500 flex items-center justify-center text-white">
+                                    <Package size={24} />
+                                </div>
+                                <div>
+                                    <p className="font-black text-blue-800">Aparelho em trânsito para {activeTransfer?.to_unit?.name}</p>
+                                    <p className="text-sm text-blue-600 font-bold">
+                                        Enviado em {formatDate(activeTransfer?.sent_at)} · Aguardando confirmação de recebimento.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                }
+
+                // 3. Banner de Em Trânsito (Visão Destino)
+                if (os.status === 'em_transito' && isDest) {
+                    return (
+                        <div className="mb-6 animate-in slide-in-from-top-4 duration-300">
+                            <div className="bg-blue-50 border border-blue-200 rounded-[1.5rem] p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-blue-500 flex items-center justify-center text-white">
+                                        <Package size={24} />
+                                    </div>
+                                    <div>
+                                        <p className="font-black text-blue-800">Aparelho chegando da {activeTransfer?.from_unit?.name}</p>
+                                        <p className="text-sm text-blue-600 font-bold">Enviado em {formatDate(activeTransfer?.sent_at)} · Confirme ao receber.</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={async () => {
+                                        if (window.confirm("Confirmar recebimento do aparelho?")) {
+                                            setSaving(true);
+                                            try {
+                                                await confirmOSTransferReceived(activeTransfer?.id || "", profile?.id || "");
+                                                toast.success("Recebimento confirmado!");
+                                                loadOS();
+                                            } catch (e) {
+                                                toast.error("Erro ao confirmar recebimento");
+                                            } finally {
+                                                setSaving(false);
+                                            }
+                                        }
+                                    }}
+                                    className="h-12 px-6 rounded-xl bg-blue-600 text-white font-black text-xs uppercase hover:bg-blue-700 transition-all flex items-center gap-2"
+                                >
+                                    Confirmar Recebimento <CheckCircle2 size={14} />
+                                </button>
+                            </div>
+                        </div>
+                    );
+                }
+
+                // 4. Banner de Reparo Concluído (OS em outra loja originalmente)
+                const lastReceivedTransfer = os.transfers?.filter((t: any) => t.status === 'recebido').sort((a: any, b: any) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime())[0];
+                if (os.status === 'finalizada' && lastReceivedTransfer) {
+                    return (
+                        <div className="mb-6 animate-in slide-in-from-top-4 duration-300">
+                            <div className="bg-emerald-50 border border-emerald-200 rounded-[1.5rem] p-6 flex items-center gap-4 shadow-sm">
+                                <div className="w-12 h-12 rounded-2xl bg-emerald-500 flex items-center justify-center text-white">
+                                    <CheckCircle2 size={24} />
+                                </div>
+                                <div>
+                                    <p className="font-black text-emerald-800">Reparo concluído — pronto para retirada</p>
+                                    <p className="text-sm text-emerald-600 font-bold">O cliente deve buscar o aparelho na {lastReceivedTransfer.from_unit?.name} (loja de origem).</p>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                }
+
+                return null;
+            })()}
+
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -343,6 +590,21 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                             <span className={cn("px-3 py-1 rounded-full text-xs font-bold", status.bg, status.color)}>
                                 {status.label}
                             </span>
+                            {/* Badge de Garantia */}
+                            {warrantyInfo && (os.status === "finalizada" || os.status === "entregue") && (
+                                <div className={cn(
+                                    "px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm",
+                                    warrantyInfo.isValid 
+                                        ? (warrantyInfo.daysRemaining <= 7 ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-emerald-50 text-emerald-600 border border-emerald-100")
+                                        : "bg-red-50 text-red-600 border border-red-100"
+                                )}>
+                                    <Shield size={12} />
+                                    {warrantyInfo.isValid 
+                                        ? `Garantia válida · vence em ${formatDate(warrantyInfo.expiresAt)}`
+                                        : `Garantia expirada em ${formatDate(warrantyInfo.expiresAt)}`
+                                    }
+                                </div>
+                            )}
                         </div>
                         <p className="text-slate-500 text-sm mt-0.5">
                             Aberta em {formatDate(os.created_at)}
@@ -351,6 +613,24 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                 </div>
 
                 <div className="flex gap-2">
+                    {os.status === 'aberta' && os.unit_id === profile?.unit_id && (
+                        <button
+                            onClick={() => setShowTransferModal(true)}
+                            className="h-10 px-4 rounded-xl border border-indigo-200 text-indigo-600 flex items-center gap-2 text-sm font-bold hover:bg-indigo-50 transition-all font-sans"
+                        >
+                            <ArrowRightLeft size={16} /> Solicitar Reparo Externo
+                        </button>
+                    )}
+
+                    {/* Botão Abrir Garantia */}
+                    {warrantyInfo?.isValid && (os.status === "finalizada" || os.status === "entregue") && (
+                        <Link 
+                            href={`/garantias/nova?os=${os.id}`}
+                            className="h-10 px-4 rounded-xl bg-orange-500 text-white flex items-center gap-2 text-sm font-bold hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20 font-sans"
+                        >
+                            <Shield size={16} /> Abrir Garantia
+                        </Link>
+                    )}
                     <button
                         onClick={() => setShowEditModal(true)}
                         className="h-10 px-4 rounded-xl border border-slate-200 text-slate-600 flex items-center gap-2 text-sm font-bold hover:bg-slate-50 transition-all font-sans"
@@ -414,14 +694,22 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                                 <p className="font-bold text-slate-800">{os.cliente?.nome}</p>
                                 <p className="text-xs text-slate-400">{os.cliente?.telefone || os.cliente?.email || ""}</p>
                             </div>
-                            <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Smartphone size={10} /> Equipamento</p>
-                                <p className="font-bold text-slate-800">{os.equipamento?.marca || os.marca_equipamento || "-"} {os.equipamento?.modelo || os.modelo_equipamento || ""}</p>
-                                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                                    {(os.equipamento?.imei || os.imei_equipamento) && <p className="text-[10px] text-slate-500 font-medium">IMEI: {os.equipamento?.imei || os.imei_equipamento}</p>}
-                                    {os.numero_serie && <p className="text-[10px] text-slate-500 font-medium">SÉRIE: {os.numero_serie}</p>}
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="flex-1">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Smartphone size={10} /> Equipamento</p>
+                                        <p className="font-bold text-slate-800">{os.equipamento?.marca || os.marca_equipamento || "-"} {os.equipamento?.modelo || os.modelo_equipamento || ""}</p>
+                                        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                                            {(os.equipamento?.imei || os.imei_equipamento) && <p className="text-[10px] text-slate-500 font-medium">IMEI: {os.equipamento?.imei || os.imei_equipamento}</p>}
+                                            {os.numero_serie && <p className="text-[10px] text-slate-500 font-medium">SÉRIE: {os.numero_serie}</p>}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowPartsModal(true)}
+                                        className="h-10 px-4 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase flex items-center gap-2 hover:bg-black transition-all shadow-lg shadow-slate-200"
+                                    >
+                                        <Wrench size={14} /> Buscar Peças
+                                    </button>
                                 </div>
-                            </div>
                         </div>
                         <div className="grid grid-cols-2 gap-6 mt-4 pt-4 border-t border-slate-100">
                             <div>
@@ -452,15 +740,53 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                         )}
                     </GlassCard>
 
-                    {/* Checklist de Entrada */}
-                    <GlassCard title="Checklist de Entrada" icon={ClipboardCheck}>
-                        <ChecklistInspecao
-                            tipo="entrada"
-                            value={checklistEntrada}
-                            onChange={() => { }}
-                            readOnly
-                        />
+                    {/* Peças Utilizadas */}
+                    <GlassCard title="Peças Utilizadas" icon={Wrench}>
+                        <div className="space-y-4">
+                            {loadingParts ? (
+                                <div className="flex items-center justify-center py-6">
+                                    <Loader2 className="animate-spin text-slate-300" />
+                                </div>
+                            ) : osParts.length === 0 ? (
+                                <div className="py-8 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-100">
+                                    <Package size={32} className="text-slate-200 mx-auto mb-2" />
+                                    <p className="text-xs text-slate-400 font-medium">Nenhuma peça registrada nesta OS.</p>
+                                    <button 
+                                        onClick={() => setShowPartsModal(true)}
+                                        className="mt-3 text-[10px] font-black text-indigo-600 hover:text-indigo-700"
+                                    >
+                                        + ADICIONAR PEÇA
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {osParts.map(part => (
+                                        <div key={part.id} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500">
+                                                    <Wrench size={18} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-slate-700">{part.name}</p>
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase">
+                                                        {part.qty}x · {part.unitName} · Custo: R$ {(part.costPrice / 100).toFixed(2).replace('.', ',')}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div className="pt-4 border-t border-slate-100 flex justify-between items-center px-2">
+                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Custo Total de Peças</span>
+                                        <span className="text-lg font-black text-slate-800">
+                                            R$ {(osParts.reduce((acc, curr) => acc + (curr.costPrice * curr.qty), 0) / 100).toFixed(2).replace('.', ',')}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </GlassCard>
+
+                    {/* Checklist de Entrada */}
 
                     {/* Checklist de Saída (se entregue) */}
                     {os.checklist_saida_json && (
@@ -485,6 +811,40 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
 
                 {/* Coluna Direita: Timeline & Ações */}
                 <div className="space-y-6">
+                    {/* Garantias Vinculadas */}
+                    {warrantyClaims.length > 0 && (
+                        <GlassCard title={`Garantias (${warrantyClaims.length})`} icon={Shield}>
+                            <div className="space-y-3">
+                                {warrantyClaims.map((claim: any) => (
+                                    <Link 
+                                        key={claim.id}
+                                        href={`/garantias/${claim.id}`}
+                                        className="block p-3 rounded-xl border border-indigo-50 border-white bg-indigo-50/30 hover:bg-indigo-50 transition-colors"
+                                    >
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-[10px] font-black uppercase text-indigo-500">#{claim.id.slice(0, 5).toUpperCase()}</span>
+                                            <span className={cn(
+                                                "text-[10px] font-bold px-2 py-0.5 rounded-full",
+                                                claim.status === 'aberta' ? "bg-amber-100 text-amber-700" :
+                                                claim.status === 'negada' ? "bg-red-100 text-red-700" :
+                                                "bg-emerald-100 text-emerald-700"
+                                            )}>
+                                                {claim.status.toUpperCase()}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-700 leading-tight">
+                                            {claim.claim_type === 'peca_defeituosa' ? 'Peça Defeituosa' :
+                                             claim.claim_type === 'erro_tecnico' ? 'Erro Técnico' :
+                                             claim.claim_type === 'dano_acidental' ? 'Dano Acidental' : 'Não Relacionado'}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 mt-1">
+                                            Aberta em {formatDate(claim.created_at)}
+                                        </p>
+                                    </Link>
+                                ))}
+                            </div>
+                        </GlassCard>
+                    )}
                     {/* QR Code para Rastreamento do Cliente */}
                     <GlassCard title="Acompanhamento do Cliente" icon={MapPin}>
                         {tokenTeste ? (
@@ -715,19 +1075,52 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                     </GlassCard>
 
                     {/* Timeline */}
-                    {os.timeline && os.timeline.length > 0 && (
-                        <GlassCard title="Timeline" icon={Clock}>
-                            <div className="relative border-l-2 border-indigo-100 ml-3 space-y-4 pb-2">
-                                {os.timeline.slice().sort((a: any, b: any) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime()).map((ev: any) => (
+                    <GlassCard title="Timeline" icon={Clock}>
+                        <div className="relative border-l-2 border-indigo-100 ml-3 space-y-4 pb-2">
+                            {(() => {
+                                // Conjunto de eventos: timeline + transferências
+                                const events = [
+                                    ...(os.timeline || []).map((ev: any) => ({
+                                        id: ev.id,
+                                        type: 'manual',
+                                        date: ev.criado_em,
+                                        title: ev.evento,
+                                        icon: <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-indigo-500 border-2 border-white" />
+                                    })),
+                                    ...(os.transfers || []).flatMap((t: any) => {
+                                        const tEvents = [];
+                                        if (t.created_at) tEvents.push({
+                                            id: `t-req-${t.id}`,
+                                            date: t.created_at,
+                                            title: `Solicitada transferência para ${t.to_unit?.name}`,
+                                            icon: <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-amber-500 border-2 border-white" />
+                                        });
+                                        if (t.sent_at) tEvents.push({
+                                            id: `t-sent-${t.id}`,
+                                            date: t.sent_at,
+                                            title: `Aparelho enviado para ${t.to_unit?.name} (por ${t.sent_by_name || 'Usuário'})`,
+                                            icon: <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-blue-500 border-2 border-white" />
+                                        });
+                                        if (t.received_at) tEvents.push({
+                                            id: `t-recv-${t.id}`,
+                                            date: t.received_at,
+                                            title: `Recebimento confirmado na ${t.to_unit?.name} (por ${t.received_by_name || 'Usuário'})`,
+                                            icon: <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white" />
+                                        });
+                                        return tEvents;
+                                    })
+                                ].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                                return events.map((ev: any) => (
                                     <div key={ev.id} className="relative pl-6">
-                                        <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-indigo-500 border-2 border-white" />
-                                        <p className="text-sm font-semibold text-slate-700">{ev.evento}</p>
-                                        <p className="text-[10px] text-slate-400">{formatDate(ev.criado_em)}</p>
+                                        {ev.icon}
+                                        <p className="text-sm font-semibold text-slate-700">{ev.title}</p>
+                                        <p className="text-[10px] text-slate-400">{formatDate(ev.date)}</p>
                                     </div>
-                                ))}
-                            </div>
-                        </GlassCard>
-                    )}
+                                ));
+                            })()}
+                        </div>
+                    </GlassCard>
                 </div>
             </div>
 
@@ -925,6 +1318,51 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                     </div>
                 </div>
             )}
+
+            <TransferRequestModal
+                isOpen={showTransferModal}
+                currentUnitId={profile?.unit_id || ""}
+                tenantId={profile?.empresa_id || ""}
+                onClose={() => setShowTransferModal(false)}
+                onConfirm={async (toUnitId, notes) => {
+                    setSaving(true);
+                    try {
+                        await requestOSTransfer({
+                            tenantId: profile?.empresa_id || "",
+                            osId: os.id,
+                            fromUnitId: os.unit_id,
+                            toUnitId,
+                            requestedBy: profile?.id || "",
+                            notes
+                        });
+                        toast.success("Transferência solicitada!");
+                        setShowTransferModal(false);
+                        loadOS();
+                    } catch (e) {
+                        toast.error("Erro ao solicitar transferência");
+                    } finally {
+                        setSaving(false);
+                    }
+                }}
+            />
+
+            <PartsSearchModal
+                isOpen={showPartsModal}
+                osId={os.id}
+                deviceModel={os.modelo_equipamento || os.equipamento?.modelo || ""}
+                tenantId={profile?.empresa_id || ""}
+                technicianId={profile?.id || ""}
+                currentUnitId={os.unit_id}
+                onClose={() => {
+                    setShowPartsModal(false);
+                    loadParts();
+                    loadOS(true);
+                }}
+                onPartUsed={() => {
+                    loadParts();
+                    // Don't close so they can add more
+                }}
+            />
         </div>
     );
 }

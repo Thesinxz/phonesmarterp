@@ -53,13 +53,14 @@ export interface MarketingTemplate {
 }
 
 // ─── Logs ─────────────────────────────────────────────────
-export async function getMarketingLogs(page = 1, limit = 50) {
+export async function getMarketingLogs(empresa_id: string, page = 1, limit = 50) {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, count, error } = await (supabase.from("marketing_logs") as any)
         .select("*", { count: "exact" })
+        .eq("empresa_id", empresa_id)
         .order("created_at", { ascending: false })
         .range(from, to);
 
@@ -67,13 +68,14 @@ export async function getMarketingLogs(page = 1, limit = 50) {
     return { data: (data || []) as MarketingLog[], count: count || 0, totalPages: count ? Math.ceil(count / limit) : 0 };
 }
 
-export async function getMarketingStats() {
+export async function getMarketingStats(empresa_id: string) {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase.from("marketing_logs") as any)
         .select("status, tipo")
+        .eq("empresa_id", empresa_id)
         .gte("created_at", startOfMonth);
 
     if (error) throw error;
@@ -149,10 +151,11 @@ const DEFAULT_AUTOMACOES: MarketingAutomacao[] = [
     }
 ];
 
-export async function getAutomacoes(): Promise<MarketingAutomacao[]> {
+export async function getAutomacoes(empresa_id: string): Promise<MarketingAutomacao[]> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (supabase.from("configuracoes") as any)
         .select("valor")
+        .eq("empresa_id", empresa_id)
         .eq("chave", "marketing_automacoes")
         .maybeSingle();
 
@@ -224,10 +227,11 @@ const DEFAULT_TEMPLATES: MarketingTemplate[] = [
     }
 ];
 
-export async function getTemplates(): Promise<MarketingTemplate[]> {
+export async function getTemplates(empresa_id: string): Promise<MarketingTemplate[]> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (supabase.from("configuracoes") as any)
         .select("valor")
+        .eq("empresa_id", empresa_id)
         .eq("chave", "marketing_templates")
         .maybeSingle();
 

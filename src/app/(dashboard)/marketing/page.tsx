@@ -16,6 +16,8 @@ import {
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
 import { useAuth } from "@/context/AuthContext";
+import { useFeatureGate } from "@/hooks/useFeatureGate";
+import { UpgradeBanner } from "@/components/plans/UpgradeBanner";
 import { getMarketingStats, getMarketingLogs, type MarketingLog } from "@/services/marketing";
 import { formatDate } from "@/utils/formatDate";
 
@@ -31,11 +33,12 @@ export default function MarketingPage() {
     }, [profile?.empresa_id]);
 
     async function loadData() {
+        if (!profile?.empresa_id) return;
         setLoading(true);
         try {
             const [statsData, logsData] = await Promise.all([
-                getMarketingStats(),
-                getMarketingLogs(1, 15)
+                getMarketingStats(profile.empresa_id),
+                getMarketingLogs(profile.empresa_id, 1, 15)
             ]);
             setStats(statsData);
             setLogs(logsData.data);
@@ -47,6 +50,29 @@ export default function MarketingPage() {
     }
 
     const taxaEntrega = stats.total > 0 ? Math.round((stats.entregues / stats.total) * 100) : 0;
+    const { hasAccess, upgrade } = useFeatureGate('marketing_aut');
+
+    if (!hasAccess && !loading) {
+        return (
+            <div className="space-y-6 page-enter">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/20 shrink-0">
+                        <Megaphone className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                        <h1 className="text-xl md:text-2xl font-bold text-slate-800 leading-tight">Marketing</h1>
+                        <p className="text-slate-500 text-[10px] md:text-sm mt-0.5">Central de comunicação, automações e campanhas</p>
+                    </div>
+                </div>
+                
+                <UpgradeBanner 
+                    feature="Automação de Marketing e Campanhas"
+                    requiredPlan="pro"
+                    className="mt-8"
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 page-enter pb-20 lg:pb-6">

@@ -139,8 +139,7 @@ export function calculateProductPrices(
 }
 
 /**
- * Calcula o preço de venda sugerido baseado no custo e categoria.
- * Versão simplificada para formulários.
+ * Calcula o preço de venda sugerido baseado no custo e categoria (Legado).
  */
 export function calculateSuggestedPrice(
     custoCentavos: number,
@@ -163,4 +162,24 @@ export function calculateSuggestedPrice(
             ? Math.round((custoCentavos + margemCentavos) / divisor)
             : custoCentavos + margemCentavos;
     }
+}
+
+/**
+ * Calcula o preço de venda sugerido baseado no custo e segmento (Novo Sistema).
+ */
+export function calculateSuggestedPriceBySegment(
+    custoCentavos: number,
+    segment: { default_margin: number } | null,
+    impostoPct: number
+): number {
+    if (!segment || custoCentavos <= 0) return custoCentavos;
+    
+    // Margem já vem em centavos
+    const margemCentavos = segment.default_margin;
+    
+    // Preço = (Custo + Margem) / (1 - Imposto%)
+    const divisor = 1 - (impostoPct / 100);
+    return divisor > 0.001
+        ? Math.ceil((custoCentavos + margemCentavos) / divisor)
+        : custoCentavos + margemCentavos;
 }

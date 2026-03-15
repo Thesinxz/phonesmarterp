@@ -3,673 +3,677 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-    ArrowLeft,
-    Save,
-    Package,
-    Smartphone,
-    DollarSign,
-    BarChart3,
-    Barcode,
-    FileText,
-    Tag,
-    Zap,
-    CreditCard,
-    Info,
-    ImageIcon,
-    RefreshCw,
-    Eye,
-    EyeOff,
-    Battery,
-    Cpu,
-    Layers,
-    Trash2
-} from "lucide-react";
-import { createProduto, uploadProdutoImage } from "@/services/estoque";
+import { ArrowLeft, Save, Package, Smartphone, Headphones, Wrench, DollarSign, Barcode, Eye, FileText, Upload, Tag, Cpu, X, Info } from "lucide-react";
+import { createCatalogItem } from "@/services/catalog";
+import { uploadProdutoImage } from "@/services/estoque"; // reaproveitando upload
 import { useAuth } from "@/context/AuthContext";
 import { useFinanceConfig } from "@/hooks/useFinanceConfig";
+import { calculateSuggestedPriceBySegment } from "@/utils/product-pricing";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { calculateSuggestedPrice } from "@/utils/product-pricing";
 import { cn } from "@/utils/cn";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import { Brand, PricingSegment, type CatalogItem } from "@/types/database";
+import { getExistingDeviceModels, createCatalogItemWithStock } from "@/app/actions/parts";
+import { IMEIScanner } from "@/components/inventory/IMEIScanner";
+import { registerIMEI } from "@/app/actions/imei";
 
-export default function NovoProdutoPage() {
+type ItemType = 'celular' | 'acessorio' | 'peca' | null;
+
+export default function NovoCatalogItemPage() {
     const router = useRouter();
     const { profile } = useAuth();
-    const { config, defaultGateway } = useFinanceConfig();
+    const { config } = useFinanceConfig();
     const [loading, setLoading] = useState(false);
-    const [precoEditadoManualmente, setPrecoEditadoManualmente] = useState(false);
-
+    
+    // Auxiliares
+    const [brands, setBrands] = useState<Brand[]>([]);
+    const [pricingSegments, setPricingSegments] = useState<PricingSegment[]>([]);
+    
+    const [itemType, setItemType] = useState<ItemType>(null);
+    const [precoEditado, setPrecoEditado] = useState(false);
+    
+    // Form State Universal/Específico
     const [form, setForm] = useState({
-        nome: "",
-        imei: "",
-        grade: "" as any,
-        cor: "",
-        capacidade: "", // Armazenamento
-        memoriaRam: "",
-        saudeBateria: "",
-        condicao: "novo_lacrado",
-        exibirVitrine: true,
-        imagemUrl: "",
-        precoCusto: "0,00",
-        precoVenda: "0,00",
-        estoqueQtd: "1",
-        estoqueMinimo: "1",
-        codigoBarras: "", // Usado como EAN/SKU
-        descricao: "",
-        // Fiscal
+        // Universais
+        name: "",
+        cost_price: "0,00",
+        sale_price: "0,00",
+        stock_qty: "1",
+        stock_alert_qty: "1",
+        show_in_storefront: true,
+        description: "",
+        sku: "",
+        barcode: "",
         ncm: "85171231",
         cfop: "5102",
-        origem: "0",
+        origin_code: "0",
         cest: "",
-        // Categoria
-        categoria: "",
-        subcategoria: ""
+        image_url: "",
+        
+        // Celulares
+        brand_id: "",
+        pricing_segment_id: "",
+        subcategory: "",
+        condicao: "novo_lacrado",
+        color: "",
+        grade: "",
+        storage: "",
+        ram: "",
+        battery_health: "",
+        imei: "",
+        imei2: "",
+        
+        // Acessórios
+        accessory_type: "",
+        compatible_models: "",
+        
+        // Peças
+        part_type: "",
+        quality: "",
+        part_brand: "",
+        model: "",
+        supplier: "",
+        compatible_models_parts: "" // será split(',') depois
     });
 
-    // Auto-calcular preço quando custo ou categoria mudam
     useEffect(() => {
-        if (precoEditadoManualmente || !config) return;
-        const custoCentavos = Math.round(parseFloat(form.precoCusto.replace(',', '.')) * 100) || 0;
-        if (custoCentavos <= 0) return;
+        if (!profile?.empresa_id) return;
+        const fetchData = async () => {
+            const supabase = createClient();
+            const [b, s, u] = await Promise.all([
+                supabase.from('brands').select('*').eq('empresa_id', profile.empresa_id).order('name'),
+                supabase.from('pricing_segments').select('*').eq('empresa_id', profile.empresa_id).order('name'),
+                supabase.from('units').select('*').eq('empresa_id', profile.empresa_id).eq('is_active', true).order('name')
+            ]);
+            if (b.data) setBrands(b.data as any);
+            if (s.data) setPricingSegments(s.data as any);
+            if (u.data) setUnits(u.data as any);
+        }
+        fetchData();
+    }, [profile?.empresa_id]);
 
-        const cat = config.categorias.find(c => c.nome === form.categoria) ?? null;
-        if (!cat) return;
+    const [units, setUnits] = useState<any[]>([]);
+    const [compatibleModels, setCompatibleModels] = useState<string[]>([]);
+    const [modelSearch, setModelSearch] = useState("");
+    const [modelSuggestions, setModelSuggestions] = useState<any[]>([]);
+    const [unitStocks, setUnitStocks] = useState<Record<string, string>>({});
 
-        const sugerido = calculateSuggestedPrice(custoCentavos, cat, config.taxa_nota_fiscal_pct);
-        const precoFormatado = (sugerido / 100).toFixed(2).replace('.', ',');
-        setForm(prev => ({ ...prev, precoVenda: precoFormatado }));
-    }, [form.precoCusto, form.categoria, config, precoEditadoManualmente]);
+    useEffect(() => {
+        if (modelSearch.length < 2 || !profile?.empresa_id) {
+            setModelSuggestions([]);
+            return;
+        }
+        const timer = setTimeout(async () => {
+            const suggestions = await getExistingDeviceModels(profile.empresa_id, modelSearch);
+            setModelSuggestions(suggestions);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [modelSearch, profile?.empresa_id]);
 
-    const isAccessoryOrPart = (form.categoria || form.subcategoria) && (
-        ['acessorio', 'acessório', 'peca', 'peça', 'pelicula', 'cabo'].some(term =>
-            (form.categoria?.toLowerCase() || '').includes(term) ||
-            (form.subcategoria?.toLowerCase() || '').includes(term)
-        )
-    );
-    const showColorAndGrade = !isAccessoryOrPart;
-
-    const isDevice = (form.categoria || form.subcategoria) && (
-        ['smart', 'celular', 'tablet', 'iphone', 'ipad', 'aparelho', 'macbook', 'watch'].some(term =>
-            (form.categoria?.toLowerCase() || '').includes(term) ||
-            (form.subcategoria?.toLowerCase() || '').includes(term)
-        )
-    );
-
-    const gerarSKU = () => {
-        const randomStr = Math.floor(100000 + Math.random() * 900000).toString();
-        setForm(prev => ({ ...prev, codigoBarras: `SMT-${randomStr}` }));
+    const addModelTag = (name: string) => {
+        const clean = name.trim();
+        if (clean && !compatibleModels.includes(clean)) {
+            setCompatibleModels(prev => [...prev, clean]);
+        }
+        setModelSearch("");
+        setModelSuggestions([]);
     };
+
+    const removeModelTag = (name: string) => {
+        setCompatibleModels(prev => prev.filter(m => m !== name));
+    };
+
+    useEffect(() => {
+        if (precoEditado || !config) return;
+        
+        const custo = parseInt(form.cost_price.replace(/\D/g, ''), 10);
+        if (isNaN(custo) || custo <= 0) return;
+
+        let segment = null;
+        if (itemType === 'celular' && form.pricing_segment_id) {
+            segment = pricingSegments.find(s => s.id === form.pricing_segment_id);
+        } else if (itemType === 'acessorio' || itemType === 'peca') {
+            // usar margem bruta opcional, mas no sistema legado é só custo se não tiver segmento.
+            // Para peças e acessórios, vamos exigir preencher ou aplicar lógica default
+            return;
+        }
+
+        if (segment) {
+            const sugerido = calculateSuggestedPriceBySegment(custo, segment as any, config.taxa_nota_fiscal_pct);
+            setForm(prev => ({ ...prev, sale_price: (sugerido / 100).toFixed(2).replace('.', ',') }));
+        }
+    }, [form.cost_price, form.pricing_segment_id, config, precoEditado, itemType, pricingSegments]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
+        
         if (type === 'checkbox') {
             const checked = (e.target as HTMLInputElement).checked;
             setForm(prev => ({ ...prev, [name]: checked }));
-        } else {
-            setForm(prev => ({ ...prev, [name]: value }));
+            return;
+        }
+
+        if (name === 'cost_price' || name === 'sale_price') {
+            let numStr = value.replace(/\D/g, "");
+            if (numStr === "") numStr = "0";
+            const num = parseInt(numStr, 10);
+            const strValue = (num / 100).toFixed(2).replace('.', ',');
+            setForm(prev => ({ ...prev, [name]: strValue }));
+            if (name === 'sale_price') setPrecoEditado(true);
+            return;
+        }
+
+        setForm(prev => {
+            const up = { ...prev, [name]: value };
+            if (name === 'brand_id' && itemType === 'celular') {
+                const b = brands.find(x => x.id === value);
+                if (b?.default_pricing_segment_id) {
+                    up.pricing_segment_id = b.default_pricing_segment_id;
+                }
+            }
+            return up;
+        });
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !profile?.empresa_id) return;
+
+        try {
+            toast.loading("Enviando imagem...", { id: "upload" });
+            const url = await uploadProdutoImage(file, profile.empresa_id);
+            setForm(prev => ({ ...prev, image_url: url }));
+            toast.success("Imagem enviada!", { id: "upload" });
+        } catch (error) {
+            toast.error("Erro ao enviar imagem", { id: "upload" });
         }
     };
 
-    async function handleSubmit(e: React.FormEvent) {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!profile) return;
-
         setLoading(true);
+
         try {
-            const custoCentavos = Math.round(parseFloat(form.precoCusto.replace(',', '.')) * 100) || 0;
-            const vendaCentavos = Math.round(parseFloat(form.precoVenda.replace(',', '.')) * 100) || 0;
+            if (!profile?.empresa_id) throw new Error("Empresa não identificada");
+            if (!itemType) throw new Error("Selecione o tipo de item");
 
-            await createProduto({
+            const cost_price = parseInt(form.cost_price.replace(/\D/g, ''), 10);
+            const sale_price = parseInt(form.sale_price.replace(/\D/g, ''), 10);
+
+            const stock_alert_qty = parseInt(form.stock_alert_qty, 10) || 1;
+
+            const finalUnitStocks: Record<string, number> = {};
+            if (units.length > 1) {
+                units.forEach(u => {
+                    finalUnitStocks[u.id] = parseInt(unitStocks[u.id] || "0", 10) || 0;
+                });
+            } else if (profile.unit_id) {
+                finalUnitStocks[profile.unit_id] = parseInt(form.stock_qty, 10) || 0;
+            }
+
+            const itemData = {
                 empresa_id: profile.empresa_id,
-                nome: form.nome,
-                imei: form.imei || null,
-                grade: (form.grade as any) || null,
-                cor: form.cor || null,
-                capacidade: form.capacidade || null,
-                preco_custo_centavos: custoCentavos,
-                preco_venda_centavos: vendaCentavos,
-                estoque_qtd: parseInt(form.estoqueQtd),
-                estoque_minimo: parseInt(form.estoqueMinimo),
-                codigo_barras: form.codigoBarras || null,
-                sku: form.codigoBarras || null, // salva o mesmo pro SKU por ora, ou interno
-                descricao: form.descricao || null,
-                // Avançados
-                condicao: form.condicao as any,
-                saude_bateria: form.saudeBateria ? parseInt(form.saudeBateria) : null,
-                memoria_ram: form.memoriaRam || null,
-                exibir_vitrine: form.exibirVitrine,
-                imagem_url: form.imagemUrl || null,
-                // Fiscal
-                ncm: form.ncm,
-                cfop: form.cfop,
-                origem: form.origem,
+                item_type: itemType,
+                name: form.name,
+                cost_price: isNaN(cost_price) ? 0 : cost_price,
+                sale_price: isNaN(sale_price) ? 0 : sale_price,
+                stock_qty: Object.values(finalUnitStocks).reduce((a, b) => a + b, 0),
+                stock_alert_qty: stock_alert_qty,
+                show_in_storefront: form.show_in_storefront,
+                description: form.description || null,
+                sku: form.sku || null,
+                barcode: form.barcode || null,
+                ncm: form.ncm || null,
+                cfop: form.cfop || null,
+                origin_code: form.origin_code || null,
                 cest: form.cest || null,
+                image_url: form.image_url || null,
+                
+                // Celular
+                brand_id: (itemType === 'celular' && form.brand_id) ? form.brand_id : null,
+                pricing_segment_id: (itemType === 'celular' && form.pricing_segment_id) ? form.pricing_segment_id : null,
+                subcategory: form.subcategory || null,
+                condicao: itemType === 'celular' ? form.condicao : null,
+                color: form.color || null,
+                grade: form.grade || null,
+                storage: form.storage || null,
+                ram: form.ram || null,
+                battery_health: form.battery_health ? parseInt(form.battery_health, 10) : null,
+                imei: form.imei || null,
+                imei2: form.imei2 || null,
+                
+                // Acessórios
+                accessory_type: itemType === 'acessorio' ? form.accessory_type : null,
+                compatible_models: itemType === 'acessorio' ? form.compatible_models : null,
 
-                fornecedor_id: null,
-                categoria: form.categoria || null,
-                subcategoria: form.subcategoria || null
+                // Peças
+                part_type: itemType === 'peca' ? form.part_type : null,
+                quality: itemType === 'peca' ? form.quality : null,
+                part_brand: itemType === 'peca' ? form.part_brand : null,
+                supplier: itemType === 'peca' ? form.supplier : null,
+                model: itemType === 'peca' ? form.model : null
+            };
+
+            const newItem = await createCatalogItemWithStock({
+                item: itemData,
+                unitStocks: finalUnitStocks,
+                compatibleModels: itemType === 'peca' ? compatibleModels : []
             });
 
+            // Registrar IMEI no sistema de rastreabilidade se for celular
+            if (itemType === 'celular' && form.imei && profile.id) {
+                // Determinar unidade para o IMEI (Matriz ou a única selecionada)
+                const unitId = profile.unit_id || Object.keys(finalUnitStocks)[0];
+                
+                await registerIMEI({
+                    tenantId: profile.empresa_id,
+                    imei: form.imei,
+                    catalogItemId: newItem.id,
+                    unitId: unitId,
+                    registeredBy: profile.id
+                });
+            }
+
+            toast.success("Item salvo com sucesso!");
             router.push("/estoque");
-            router.refresh();
-        } catch (error) {
-            console.error("Erro ao cadastrar produto:", error);
-            alert("Erro ao cadastrar produto.");
+        } catch (err: any) {
+            console.error(err);
+            toast.error(err.message || "Erro ao salvar o item");
         } finally {
             setLoading(false);
         }
+    };
+
+    if (!itemType) {
+        return (
+            <div className="max-w-4xl mx-auto space-y-6 page-enter pb-20">
+                 <div className="flex items-center gap-4">
+                    <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-xl transition-all">
+                        <ArrowLeft size={20} className="text-slate-500" />
+                    </button>
+                    <div>
+                        <h1 className="text-2xl font-black text-slate-800">Novo Item</h1>
+                        <p className="text-slate-500 text-sm">Selecione o tipo de item que deseja cadastrar</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 pt-4 sm:pt-8">
+                    <button onClick={() => setItemType('celular')} className="group flex flex-col items-center text-center p-6 sm:p-8 bg-white border-2 border-slate-100 hover:border-blue-400 rounded-3xl sm:rounded-[32px] transition-all hover:shadow-xl hover:-translate-y-1">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-blue-50 text-blue-500 rounded-2xl sm:rounded-3xl flex items-center justify-center mb-4 sm:mb-6 group-hover:scale-110 transition-transform">
+                            <Smartphone size={32} className="sm:w-10 sm:h-10" />
+                        </div>
+                        <h2 className="text-lg sm:text-xl font-black text-slate-800 mb-2">Celular</h2>
+                        <p className="text-xs sm:text-sm text-slate-500 font-medium">Aparelhos para revenda. Campos para IMEI, saúde da bateria, grade.</p>
+                    </button>
+
+                    <button onClick={() => setItemType('acessorio')} className="group flex flex-col items-center text-center p-6 sm:p-8 bg-white border-2 border-slate-100 hover:border-emerald-400 rounded-3xl sm:rounded-[32px] transition-all hover:shadow-xl hover:-translate-y-1">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-emerald-50 text-emerald-500 rounded-2xl sm:rounded-3xl flex items-center justify-center mb-4 sm:mb-6 group-hover:scale-110 transition-transform">
+                            <Headphones size={32} className="sm:w-10 sm:h-10" />
+                        </div>
+                        <h2 className="text-lg sm:text-xl font-black text-slate-800 mb-2">Acessório & Película</h2>
+                        <p className="text-xs sm:text-sm text-slate-500 font-medium">Capas, cabos, películas, fones. Formulário rápido sem dados do aparelho.</p>
+                    </button>
+
+                    <button onClick={() => setItemType('peca')} className="group flex flex-col items-center text-center p-6 sm:p-8 bg-white border-2 border-slate-100 hover:border-amber-400 rounded-3xl sm:rounded-[32px] transition-all hover:shadow-xl hover:-translate-y-1">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-amber-50 text-amber-500 rounded-2xl sm:rounded-3xl flex items-center justify-center mb-4 sm:mb-6 group-hover:scale-110 transition-transform">
+                            <Wrench size={32} className="sm:w-10 sm:h-10" />
+                        </div>
+                        <h2 className="text-lg sm:text-xl font-black text-slate-800 mb-2">Peça (Assistência)</h2>
+                        <p className="text-xs sm:text-sm text-slate-500 font-medium">Telas, baterias, conectores. Compatibilidade, qualidade e fornecedor.</p>
+                    </button>
+                </div>
+            </div>
+        );
     }
 
     return (
-        <div className="space-y-6 page-enter pb-12">
-            {/* Header */}
-            <div className="flex items-center gap-4">
-                <Link href="/estoque" className="p-2 hover:bg-white/50 rounded-lg transition-colors">
-                    <ArrowLeft className="w-5 h-5 text-slate-600" />
-                </Link>
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Novo Produto</h1>
-                    <p className="text-slate-500 text-sm mt-0.5">Adicione peças ou aparelhos ao inventário com dados fiscais</p>
+        <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-6 page-enter pb-32">
+            <div className="flex items-center justify-between sticky top-0 bg-slate-50/80 backdrop-blur-md z-40 py-4 -mx-4 px-4 sm:mx-0 sm:px-0">
+                <div className="flex items-center gap-4">
+                    <button type="button" onClick={() => setItemType(null)} className="p-2 bg-white hover:bg-slate-100 rounded-xl transition-all shadow-sm">
+                        <ArrowLeft size={18} className="text-slate-500" />
+                    </button>
+                    <div>
+                        <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                            {itemType === 'celular' ? <><Smartphone className="text-blue-500" size={20}/> Celular</> :
+                             itemType === 'acessorio' ? <><Headphones className="text-emerald-500" size={20}/> Acessório</> :
+                             <><Wrench className="text-amber-500" size={20}/> Peça</>}
+                        </h1>
+                        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Cadastro Unificado</p>
+                    </div>
+                </div>
+                <div className="flex gap-3">
+                    <button type="button" onClick={() => router.back()} className="btn-secondary h-11 hidden sm:flex">Cancelar</button>
+                    <button type="submit" disabled={loading} className="btn-primary h-11">
+                        <Save size={18} /> {loading ? "Salvando..." : "Salvar"}
+                    </button>
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-3 gap-6">
-                    {/* Coluna Esquerda: Cadastro + Fiscal */}
-                    <div className="col-span-2 space-y-6">
-                        <GlassCard title="Informações Gerais" icon={Package}>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-sm font-semibold text-slate-700">Nome do Produto *</label>
-                                    <input
-                                        required
-                                        name="nome"
-                                        value={form.nome}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1.5"
-                                        placeholder="Ex: iPhone 13 Pro Max"
-                                    />
-                                </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Coluna Principal (Esquerda) */}
+                <div className="lg:col-span-2 space-y-6">
+                    <GlassCard title="Informações Gerais" icon={Package}>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase">Nome do Produto *</label>
+                                <input required name="name" value={form.name} onChange={handleChange} className="input-glass mt-1 w-full text-lg font-bold" placeholder="Ex: iPhone 13 Pro Max 128GB" />
+                            </div>
+
+                            {itemType === 'celular' && (
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        {config && config.categorias.length > 0 ? (
-                                            <>
-                                                <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                                                    <Tag size={14} className="text-brand-500" />
-                                                    Categoria Geral
-                                                </label>
-                                                <select
-                                                    name="categoria"
-                                                    value={form.categoria}
-                                                    onChange={handleChange}
-                                                    className="input-glass mt-1.5 appearance-none"
-                                                >
-                                                    <option value="">Sem categoria</option>
-                                                    {config.categorias.map(cat => (
-                                                        <option key={cat.nome} value={cat.nome}>
-                                                            {cat.nome}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <label className="text-sm font-semibold text-slate-700">Categoria Geral</label>
-                                                <select className="input-glass mt-1.5 appearance-none" disabled>
-                                                    <option>Carregando...</option>
-                                                </select>
-                                            </>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-semibold text-slate-700">Subcategoria (Linha/Tipo)</label>
-                                        <input
-                                            name="subcategoria"
-                                            value={form.subcategoria}
-                                            onChange={handleChange}
-                                            className="input-glass mt-1.5"
-                                            placeholder="Ex: iPhone, Galaxy, Capa, Cabo"
-                                            list="subcategorias-list"
-                                        />
-                                        <datalist id="subcategorias-list">
-                                            <option value="iPhone" />
-                                            <option value="Samsung Galaxy" />
-                                            <option value="Motorola" />
-                                            <option value="Xiaomi" />
-                                            <option value="Capa de Silicone" />
-                                            <option value="Película" />
-                                            <option value="Cabo USB" />
-                                            <option value="Carregador" />
-                                            <option value="Fone de Ouvido" />
-                                        </datalist>
-                                    </div>
-                                </div>
-                                {form.categoria && config && (() => {
-                                    const cat = config.categorias.find(c => c.nome === form.categoria);
-                                    return cat ? (
-                                        <div className="flex items-center gap-3 mt-1 text-[10px]">
-                                            <span className="px-2 py-0.5 bg-brand-50 text-brand-600 rounded-lg font-bold">
-                                                Margem Padrão: {cat.tipo_margem === 'porcentagem' ? `${cat.margem_padrao}%` : `R$ ${cat.margem_padrao}`}
-                                            </span>
-                                            {cat.nf_obrigatoria && (
-                                                <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-lg font-bold">NF Obrigatória</span>
-                                            )}
-                                        </div>
-                                    ) : null;
-                                })()}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-sm font-semibold text-slate-700">Condição / Estado</label>
-                                        <select
-                                            name="condicao"
-                                            value={form.condicao}
-                                            onChange={handleChange}
-                                            className="input-glass mt-1.5 appearance-none"
-                                        >
-                                            <option value="novo_lacrado">Novo (Lacrado)</option>
-                                            <option value="seminovo">Seminovo (Vitrine)</option>
-                                            <option value="usado">Usado (Com marcas)</option>
-                                            <option value="peca_reposicao">Peça de Reposição / Insumo</option>
-                                            <option value="defeito">Com Defeito / Sucata</option>
-                                            <option value="outro">Outro</option>
+                                        <label className="text-xs font-black text-slate-400 uppercase">Marca</label>
+                                        <select name="brand_id" value={form.brand_id} onChange={handleChange} className="input-glass mt-1 w-full font-bold">
+                                            <option value="">Selecione...</option>
+                                            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                         </select>
                                     </div>
-                                    <div className="flex items-center">
-                                        <label className="flex items-center gap-3 cursor-pointer mt-6 p-2 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 flex-1">
-                                            <div className={cn(
-                                                "w-12 h-6 rounded-full transition-colors relative flex items-center",
-                                                form.exibirVitrine ? "bg-indigo-500" : "bg-slate-300"
-                                            )}>
-                                                <div className={cn(
-                                                    "w-4 h-4 rounded-full bg-white absolute transition-all shadow-sm",
-                                                    form.exibirVitrine ? "left-7" : "left-1.5"
-                                                )} />
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-sm text-slate-700 flex items-center gap-1.5">
-                                                    {form.exibirVitrine ? <Eye size={16} className="text-indigo-500" /> : <EyeOff size={16} className="text-slate-400" />}
-                                                    Exibir na Vitrine
-                                                </p>
-                                                <p className="text-[10px] text-slate-400">Mostrar este item na loja online</p>
-                                            </div>
-                                        </label>
+                                    <div>
+                                        <label className="text-xs font-black text-slate-400 uppercase">Segmento (Precificação)</label>
+                                        <select name="pricing_segment_id" value={form.pricing_segment_id} onChange={handleChange} className="input-glass mt-1 w-full font-bold text-indigo-700">
+                                            <option value="">Nenhum / Manual</option>
+                                            {pricingSegments.map(s => <option key={s.id} value={s.id}>{s.name} (R$ {(s.default_margin/100).toFixed(2)})</option>)}
+                                        </select>
                                     </div>
-                                </div>
-                                <div>
-                                    <label className="text-sm font-semibold text-slate-700">Descrição Comercial</label>
-                                    <textarea
-                                        name="descricao"
-                                        value={form.descricao}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1.5 min-h-[100px] pt-3 resize-none"
-                                        placeholder="Descreva o produto para a vitrine e vendedores..."
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-sm font-semibold text-slate-700 font-mono">Cód. Barras / SKU Interno</label>
-                                    <div className="flex gap-2 mt-1.5">
-                                        <div className="relative flex-1">
-                                            <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                            <input
-                                                name="codigoBarras"
-                                                value={form.codigoBarras}
-                                                onChange={handleChange}
-                                                className="input-glass pl-10"
-                                                placeholder="789... ou clique em Gerar SKU"
-                                            />
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={gerarSKU}
-                                            className="px-4 bg-slate-100 hover:bg-indigo-50 text-indigo-600 font-bold text-xs rounded-xl transition-colors border border-slate-200 hover:border-indigo-200 flex items-center gap-2"
-                                        >
-                                            <RefreshCw size={14} />
-                                            Gerar SKU
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </GlassCard>
-
-                        <GlassCard title="Dados Fiscais (NFC-e / SPED)" icon={FileText}>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="label-sm">NCM *</label>
-                                    <input
-                                        required
-                                        name="ncm"
-                                        value={form.ncm}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1 font-mono"
-                                        placeholder="8517.12.31"
-                                    />
-                                    <p className="text-[10px] text-slate-400 mt-1">Nomenclatura Comum do Mercosul</p>
-                                </div>
-                                <div>
-                                    <label className="label-sm">CFOP *</label>
-                                    <input
-                                        required
-                                        name="cfop"
-                                        value={form.cfop}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1 font-mono"
-                                        placeholder="5102"
-                                    />
-                                    <p className="text-[10px] text-slate-400 mt-1">Cód. Fiscal de Operações</p>
-                                </div>
-                                <div>
-                                    <label className="label-sm">Origem da Mercadoria</label>
-                                    <select
-                                        name="origem"
-                                        value={form.origem}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1 appearance-none"
-                                    >
-                                        <option value="0">0 - Nacional</option>
-                                        <option value="1">1 - Estrangeira (Imp. Direta)</option>
-                                        <option value="2">2 - Estrangeira (Adq. no Me. Interno)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="label-sm">CEST (Opcional)</label>
-                                    <input
-                                        name="cest"
-                                        value={form.cest}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1 font-mono"
-                                        placeholder="Código CEST"
-                                    />
-                                </div>
-                            </div>
-                        </GlassCard>
-
-                        <GlassCard title="Financeiro" icon={DollarSign}>
-                            {/* Categoria movida para Informações Gerais */}
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="label-sm">Preço de Custo (R$)</label>
-                                    <input
-                                        name="precoCusto"
-                                        value={form.precoCusto}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1.5 font-bold text-slate-700"
-                                        placeholder="0,00"
-                                    />
-                                </div>
-                                <div>
-                                    <label className={cn(
-                                        "label-sm flex items-center gap-1.5",
-                                        precoEditadoManualmente ? "text-amber-600" : "text-brand-600"
-                                    )}>
-                                        Preço de Venda (R$)
-                                        {!precoEditadoManualmente && form.categoria && (
-                                            <span className="text-[9px] bg-brand-50 text-brand-500 px-1.5 py-0.5 rounded font-bold">AUTO</span>
-                                        )}
-                                    </label>
-                                    <input
-                                        name="precoVenda"
-                                        value={form.precoVenda}
-                                        onChange={(e) => {
-                                            handleChange(e);
-                                            setPrecoEditadoManualmente(true);
-                                        }}
-                                        className={cn(
-                                            "input-glass mt-1.5 font-bold",
-                                            precoEditadoManualmente ? "text-amber-600 bg-amber-50/20" : "text-brand-600 bg-brand-50/20"
-                                        )}
-                                        placeholder="0,00"
-                                    />
-                                    {precoEditadoManualmente && form.categoria && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setPrecoEditadoManualmente(false)}
-                                            className="text-[10px] text-brand-500 hover:underline mt-1"
-                                        >
-                                            ↩ Recalcular pela categoria
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Preview de preços por forma de pagamento */}
-                            {config && parseFloat(form.precoVenda.replace(',', '.')) > 0 && (
-                                <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                                        <Info size={10} /> Preços por Forma de Pagamento
-                                    </p>
-                                    {(() => {
-                                        const vendaCentavos = Math.round(parseFloat(form.precoVenda.replace(',', '.')) * 100);
-                                        const fmt = (c: number) => (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-                                        const cat = config.categorias.find(c => c.nome === form.categoria);
-                                        const effectiveGateway = (cat?.default_gateway_id && config.gateways)
-                                            ? (config.gateways.find(g => g.id === cat.default_gateway_id) || defaultGateway)
-                                            : defaultGateway;
-
-                                        if (!effectiveGateway) return null;
-
-                                        const pix = vendaCentavos; // base
-                                        const debito = effectiveGateway.taxa_debito_pct > 0
-                                            ? Math.round(vendaCentavos / (1 - effectiveGateway.taxa_debito_pct / 100))
-                                            : vendaCentavos;
-                                        const t12 = effectiveGateway.taxas_credito?.[11];
-                                        const credito12 = t12 && t12.taxa > 0
-                                            ? Math.round(vendaCentavos / (1 - t12.taxa / 100))
-                                            : vendaCentavos;
-
-                                        return (
-                                            <div className="flex items-center gap-3 text-xs">
-                                                <span className="flex items-center gap-1 text-emerald-600 font-bold">
-                                                    <Zap size={12} /> Pix: {fmt(pix)}
-                                                </span>
-                                                <span className="text-slate-300">|</span>
-                                                <span className="flex items-center gap-1 text-blue-600 font-bold">
-                                                    <CreditCard size={12} /> Débito: {fmt(debito)}
-                                                </span>
-                                                {t12 && (
-                                                    <>
-                                                        <span className="text-slate-300">|</span>
-                                                        <span className="text-indigo-600 font-bold">
-                                                            12x: {fmt(Math.round(credito12 / 12))}/mês
-                                                        </span>
-                                                    </>
-                                                )}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-                            )}
-                        </GlassCard>
-                    </div>
-
-                    {/* Coluna Direita: Específicos + Estoque */}
-                    <div className="space-y-6">
-                        <GlassCard title={isDevice ? "Especificações do Aparelho" : "Especificações Técnicas"} icon={Layers}>
-                            <div className="space-y-4">
-                                {/* Cor e Grade */}
-                                {showColorAndGrade && (
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="col-span-2 grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="label-sm">Cor</label>
-                                            <input
-                                                name="cor"
-                                                value={form.cor}
-                                                onChange={handleChange}
-                                                className="input-glass mt-1"
-                                                placeholder="Ex: Space Gray"
-                                            />
+                                            <label className="text-xs font-black text-slate-400 uppercase">Subcategoria / Modelo</label>
+                                            <input name="subcategory" value={form.subcategory} onChange={handleChange} className="input-glass mt-1 w-full" placeholder="Ex: iPhone 13 Pro Max" />
                                         </div>
                                         <div>
-                                            <label className="label-sm">Grade</label>
-                                            <select
-                                                name="grade"
-                                                value={form.grade}
-                                                onChange={handleChange}
-                                                className="input-glass mt-1 appearance-none"
-                                            >
-                                                <option value="">Nenhuma / Novo</option>
-                                                <option value="A">Grade A (Excelente)</option>
-                                                <option value="B">Grade B (Bom)</option>
-                                                <option value="C">Grade C (Marcas de uso)</option>
+                                            <label className="text-xs font-black text-slate-400 uppercase">Condição</label>
+                                            <select name="condicao" value={form.condicao} onChange={handleChange} className="input-glass mt-1 w-full font-bold">
+                                                <option value="novo_lacrado">Novo Lacrado</option>
+                                                <option value="seminovo">Seminovo</option>
+                                                <option value="usado">Usado</option>
                                             </select>
                                         </div>
                                     </div>
-                                )}
+                                </div>
+                            )}
 
-                                {/* Apenas para Aparelhos (Smartphones, Tablets) */}
-                                {isDevice && (
-                                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <label className="label-sm">Armazenamento</label>
-                                                <input
-                                                    name="capacidade"
-                                                    value={form.capacidade}
-                                                    onChange={handleChange}
-                                                    className="input-glass mt-1"
-                                                    placeholder="Ex: 128GB"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="label-sm flex items-center gap-1.5"><Cpu size={12} className="text-slate-400" /> Memória RAM</label>
-                                                <input
-                                                    name="memoriaRam"
-                                                    value={form.memoriaRam}
-                                                    onChange={handleChange}
-                                                    className="input-glass mt-1"
-                                                    placeholder="Ex: 4GB"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <label className="label-sm flex items-center gap-1.5"><Battery size={12} className="text-slate-400" /> Saúde Bateria (%)</label>
-                                                <div className="relative mt-1">
-                                                    <input
-                                                        type="text"
-                                                        inputMode="numeric"
-                                                        name="saudeBateria"
-                                                        value={form.saudeBateria}
-                                                        onChange={handleChange}
-                                                        className="input-glass mt-1.5 font-bold text-center"
-                                                        placeholder="100"
-                                                    />
-                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">%</span>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label className="label-sm">IMEI (Opcional)</label>
-                                                <input
-                                                    name="imei"
-                                                    value={form.imei}
-                                                    onChange={handleChange}
-                                                    className="input-glass mt-1 font-mono text-xs"
-                                                    placeholder="15 dígitos"
-                                                    maxLength={15}
-                                                />
-                                            </div>
+                            {itemType === 'acessorio' && (
+                                <div className="grid grid-cols-2 gap-4">
+                                     <div className="col-span-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase block mb-2">Categoria</label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {['pelicula', 'capa', 'cabo', 'carregador', 'fone', 'acessorio'].map(t => (
+                                                <button key={t} type="button" onClick={() => setForm(p => ({...p, accessory_type: t}))}
+                                                    className={cn("px-4 py-2 rounded-xl text-xs font-bold capitalize transition-all border-2",
+                                                        form.accessory_type === t ? "border-brand-500 bg-brand-50 text-brand-700" : "border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200"
+                                                    )}>
+                                                    {t}
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
-                                )}
-                            </div>
-                        </GlassCard>
-
-                        <GlassCard title="Mídia (Foto do Produto)" icon={ImageIcon}>
-                            <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-slate-50 transition-colors relative group">
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                    onChange={async (e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file && profile) {
-                                            try {
-                                                setLoading(true);
-                                                const url = await uploadProdutoImage(file, profile.empresa_id);
-                                                setForm(prev => ({ ...prev, imagemUrl: url }));
-                                            } catch (error) {
-                                                console.error(error);
-                                                alert("Erro ao enviar imagem");
-                                            } finally {
-                                                setLoading(false);
-                                            }
-                                        }
-                                    }}
-                                />
-                                {form.imagemUrl ? (
-                                    <div className="w-full h-32 rounded-lg overflow-hidden relative mb-2">
-                                        <img src={form.imagemUrl} alt="Preview" className="w-full h-full object-contain" />
+                                     <div className="col-span-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase">Modelos Compatíveis</label>
+                                        <input name="compatible_models" value={form.compatible_models} onChange={handleChange} className="input-glass mt-1 w-full" placeholder="Ex: iPhone 15, Galaxy S24" />
                                     </div>
-                                ) : (
-                                    <>
-                                        <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center group-hover:scale-110 transition-transform mb-3">
-                                            <ImageIcon className="text-slate-400" size={24} />
+                                </div>
+                            )}
+
+                            {itemType === 'peca' && (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="col-span-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase block mb-2">Tipo de Peça</label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {[ 
+                                                {v:'tela', l:'Tela/Frontal'}, {v:'bateria', l:'Bateria'}, {v:'conector', l:'Conector'}, 
+                                                {v:'camera', l:'Câmera'}, {v:'tampa_traseira', l:'Tampa'}, {v:'outro', l:'Outro'} 
+                                            ].map(t => (
+                                                 <button key={t.v} type="button" onClick={() => setForm(p => ({...p, part_type: t.v}))}
+                                                    className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all border-2",
+                                                        form.part_type === t.v ? "border-amber-500 bg-amber-50 text-amber-700" : "border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200"
+                                                    )}>
+                                                    {t.l}
+                                                </button>
+                                            ))}
                                         </div>
-                                        <p className="font-bold text-sm text-slate-700">Adicionar Foto Principal</p>
-                                        <p className="text-[10px] text-slate-400 mt-1 max-w-[200px]">Arraste uma imagem ou clique para fazer upload.</p>
-                                    </>
-                                )}
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase block mb-2">Qualidade</label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {['original', 'oem', 'paralela', 'china'].map(t => (
+                                                 <button key={t} type="button" onClick={() => setForm(p => ({...p, quality: t}))}
+                                                    className={cn("px-4 py-2 rounded-xl text-xs font-bold capitalize transition-all border-2",
+                                                        form.quality === t ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200"
+                                                    )}>
+                                                    {t}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-black text-slate-400 uppercase">Marca (Aparelho)</label>
+                                        <input name="part_brand" value={form.part_brand} onChange={handleChange} className="input-glass mt-1 w-full" placeholder="Ex: Apple" />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-black text-slate-400 uppercase">Modelo Específico</label>
+                                        <input name="model" value={form.model} onChange={handleChange} className="input-glass mt-1 w-full" placeholder="Ex: iPhone 15 Pro Max" />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase block mb-1">Modelos Compatíveis</label>
+                                        <div className="flex flex-wrap gap-2 p-3 bg-white border border-slate-200 rounded-2xl min-h-[50px] focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+                                            {compatibleModels.map(tag => (
+                                                <span key={tag} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-100 group">
+                                                    {tag}
+                                                    <button type="button" onClick={() => removeModelTag(tag)} className="p-0.5 hover:bg-indigo-200 rounded-md transition-colors">
+                                                        <X size={12} />
+                                                    </button>
+                                                </span>
+                                            ))}
+                                            <div className="relative flex-1 min-w-[150px]">
+                                                <input
+                                                    value={modelSearch}
+                                                    onChange={(e) => setModelSearch(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            if (modelSearch) addModelTag(modelSearch);
+                                                        }
+                                                    }}
+                                                    className="w-full bg-transparent border-none outline-none text-sm font-medium p-0"
+                                                    placeholder="Ex: Moto E7, Samsung A15..."
+                                                />
+                                                {modelSuggestions.length > 0 && (
+                                                    <div className="absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl mt-2 z-50 overflow-hidden">
+                                                        {modelSuggestions.map(s => (
+                                                            <button
+                                                                key={s.deviceModel}
+                                                                type="button"
+                                                                onClick={() => addModelTag(s.deviceModelDisplay)}
+                                                                className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center justify-between group"
+                                                            >
+                                                                <span className="font-bold text-slate-700">{s.deviceModelDisplay}</span>
+                                                                <span className="text-[10px] text-slate-400 font-bold uppercase">{s.usageCount}x usado</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 mt-2 font-medium flex items-center gap-1">
+                                            <Info size={12}/> Digite os modelos que esta peça serve. Pressione Enter para adicionar.
+                                        </p>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase">Fornecedor</label>
+                                        <input name="supplier" value={form.supplier} onChange={handleChange} className="input-glass mt-1 w-full" placeholder="Ex: Ali, Distribuidora XYZ" />
+                                    </div>
+                                </div>
+                            )}
 
-                                <input
-                                    name="imagemUrl"
-                                    value={form.imagemUrl}
-                                    onChange={handleChange}
-                                    type="text"
-                                    placeholder="Ou cole a URL da imagem aqui"
-                                    className="input-glass mt-4 text-[10px] h-8 text-center relative z-20 hover:border-brand-300 focus:border-brand-500"
-                                    onClick={(e) => e.stopPropagation()}
-                                />
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase">Descrição Opcional</label>
+                                <textarea name="description" value={form.description} onChange={handleChange} className="input-glass mt-1 w-full min-h-[80px]" placeholder="Informações visíveis na vitrine..." />
                             </div>
-                        </GlassCard>
 
-                        <GlassCard title="Gestão de Estoque" icon={BarChart3}>
-                            <div className="space-y-4">
+                            <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl cursor-pointer border border-slate-100 hover:border-brand-200 transition-colors">
+                                <div className="relative">
+                                    <input type="checkbox" name="show_in_storefront" checked={form.show_in_storefront} onChange={handleChange} className="sr-only peer" />
+                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-bold text-slate-700 flex items-center gap-2"><Eye size={16}/> Exibir na Vitrine Online</span>
+                                    <span className="text-xs text-slate-500">Ative para permitir clientes verem e orçarem este item online.</span>
+                                </div>
+                            </label>
+
+                            <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-sm font-semibold text-slate-700">Qtd em Estoque</label>
-                                    <input
-                                        type="text"
-                                        inputMode="numeric"
-                                        name="estoqueQtd"
-                                        value={form.estoqueQtd}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1.5 font-bold"
-                                        placeholder="Ex: 5"
-                                    />
+                                    <label className="text-xs font-black text-slate-400 uppercase flex items-center gap-1"><Barcode size={14}/> Cód. Barras/EAN</label>
+                                    <input name="barcode" value={form.barcode} onChange={handleChange} className="input-glass mt-1 w-full font-mono text-sm" />
                                 </div>
                                 <div>
-                                    <label className="text-sm font-semibold text-amber-600">Alerta de Estoque Baixo</label>
-                                    <input
-                                        type="text"
-                                        inputMode="numeric"
-                                        name="estoqueMinimo"
-                                        value={form.estoqueMinimo}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1.5"
-                                        placeholder="Ex: 1"
-                                    />
+                                    <label className="text-xs font-black text-slate-400 uppercase flex items-center gap-1"><Tag size={14}/> SKU</label>
+                                    <input name="sku" value={form.sku} onChange={handleChange} className="input-glass mt-1 w-full font-mono text-sm uppercase" />
                                 </div>
                             </div>
-                        </GlassCard>
-
-                        <div className="pt-4">
-                            <button
-                                disabled={loading}
-                                className="btn-primary w-full h-12 flex items-center justify-center gap-2"
-                            >
-                                {loading ? (
-                                    <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                ) : (
-                                    <Save size={18} />
-                                )}
-                                Salvar Produto
-                            </button>
-                            <Link href="/estoque" className="btn-secondary w-full h-12 mt-3 flex items-center justify-center">CANCELAR</Link>
                         </div>
-                    </div>
+                    </GlassCard>
+
+                    {itemType === 'celular' && (
+                        <GlassCard title="Especificações Técnicas" icon={Cpu}>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="text-xs font-black text-slate-400 uppercase">Cor</label>
+                                    <input name="color" value={form.color} onChange={handleChange} className="input-glass mt-1 w-full font-medium" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-black text-slate-400 uppercase">Armazenamento</label>
+                                    <input name="storage" value={form.storage} onChange={handleChange} placeholder="Ex: 128GB" className="input-glass mt-1 w-full font-mono font-bold" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-black text-slate-400 uppercase">Memória RAM</label>
+                                    <input name="ram" value={form.ram} onChange={handleChange} placeholder="Ex: 6GB" className="input-glass mt-1 w-full font-mono" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-black text-slate-400 uppercase">Saúde Bateria %</label>
+                                    <input name="battery_health" type="number" min="0" max="100" value={form.battery_health} onChange={handleChange} className="input-glass mt-1 w-full font-mono font-bold text-emerald-600" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-black text-slate-400 uppercase">Grade</label>
+                                    <select name="grade" value={form.grade} onChange={handleChange} className="input-glass mt-1 w-full font-bold">
+                                        <option value="">Nenhuma / Novo</option>
+                                        <option value="A">A (Impecável)</option>
+                                        <option value="B">B (Marcas leves)</option>
+                                        <option value="C">C (Marcas visíveis)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="mt-4">
+                                <label className="text-xs font-black text-slate-400 uppercase block mb-2 font-bold tracking-tight">IMEI Principal (Escaneie ou digite)</label>
+                                <IMEIScanner 
+                                    value={form.imei}
+                                    onChange={(val) => setForm(prev => ({ ...prev, imei: val }))}
+                                    tenantId={profile?.empresa_id || ""}
+                                />
+                            </div>
+                        </GlassCard>
+                    )}
+
+                    <GlassCard title="Classificação Fiscal (NFC-e / NF-e)" icon={FileText}>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="col-span-2">
+                                <label className="text-xs font-black text-slate-400 uppercase">NCM *</label>
+                                <input name="ncm" required value={form.ncm} onChange={handleChange} className="input-glass mt-1 w-full font-mono font-bold" />
+                            </div>
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase">CFOP *</label>
+                                <input name="cfop" required value={form.cfop} onChange={handleChange} className="input-glass mt-1 w-full font-mono font-bold" />
+                            </div>
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase">Origem *</label>
+                                <select name="origin_code" value={form.origin_code} onChange={handleChange} className="input-glass mt-1 w-full font-mono font-bold">
+                                    <option value="0">0 - Nacional</option>
+                                    <option value="1">1 - Estrangeira Import.</option>
+                                    <option value="2">2 - Estrangeira Interna</option>
+                                </select>
+                            </div>
+                            <div className="col-span-4">
+                                <label className="text-xs font-black text-slate-400 uppercase">CEST (Opcional)</label>
+                                <input name="cest" value={form.cest} onChange={handleChange} className="input-glass mt-1 w-full font-mono" />
+                            </div>
+                        </div>
+                    </GlassCard>
                 </div>
-            </form>
-        </div>
+
+                {/* Coluna Lateral (Direita) */}
+                <div className="space-y-6">
+                    <GlassCard title="Preços" icon={DollarSign} className="bg-emerald-50/10">
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase">Preço de Custo (R$)</label>
+                                <input name="cost_price" value={form.cost_price} onChange={handleChange} className="input-glass mt-1 w-full text-right text-xl font-mono text-slate-500 font-bold" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-emerald-600 uppercase flex justify-between">
+                                    <span>Preço Venda (R$)</span>
+                                    {precoEditado && <span className="text-amber-500 lowercase">(manual)</span>}
+                                </label>
+                                <input name="sale_price" value={form.sale_price} onChange={handleChange} className="input-glass mt-1 w-full text-right text-2xl font-black font-mono text-emerald-600 border-emerald-200 bg-white" />
+                            </div>
+                        </div>
+                    </GlassCard>
+
+                    <GlassCard title="Gestão de Estoque" icon={Package}>
+                        <div className="space-y-4">
+                            {units.length > 1 ? (
+                                <div className="space-y-3">
+                                    <label className="text-xs font-black text-slate-400 uppercase">Estoque Inicial por Unidade</label>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {units.map(u => (
+                                            <div key={u.id} className="p-3 bg-slate-50 border border-slate-100 rounded-2xl">
+                                                <label className="text-[10px] font-black text-slate-500 uppercase block mb-1 truncate">{u.name}</label>
+                                                <input
+                                                    type="number"
+                                                    value={unitStocks[u.id] || "0"}
+                                                    onChange={(e) => setUnitStocks(prev => ({ ...prev, [u.id]: e.target.value }))}
+                                                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-center font-black text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div>
+                                    <label className="text-xs font-black text-slate-400 uppercase">Quantidade Atual</label>
+                                    <input name="stock_qty" type="number" value={form.stock_qty} onChange={handleChange} className="input-glass mt-1 w-full text-xl font-black text-center" />
+                                </div>
+                            )}
+                            
+                            <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+                                <label className="text-[10px] font-black text-amber-600 uppercase">Aviso de Estoque Baixo</label>
+                                <p className="text-xs text-amber-700/70 mb-2 leading-relaxed">Alertar quando o estoque for igual ou menor a:</p>
+                                <input name="stock_alert_qty" type="number" value={form.stock_alert_qty} onChange={handleChange} className="w-full bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-center font-bold text-amber-900 outline-none focus:ring-2 focus:ring-amber-500" />
+                            </div>
+                        </div>
+                    </GlassCard>
+
+                    <GlassCard title="Foto do Produto" icon={Upload}>
+                        <div className="space-y-4 text-center">
+                            {form.image_url ? (
+                                <div className="relative group rounded-2xl overflow-hidden border-2 border-slate-100">
+                                    <img src={form.image_url} alt="Imagem" className="w-full h-48 object-cover" />
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <button type="button" onClick={() => setForm(p => ({...p, image_url: ""}))} className="bg-white text-red-500 px-4 py-2 rounded-xl text-xs font-bold">Remover</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="border-2 border-dashed border-slate-200 hover:border-brand-400 bg-slate-50 hover:bg-brand-50 rounded-2xl p-6 transition-colors relative cursor-pointer">
+                                    <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                                    <Upload className="mx-auto text-slate-400 mb-2" size={24} />
+                                    <span className="text-xs font-bold text-slate-500 uppercase">Clique para Upload</span>
+                                </div>
+                            )}
+                        </div>
+                    </GlassCard>
+                </div>
+            </div>
+        </form>
     );
 }

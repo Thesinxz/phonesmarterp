@@ -37,7 +37,7 @@ export function TrialExpiredOverlay() {
             console.error("Erro no checkout:", err);
             toast.error(err.message || "Erro ao processar pagamento. Chame o suporte.");
             // Fallback para whatsapp em caso de erro na API/lib
-            window.location.href = `https://wa.me/5500000000000?text=Erro+no+Stripe+Checkout.+Quero+assinar+o+Phone+Smart+ERP+para+a+loja+${empresa.nome}`;
+            window.location.href = `https://wa.me/5567993024221?text=Erro+no+Stripe+Checkout.+Quero+assinar+o+Phone+Smart+ERP+para+a+loja+${empresa.nome}`;
         } finally {
             setLoadingCheckout(false);
         }
@@ -96,7 +96,7 @@ export function TrialExpiredOverlay() {
                             </button>
 
                             <button
-                                onClick={() => window.location.href = `https://wa.me/5500000000000?text=Assinar+com+Pix+Manual.+Quero+assinar+o+Phone+Smart+ERP+para+a+loja+${empresa.nome}`}
+                                onClick={() => window.location.href = `https://wa.me/5567993024221?text=Assinar+com+Pix+Manual.+Quero+assinar+o+Phone+Smart+ERP+para+a+loja+${empresa.nome}`}
                                 className="w-full border-2 border-slate-200 hover:border-brand-200 hover:text-brand-600 text-slate-500 font-bold py-3 rounded-2xl flex items-center justify-center gap-2 transition-all"
                             >
                                 Falha no Cartão? Pagar via WhatsApp

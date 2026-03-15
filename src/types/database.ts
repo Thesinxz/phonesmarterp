@@ -19,6 +19,8 @@ export interface Database {
                     certificado_a1: string | null;
                     logo_url: string | null;
                     trial_ends_at: string | null;
+                    onboarding_completed: boolean;
+                    copied_from_empresa_id: string | null;
                     created_at: string;
                     updated_at: string;
                 };
@@ -30,15 +32,24 @@ export interface Database {
                     id: string;
                     auth_user_id: string | null;
                     empresa_id: string;
+                    unit_id: string | null;
                     nome: string;
                     email: string;
                     papel: "admin" | "gerente" | "tecnico" | "financeiro" | "atendente";
                     permissoes_json: Json;
                     ativo: boolean;
+                    plano: "starter" | "profissional" | "enterprise";
+                    plano_expira_em: string | null;
+                    trial_start: string | null;
+                    trial_end: string | null;
+                    max_empresas: number;
+                    stripe_customer_id: string | null;
+                    stripe_subscription_id: string | null;
+                    ultimo_acesso_empresa_id: string | null;
                     created_at: string;
                 };
                 Insert: Omit<Database["public"]["Tables"]["usuarios"]["Row"], "id" | "created_at">;
-                Update: Partial<Database["public"]["Tables"]["usuarios"]["Insert"]>;
+                Update: Partial<Database["public"]["Tables"]["usuarios"]["Row"]>;
             };
             usuario_vinculos_empresa: {
                 Row: {
@@ -93,10 +104,11 @@ export interface Database {
                     id: string;
                     numero: number;
                     empresa_id: string;
+                    unit_id: string | null;
                     cliente_id: string;
                     equipamento_id: string | null;
                     tecnico_id: string | null;
-                    status: "aberta" | "em_analise" | "aguardando_peca" | "em_execucao" | "finalizada" | "entregue" | "cancelada";
+                    status: "aberta" | "em_analise" | "aguardando_peca" | "em_transito" | "em_execucao" | "finalizada" | "entregue" | "cancelada";
                     problema_relatado: string;
                     diagnostico: string | null;
                     checklist_json: Json | null;
@@ -189,6 +201,9 @@ export interface Database {
 
                     created_at: string;
                     updated_at: string;
+                    product_type_id: string | null;
+                    pricing_segment_id: string | null;
+                    brand_id: string | null;
                 };
                 Insert: Omit<Database["public"]["Tables"]["produtos"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["produtos"]["Insert"]>;
@@ -582,6 +597,300 @@ export interface Database {
                 Insert: Omit<Database["public"]["Tables"]["equipe_metas_categorias"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["equipe_metas_categorias"]["Insert"]>;
             };
+catalog_items: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    item_type: string;
+                    name: string;
+                    cost_price: number;
+                    sale_price: number;
+                    stock_qty: number;
+                    stock_alert_qty: number | null;
+                    show_in_storefront: boolean | null;
+                    description: string | null;
+                    sku: string | null;
+                    barcode: string | null;
+                    image_url: string | null;
+                    ncm: string | null;
+                    cfop: string | null;
+                    origin_code: string | null;
+                    cest: string | null;
+                    brand_id: string | null;
+                    pricing_segment_id: string | null;
+                    subcategory: string | null;
+                    condicao: string | null;
+                    color: string | null;
+                    grade: string | null;
+                    storage: string | null;
+                    ram: string | null;
+                    battery_health: number | null;
+                    imei: string | null;
+                    imei2: string | null;
+                    accessory_type: string | null;
+                    compatible_models: string | null;
+                    part_type: string | null;
+                    quality: string | null;
+                    compatible_models_parts: string[] | null;
+                    supplier: string | null;
+                    part_brand: string | null;
+                    model: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["catalog_items"]["Row"], "id" | "created_at" | "updated_at">;
+                Update: Partial<Database["public"]["Tables"]["catalog_items"]["Insert"]>;
+            };
+                        product_types: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    name: string;
+                    slug: string;
+                    show_device_specs: boolean;
+                    show_imei: boolean;
+                    show_grade: boolean;
+                    show_battery_health: boolean;
+                    created_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["product_types"]["Row"], "id" | "created_at">;
+                Update: Partial<Database["public"]["Tables"]["product_types"]["Insert"]>;
+            };
+            pricing_segments: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    name: string;
+                    default_margin: number;
+                    payment_gateway_id: string | null;
+                    warranty_days: number;
+                    requires_nf: boolean;
+                    created_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["pricing_segments"]["Row"], "id" | "created_at">;
+                Update: Partial<Database["public"]["Tables"]["pricing_segments"]["Insert"]>;
+            };
+            brands: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    name: string;
+                    default_pricing_segment_id: string | null;
+                    created_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["brands"]["Row"], "id" | "created_at">;
+                Update: Partial<Database["public"]["Tables"]["brands"]["Insert"]>;
+            };
+            units: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    name: string;
+                    address: string | null;
+                    is_active: boolean;
+                    has_repair_lab: boolean;
+                    has_parts_stock: boolean;
+                    has_sales: boolean;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["units"]["Row"], "id" | "created_at" | "updated_at">;
+                Update: Partial<Database["public"]["Tables"]["units"]["Insert"]>;
+            };
+            unit_stock: {
+                Row: {
+                    id: string;
+                    tenant_id: string;
+                    unit_id: string;
+                    catalog_item_id: string;
+                    qty: number;
+                    alert_qty: number | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["unit_stock"]["Row"], "id" | "created_at" | "updated_at">;
+                Update: Partial<Database["public"]["Tables"]["unit_stock"]["Insert"]>;
+            };
+            stock_movements: {
+                Row: {
+                    id: string;
+                    tenant_id: string;
+                    unit_id: string;
+                    catalog_item_id: string;
+                    movement_type: "entrada" | "saida_os" | "saida_venda" | "transferencia_saida" | "transferencia_entrada" | "ajuste";
+                    qty: number;
+                    reference_id: string | null;
+                    notes: string | null;
+                    created_by: string | null;
+                    created_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["stock_movements"]["Row"], "id" | "created_at">;
+                Update: Partial<Database["public"]["Tables"]["stock_movements"]["Insert"]>;
+            };
+            os_unit_transfers: {
+                Row: {
+                    id: string;
+                    tenant_id: string;
+                    os_id: string;
+                    from_unit_id: string;
+                    to_unit_id: string;
+                    status: "pendente" | "em_transito" | "recebido" | "cancelado";
+                    sent_by: string | null;
+                    received_by: string | null;
+                    sent_at: string | null;
+                    received_at: string | null;
+                    notes: string | null;
+                    created_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["os_unit_transfers"]["Row"], "id" | "created_at">;
+                Update: Partial<Database["public"]["Tables"]["os_unit_transfers"]["Insert"]>;
+            };
+            part_compatibility: {
+                Row: {
+                    id: string;
+                    tenant_id: string;
+                    catalog_item_id: string;
+                    device_model: string;
+                    device_model_display: string;
+                    created_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["part_compatibility"]["Row"], "id" | "created_at">;
+                Update: Partial<Database["public"]["Tables"]["part_compatibility"]["Insert"]>;
+            };
+            os_parts: {
+                Row: {
+                    id: string;
+                    tenant_id: string;
+                    os_id: string;
+                    catalog_item_id: string;
+                    unit_id: string;
+                    qty: number;
+                    cost_price: number;
+                    created_by: string | null;
+                    created_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["os_parts"]["Row"], "id" | "created_at">;
+                Update: Partial<Database["public"]["Tables"]["os_parts"]["Insert"]>;
+            };
+            payment_gateways: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    nome: string;
+                    taxa_pix_pct: number;
+                    taxa_debito_pct: number;
+                    taxas_credito_json: Json;
+                    is_default: boolean;
+                    enabled: boolean;
+                    created_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["payment_gateways"]["Row"], "id" | "created_at">;
+                Update: Partial<Database["public"]["Tables"]["payment_gateways"]["Insert"]>;
+            };
+            warranty_claims: {
+                Row: {
+                    id: string;
+                    tenant_id: string;
+                    unit_id: string;
+                    original_os_id: string;
+                    warranty_os_id: string | null;
+                    claim_type: "peca_defeituosa" | "erro_tecnico" | "dano_acidental" | "nao_relacionado";
+                    is_covered: boolean;
+                    coverage_reason: string | null;
+                    diagnosis_charged: boolean;
+                    diagnosis_amount: number;
+                    supplier_claim_status: "nao_aplicavel" | "pendente" | "enviado" | "ressarcido" | "negado";
+                    supplier_name: string | null;
+                    supplier_claim_notes: string | null;
+                    responsible_technician_id: string | null;
+                    customer_complaint: string;
+                    status: "aberta" | "em_analise" | "aprovada" | "reparo_em_andamento" | "concluida" | "negada";
+                    opened_by: string | null;
+                    opened_at: string;
+                    closed_by: string | null;
+                    closed_at: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["warranty_claims"]["Row"], "id" | "created_at" | "updated_at">;
+                Update: Partial<Database["public"]["Tables"]["warranty_claims"]["Insert"]>;
+            };
+            warranty_evidences: {
+                Row: {
+                    id: string;
+                    tenant_id: string;
+                    warranty_claim_id: string;
+                    evidence_type: "foto_defeito" | "foto_aparelho" | "foto_saida" | "documento" | "outro";
+                    file_url: string;
+                    file_name: string | null;
+                    notes: string | null;
+                    uploaded_by: string | null;
+                    created_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["warranty_evidences"]["Row"], "id" | "created_at">;
+                Update: Partial<Database["public"]["Tables"]["warranty_evidences"]["Insert"]>;
+            };
+            warranty_checklist_snapshot: {
+                Row: {
+                    id: string;
+                    tenant_id: string;
+                    warranty_claim_id: string;
+                    original_os_id: string;
+                    checklist_data: Json;
+                    captured_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["warranty_checklist_snapshot"]["Row"], "id" | "captured_at">;
+                Update: Partial<Database["public"]["Tables"]["warranty_checklist_snapshot"]["Insert"]>;
+            };
+            device_imeis: {
+                Row: {
+                    id: string;
+                    tenant_id: string;
+                    imei: string;
+                    catalog_item_id: string | null;
+                    status: 'em_estoque' | 'em_transito' | 'vendido' | 'em_garantia' | 'bloqueado';
+                    current_unit_id: string | null;
+                    sale_id: string | null;
+                    sold_to_customer_id: string | null;
+                    sold_at: string | null;
+                    registered_by: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["device_imeis"]["Row"], "id" | "created_at" | "updated_at">;
+                Update: Partial<Database["public"]["Tables"]["device_imeis"]["Insert"]>;
+            };
+            imei_history: {
+                Row: {
+                    id: string;
+                    tenant_id: string;
+                    imei_id: string;
+                    imei: string;
+                    event_type: 'cadastrado' | 'transferido' | 'vendido' | 'retornou' | 'garantia_aberta' | 'desbloqueado' | 'bloqueado';
+                    from_status: string | null;
+                    to_status: string | null;
+                    unit_id: string | null;
+                    reference_id: string | null;
+                    notes: string | null;
+                    performed_by: string | null;
+                    created_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["imei_history"]["Row"], "id" | "created_at">;
+                Update: never;
+            };
+            imei_anatel_checks: {
+                Row: {
+                    id: string;
+                    imei: string;
+                    is_blocked: boolean;
+                    block_reason: string | null;
+                    raw_response: Json | null;
+                    checked_at: string;
+                    expires_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["imei_anatel_checks"]["Row"], "id" | "checked_at">;
+                Update: Partial<Database["public"]["Tables"]["imei_anatel_checks"]["Insert"]>;
+            };
         };
         Views: Record<string, never>;
         Functions: Record<string, never>;
@@ -608,6 +917,19 @@ export type XmlImportacao = Database["public"]["Tables"]["xml_importacoes"]["Row
 export type Solicitacao = Database["public"]["Tables"]["solicitacoes"]["Row"];
 export type EquipeMeta = Database["public"]["Tables"]["equipe_metas"]["Row"];
 export type EquipeMetaCategoria = Database["public"]["Tables"]["equipe_metas_categorias"]["Row"];
+export type ProductType = Database["public"]["Tables"]["product_types"]["Row"];
+export type PricingSegment = Database["public"]["Tables"]["pricing_segments"]["Row"];
+export type Brand = Database["public"]["Tables"]["brands"]["Row"];
+export type PaymentGatewayTable = Database["public"]["Tables"]["payment_gateways"]["Row"];
+
+export type CatalogItem = Database["public"]["Tables"]["catalog_items"]["Row"];
+export type WarrantyClaim = Database["public"]["Tables"]["warranty_claims"]["Row"];
+export type WarrantyEvidence = Database["public"]["Tables"]["warranty_evidences"]["Row"];
+export type WarrantyChecklistSnapshot = Database["public"]["Tables"]["warranty_checklist_snapshot"]["Row"];
+
+export type DeviceImei = Database["public"]["Tables"]["device_imeis"]["Row"];
+export type ImeiHistoryEvent = Database["public"]["Tables"]["imei_history"]["Row"];
+export type ImeiAnatelCheck = Database["public"]["Tables"]["imei_anatel_checks"]["Row"];
 
 export type OsStatus = OrdemServico["status"];
 export type UserPapel = Usuario["papel"];

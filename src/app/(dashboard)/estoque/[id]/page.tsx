@@ -8,6 +8,7 @@ import {
     Save,
     Package,
     Smartphone,
+    Building2,
     DollarSign,
     BarChart3,
     Barcode,
@@ -26,7 +27,8 @@ import {
     Trash2,
     Activity,
     Clock,
-    Printer
+    Printer,
+    X
 } from "lucide-react";
 import { getProdutoById, updateProduto, deleteProduto } from "@/services/estoque";
 import { getProdutoHistorico } from "@/services/historico_produto";
@@ -34,10 +36,16 @@ import { uploadProdutoImage } from "@/services/estoque";
 import { useAuth } from "@/context/AuthContext";
 import { useFinanceConfig } from "@/hooks/useFinanceConfig";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { calculateSuggestedPrice } from "@/utils/product-pricing";
+import { calculateSuggestedPriceBySegment } from "@/utils/product-pricing";
 import { cn } from "@/utils/cn";
 import { toast } from "sonner";
 import { useRealtimeSubscription } from "@/hooks/useRealtime";
+import { createClient } from "@/lib/supabase/client";
+import { type ProductType, type Brand, type PricingSegment, type PaymentGatewayTable, type CatalogItem } from "@/types/database";
+import { getCatalogItem, updateCatalogItem } from "@/services/catalog";
+import { getPartCompatibleModels, savePartCompatibleModels, getExistingDeviceModels, getPartMovements } from "@/app/actions/parts";
+import { AdjustStockModal } from "@/components/estoque/AdjustStockModal";
+import { MovimentacaoModal } from "@/components/estoque/MovimentacaoModal";
 
 export default function DetalheProdutoPage({ params }: { params: { id: string } }) {
     const router = useRouter();
@@ -46,6 +54,28 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
     const [loading, setLoading] = useState(false);
     const [precoEditadoManualmente, setPrecoEditadoManualmente] = useState(false);
     const [historico, setHistorico] = useState<any[]>([]);
+    const [itemType, setItemType] = useState<string | null>(null);
+    const [compatibleModels, setCompatibleModels] = useState<any[]>([]);
+    const [isEditingModels, setIsEditingModels] = useState(false);
+    const [newModelSearch, setNewModelSearch] = useState("");
+    const [modelSuggestions, setModelSuggestions] = useState<any[]>([]);
+    const [unitStocks, setUnitStocks] = useState<any[]>([]);
+    const [units, setUnits] = useState<any[]>([]);
+    const [showMovementModal, setShowMovementModal] = useState(false);
+    const [showAdjustModal, setShowAdjustModal] = useState(false);
+
+    // Histórico de movimentações
+    const [movements, setMovements] = useState<any[]>([]);
+    const [movementsLoading, setMovementsLoading] = useState(false);
+    const [movementsPage, setMovementsPage] = useState(1);
+    const [movementsTotalPages, setMovementsTotalPages] = useState(1);
+    const [movementsFilters, setMovementsFilters] = useState({ unitId: "", type: "" });
+
+    // Camadas de categorização
+    const [productTypes, setProductTypes] = useState<ProductType[]>([]);
+    const [brands, setBrands] = useState<Brand[]>([]);
+    const [pricingSegments, setPricingSegments] = useState<PricingSegment[]>([]);
+    const [gatewaysData, setGatewaysData] = useState<PaymentGatewayTable[]>([]);
 
     const [form, setForm] = useState({
         nome: "",
@@ -64,24 +94,97 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
         estoqueMinimo: "1",
         codigoBarras: "", // Usado como EAN/SKU
         descricao: "",
+        // Relacionais
+        product_type_id: "",
+        brand_id: "",
+        pricing_segment_id: "",
         // Fiscal
         ncm: "85171231",
         cfop: "5102",
         origem: "0",
         cest: "",
-        // Categoria
+        // Legado (backup)
         categoria: "",
         subcategoria: ""
     });
+
+    const loadMovements = async (itemId: string, page: number, filters: any) => {
+        setMovementsLoading(true);
+        try {
+            const { data, totalPages } = await getPartMovements(itemId, page, 20, filters);
+            setMovements(data || []);
+            setMovementsTotalPages(totalPages || 1);
+        } catch (err) {
+            console.error("Erro ao carregar movimentações:", err);
+        } finally {
+            setMovementsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!params.id) return;
+        loadMovements(params.id, movementsPage, movementsFilters);
+    }, [movementsPage, movementsFilters, params.id]);
+
+    const handleMovementFilterChange = (name: string, value: string) => {
+        setMovementsFilters(prev => ({ ...prev, [name]: value }));
+        setMovementsPage(1);
+    };
 
     // Carregar produto
     const loadData = async () => {
         if (!params.id) return;
         try {
+            // Tenta buscar no catálogo primeiro (novo padrão)
+            const catItem = await getCatalogItem(params.id) as any;
+            if (catItem) {
+                setItemType(catItem.item_type);
+                setForm(prev => ({
+                    ...prev,
+                    nome: catItem.name,
+                    imei: catItem.imei || "",
+                    grade: catItem.grade || "",
+                    cor: catItem.color || "",
+                    capacidade: catItem.storage || "",
+                    memoriaRam: catItem.ram || "",
+                    saudeBateria: catItem.battery_health ? String(catItem.battery_health) : "",
+                    condicao: catItem.condicao || "novo_lacrado",
+                    exibirVitrine: catItem.show_in_storefront ?? true,
+                    imagemUrl: catItem.image_url || "",
+                    precoCusto: (catItem.cost_price / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+                    precoVenda: (catItem.sale_price / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+                    estoqueQtd: String(catItem.stock_qty),
+                    estoqueMinimo: String(catItem.stock_alert_qty || 1),
+                    codigoBarras: catItem.barcode || catItem.sku || "",
+                    descricao: catItem.description || "",
+                    ncm: catItem.ncm || "85171231",
+                    cfop: catItem.cfop || "5102",
+                    origem: catItem.origin_code || "0",
+                    cest: catItem.cest || "",
+                    brand_id: catItem.brand_id || "",
+                    pricing_segment_id: catItem.pricing_segment_id || ""
+                }));
+
+                if (catItem.item_type === 'peca') {
+                    const models = await getPartCompatibleModels(catItem.empresa_id, catItem.id);
+                    setCompatibleModels(models);
+                }
+
+                // Buscar estoques por unidade
+                const supabase = createClient();
+                const { data: stocks } = await supabase.from('unit_stock').select('*').eq('catalog_item_id', catItem.id);
+                if (stocks) setUnitStocks(stocks);
+                
+                // Carregar histórico inicial
+                loadMovements(catItem.id, 1, { unitId: "", type: "" });
+
+                setPrecoEditadoManualmente(true);
+                return;
+            }
+
             const data = await getProdutoById(params.id);
             if (data) {
                 setForm(prev => {
-                    // Evita sobrescrever se o usuário estiver digitando (simplificado aqui por atualização completa)
                     return {
                         ...prev,
                         nome: data.nome,
@@ -94,8 +197,6 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                         condicao: (data as any).condicao || "novo_lacrado",
                         exibirVitrine: (data as any).exibir_vitrine ?? true,
                         imagemUrl: (data as any).imagem_url || "",
-                        // Se editou manualmente, talvez não queira sobrescrever o preço enquanto está na tela,
-                        // mas para realtime de outros usuários, atualizamos:
                         precoCusto: (data.preco_custo_centavos / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
                         precoVenda: (data.preco_venda_centavos / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
                         estoqueQtd: String(data.estoque_qtd),
@@ -107,7 +208,10 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                         origem: data.origem || "0",
                         cest: data.cest || "",
                         categoria: data.categoria || "",
-                        subcategoria: data.subcategoria || ""
+                        subcategoria: data.subcategoria || "",
+                        product_type_id: (data as any).product_type_id || "",
+                        brand_id: (data as any).brand_id || "",
+                        pricing_segment_id: (data as any).pricing_segment_id || ""
                     };
                 });
 
@@ -115,7 +219,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                     const hist = await getProdutoHistorico(params.id);
                     setHistorico(hist);
                 }
-                setPrecoEditadoManualmente(true); // Evita auto-recalcular ao carregar
+                setPrecoEditadoManualmente(true);
             }
         } catch (err) {
             console.error("Erro ao carregar produto:", err);
@@ -132,34 +236,75 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
         loadData();
     }, [params.id]);
 
-    // Auto-calcular preço quando custo ou categoria mudam
+    useEffect(() => {
+        if (!profile?.empresa_id) return;
+        const fetchRelationalData = async () => {
+            const supabase = createClient();
+            const [types, segments, brandsList, gateways, unitsList] = await Promise.all([
+                supabase.from('product_types').select('*').eq('empresa_id', profile.empresa_id).order('name'),
+                supabase.from('pricing_segments').select('*').eq('empresa_id', profile.empresa_id).order('name'),
+                supabase.from('brands').select('*').eq('empresa_id', profile.empresa_id).order('name'),
+                supabase.from('payment_gateways').select('*').eq('empresa_id', profile.empresa_id).order('nome'),
+                supabase.from('units').select('*').eq('empresa_id', profile.empresa_id).eq('is_active', true).order('name')
+            ]);
+
+            if (types.data) setProductTypes(types.data as any);
+            if (segments.data) setPricingSegments(segments.data as any);
+            if (brandsList.data) setBrands(brandsList.data as any);
+            if (gateways.data) setGatewaysData(gateways.data as any);
+            if (unitsList.data) setUnits(unitsList.data as any);
+        };
+        fetchRelationalData();
+    }, [profile?.empresa_id]);
+
+    useEffect(() => {
+        if (!isEditingModels || newModelSearch.length < 2 || !profile?.empresa_id) {
+            setModelSuggestions([]);
+            return;
+        }
+        const timer = setTimeout(async () => {
+            const suggestions = await getExistingDeviceModels(profile.empresa_id, newModelSearch);
+            setModelSuggestions(suggestions);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [newModelSearch, isEditingModels, profile?.empresa_id]);
+
+    const handleSaveModels = async () => {
+        if (!profile || !params.id) return;
+        try {
+            await savePartCompatibleModels(
+                profile.empresa_id,
+                params.id,
+                compatibleModels.map(m => ({ deviceModel: m.deviceModel, deviceModelDisplay: m.deviceModelDisplay }))
+            );
+            toast.success("Modelos atualizados!");
+            setIsEditingModels(false);
+        } catch (err) {
+            toast.error("Erro ao salvar modelos");
+        }
+    }
+
+    // Auto-calcular preço quando custo ou segmento mudam
     useEffect(() => {
         if (precoEditadoManualmente || !config) return;
-        const custoCentavos = Math.round(parseFloat(form.precoCusto.replace(',', '.')) * 100) || 0;
+        const custoCentavos = Math.round(parseFloat(form.precoCusto.replace(/\./g, '').replace(',', '.')) * 100) || 0;
         if (custoCentavos <= 0) return;
 
-        const cat = config.categorias.find(c => c.nome === form.categoria) ?? null;
-        if (!cat) return;
+        const segment = pricingSegments.find(s => s.id === form.pricing_segment_id);
+        if (!segment) return;
 
-        const sugerido = calculateSuggestedPrice(custoCentavos, cat, config.taxa_nota_fiscal_pct);
+        const sugerido = calculateSuggestedPriceBySegment(custoCentavos, segment, config.taxa_nota_fiscal_pct);
         const precoFormatado = (sugerido / 100).toFixed(2).replace('.', ',');
         setForm(prev => ({ ...prev, precoVenda: precoFormatado }));
-    }, [form.precoCusto, form.categoria, config, precoEditadoManualmente]);
+    }, [form.precoCusto, form.pricing_segment_id, config, precoEditadoManualmente]);
 
-    const isAccessoryOrPart = (form.categoria || form.subcategoria) && (
-        ['acessorio', 'acessório', 'peca', 'peça', 'pelicula', 'cabo'].some(term =>
-            (form.categoria?.toLowerCase() || '').includes(term) ||
-            (form.subcategoria?.toLowerCase() || '').includes(term)
-        )
-    );
-    const showColorAndGrade = !isAccessoryOrPart;
+    const selectedType = productTypes.find(t => t.id === form.product_type_id);
+    const showDeviceSpecs = selectedType?.show_device_specs ?? false;
+    const isSmartphone = selectedType?.name.toLowerCase().includes('celular') || selectedType?.name.toLowerCase().includes('smartphone');
 
-    const isDevice = (form.categoria || form.subcategoria) && (
-        ['smart', 'celular', 'tablet', 'iphone', 'ipad', 'aparelho', 'macbook', 'watch'].some(term =>
-            (form.categoria?.toLowerCase() || '').includes(term) ||
-            (form.subcategoria?.toLowerCase() || '').includes(term)
-        )
-    );
+    // Helper variables for UI
+    const isDevice = showDeviceSpecs;
+    const showColorAndGrade = true; // Sempre relevante
 
     const gerarSKU = () => {
         const randomStr = Math.floor(100000 + Math.random() * 900000).toString();
@@ -211,31 +356,64 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
 
             console.log("Salvando produto:", params.id, { nome: form.nome, imei: form.imei });
 
-            await updateProduto(params.id, {
-                nome: form.nome,
-                imei: form.imei || null,
-                grade: (form.grade as any) || null,
-                cor: form.cor || null,
-                capacidade: form.capacidade || null,
-                preco_custo_centavos: custoCentavos,
-                preco_venda_centavos: vendaCentavos,
-                estoque_qtd: parseInt(form.estoqueQtd) || 0,
-                estoque_minimo: parseInt(form.estoqueMinimo) || 0,
-                codigo_barras: form.codigoBarras || null,
-                sku: form.codigoBarras || null,
-                descricao: form.descricao || null,
-                condicao: form.condicao as any,
-                saude_bateria: form.saudeBateria ? parseInt(form.saudeBateria) : null,
-                memoria_ram: form.memoriaRam || null,
-                exibir_vitrine: form.exibirVitrine,
-                imagem_url: form.imagemUrl || null,
-                ncm: form.ncm,
-                cfop: form.cfop,
-                origem: form.origem,
-                cest: form.cest || null,
-                categoria: form.categoria || null,
-                subcategoria: form.subcategoria || null
-            } as any);
+            if (itemType) {
+                // Novo padrão: catalog_items
+                await updateCatalogItem(params.id, {
+                    name: form.nome,
+                    imei: form.imei || null,
+                    grade: (form.grade as any) || null,
+                    color: form.cor || null,
+                    storage: form.capacidade || null,
+                    cost_price: custoCentavos,
+                    sale_price: vendaCentavos,
+                    stock_qty: parseInt(form.estoqueQtd) || 0,
+                    stock_alert_qty: parseInt(form.estoqueMinimo) || 0,
+                    barcode: form.codigoBarras || null,
+                    sku: form.codigoBarras || null,
+                    description: form.descricao || null,
+                    condicao: form.condicao as any,
+                    battery_health: form.saudeBateria ? parseInt(form.saudeBateria) : null,
+                    ram: form.memoriaRam || null,
+                    show_in_storefront: form.exibirVitrine,
+                    image_url: form.imagemUrl || null,
+                    ncm: form.ncm,
+                    cfop: form.cfop,
+                    origin_code: form.origem,
+                    cest: form.cest || null,
+                    brand_id: form.brand_id || null,
+                    pricing_segment_id: form.pricing_segment_id || null,
+                    subcategory: form.categoria || null,
+                });
+            } else {
+                // Legado: produtos
+                await updateProduto(params.id, {
+                    nome: form.nome,
+                    imei: form.imei || null,
+                    grade: (form.grade as any) || null,
+                    cor: form.cor || null,
+                    capacidade: form.capacidade || null,
+                    preco_custo_centavos: custoCentavos,
+                    preco_venda_centavos: vendaCentavos,
+                    estoque_qtd: parseInt(form.estoqueQtd) || 0,
+                    estoque_minimo: parseInt(form.estoqueMinimo) || 0,
+                    codigo_barras: form.codigoBarras || null,
+                    sku: form.codigoBarras || null,
+                    descricao: form.descricao || null,
+                    condicao: form.condicao as any,
+                    saude_bateria: form.saudeBateria ? parseInt(form.saudeBateria) : null,
+                    memoria_ram: form.memoriaRam || null,
+                    exibir_vitrine: form.exibirVitrine,
+                    imagem_url: form.imagemUrl || null,
+                    ncm: form.ncm,
+                    cfop: form.cfop,
+                    origem: form.origem,
+                    cest: form.cest || null,
+                    categoria: selectedType?.name || form.categoria, // Mantém compatibilidade
+                    product_type_id: form.product_type_id || null,
+                    brand_id: form.brand_id || null,
+                    pricing_segment_id: form.pricing_segment_id || null
+                } as any);
+            }
 
             toast.success("Produto salvo com sucesso!");
 
@@ -318,73 +496,63 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                         placeholder="Ex: iPhone 13 Pro Max"
                                     />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div>
-                                        {config && config.categorias.length > 0 ? (
-                                            <>
-                                                <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                                                    <Tag size={14} className="text-brand-500" />
-                                                    Categoria Geral
-                                                </label>
-                                                <select
-                                                    name="categoria"
-                                                    value={form.categoria}
-                                                    onChange={handleChange}
-                                                    className="input-glass mt-1.5 appearance-none"
-                                                >
-                                                    <option value="">Sem categoria</option>
-                                                    {config.categorias.map(cat => (
-                                                        <option key={cat.nome} value={cat.nome}>
-                                                            {cat.nome}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <label className="text-sm font-semibold text-slate-700">Categoria Geral</label>
-                                                <select className="input-glass mt-1.5 appearance-none" disabled>
-                                                    <option>Carregando...</option>
-                                                </select>
-                                            </>
-                                        )}
+                                        <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                                            <Tag size={14} className="text-brand-500" />
+                                            Tipo de Produto *
+                                        </label>
+                                        <select
+                                            name="product_type_id"
+                                            value={form.product_type_id}
+                                            onChange={handleChange}
+                                            className="input-glass mt-1.5 appearance-none"
+                                            required
+                                        >
+                                            <option value="">Selecione o tipo</option>
+                                            {productTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                        </select>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-semibold text-slate-700">Subcategoria (Linha/Tipo)</label>
-                                        <input
-                                            name="subcategoria"
-                                            value={form.subcategoria}
+                                        <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                                            <Building2 size={14} className="text-brand-500" />
+                                            Marca
+                                        </label>
+                                        <select
+                                            name="brand_id"
+                                            value={form.brand_id}
+                                            onChange={(e) => {
+                                                const bId = e.target.value;
+                                                const brand = brands.find(b => b.id === bId);
+                                                setForm(prev => ({
+                                                    ...prev,
+                                                    brand_id: bId,
+                                                    pricing_segment_id: brand?.default_pricing_segment_id || prev.pricing_segment_id
+                                                }));
+                                            }}
+                                            className="input-glass mt-1.5 appearance-none"
+                                        >
+                                            <option value="">Selecione a marca</option>
+                                            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                                            <Layers size={14} className="text-brand-500" />
+                                            Segmento (Preço) *
+                                        </label>
+                                        <select
+                                            name="pricing_segment_id"
+                                            value={form.pricing_segment_id}
                                             onChange={handleChange}
-                                            className="input-glass mt-1.5"
-                                            placeholder="Ex: iPhone, Galaxy, Capa, Cabo"
-                                            list="subcategorias-list"
-                                        />
-                                        <datalist id="subcategorias-list">
-                                            <option value="iPhone" />
-                                            <option value="Samsung Galaxy" />
-                                            <option value="Motorola" />
-                                            <option value="Xiaomi" />
-                                            <option value="Capa de Silicone" />
-                                            <option value="Película" />
-                                            <option value="Cabo USB" />
-                                            <option value="Carregador" />
-                                            <option value="Fone de Ouvido" />
-                                        </datalist>
+                                            className="input-glass mt-1.5 appearance-none"
+                                            required
+                                        >
+                                            <option value="">Selecione o segmento</option>
+                                            {pricingSegments.map(s => <option key={s.id} value={s.id}>{s.name} (+ R$ {s.default_margin / 100})</option>)}
+                                        </select>
                                     </div>
                                 </div>
-                                {form.categoria && config && (() => {
-                                    const cat = config.categorias.find(c => c.nome === form.categoria);
-                                    return cat ? (
-                                        <div className="flex items-center gap-3 mt-1 text-[10px]">
-                                            <span className="px-2 py-0.5 bg-brand-50 text-brand-600 rounded-lg font-bold">
-                                                Margem Padrão: {cat.tipo_margem === 'porcentagem' ? `${cat.margem_padrao}%` : `R$ ${cat.margem_padrao}`}
-                                            </span>
-                                            {cat.nf_obrigatoria && (
-                                                <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-lg font-bold">NF Obrigatória</span>
-                                            )}
-                                        </div>
-                                    ) : null;
-                                })()}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="text-sm font-semibold text-slate-700">Condição / Estado</label>
@@ -752,22 +920,44 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                             </div>
                         </GlassCard>
 
-                        <GlassCard title="Gestão de Estoque" icon={BarChart3}>
+                        <GlassCard title="Gestão de Estoque Multi-Unidade" icon={BarChart3}>
                             <div className="space-y-4">
-                                <div>
-                                    <label className="text-sm font-semibold text-slate-700">Qtd em Estoque</label>
-                                    <input
-                                        type="text"
-                                        inputMode="numeric"
-                                        name="estoqueQtd"
-                                        value={form.estoqueQtd}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1.5 font-bold"
-                                        placeholder="Ex: 5"
-                                    />
+                                <div className="grid grid-cols-1 gap-3">
+                                    {units.map(unit => {
+                                        const stock = unitStocks.find(us => us.unit_id === unit.id);
+                                        const qty = stock?.qty || 0;
+                                        return (
+                                            <div key={unit.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/50">
+                                                <div className="flex items-center gap-2">
+                                                    <Building2 size={16} className="text-slate-400" />
+                                                    <div>
+                                                        <p className="text-xs font-bold text-slate-700">{unit.name}</p>
+                                                        <p className="text-[10px] text-slate-400">Estoque atual nesta unidade</p>
+                                                    </div>
+                                                </div>
+                                                <div className={cn(
+                                                    "px-3 py-1 rounded-lg font-black text-sm",
+                                                    qty > (parseInt(form.estoqueMinimo) || 1) ? "bg-emerald-50 text-emerald-600 border border-emerald-100" :
+                                                    qty > 0 ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-red-50 text-red-600 border border-red-100"
+                                                )}>
+                                                    {qty} un
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                                <div>
-                                    <label className="text-sm font-semibold text-amber-600">Alerta de Estoque Baixo</label>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAdjustModal(true)}
+                                    className="w-full py-3 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 font-bold text-sm hover:bg-indigo-100 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <RefreshCw size={18} />
+                                    Ajustar Estoque / Movimentar
+                                </button>
+
+                                <div className="pt-4 border-t border-slate-100">
+                                    <label className="text-sm font-semibold text-amber-600">Alerta de Estoque Baixo (Global)</label>
                                     <input
                                         type="text"
                                         inputMode="numeric"
@@ -777,9 +967,198 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                         className="input-glass mt-1.5"
                                         placeholder="Ex: 1"
                                     />
+                                    <p className="text-[10px] text-slate-400 mt-1">Soma de todas as lojas menor que este valor aciona o alerta.</p>
                                 </div>
                             </div>
                         </GlassCard>
+
+                        <GlassCard title="Histórico de Movimentações" icon={Clock}>
+                            <div className="space-y-4">
+                                <div className="flex flex-col md:flex-row gap-2">
+                                    <select
+                                        value={movementsFilters.unitId}
+                                        onChange={(e) => handleMovementFilterChange("unitId", e.target.value)}
+                                        className="flex-1 p-2 rounded-lg border border-slate-200 text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                                    >
+                                        <option value="">Todas as Unidades</option>
+                                        {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                    </select>
+                                    <select
+                                        value={movementsFilters.type}
+                                        onChange={(e) => handleMovementFilterChange("type", e.target.value)}
+                                        className="flex-1 p-2 rounded-lg border border-slate-200 text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                                    >
+                                        <option value="">Todos os Tipos</option>
+                                        <option value="entrada">Entrada</option>
+                                        <option value="saida_os">Saída OS</option>
+                                        <option value="saida_venda">Saída Venda</option>
+                                        <option value="ajuste">Ajuste</option>
+                                    </select>
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-xs">
+                                        <thead>
+                                            <tr className="border-b border-slate-100 text-slate-400 uppercase font-black text-[9px] tracking-wider">
+                                                <th className="py-2">Data</th>
+                                                <th className="py-2">Tipo</th>
+                                                <th className="py-2 text-center">Qtd</th>
+                                                <th className="py-2">Unidade</th>
+                                                <th className="py-2">Referência</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50">
+                                            {movementsLoading ? (
+                                                <tr>
+                                                    <td colSpan={5} className="py-8 text-center text-slate-400 italic">Carregando...</td>
+                                                </tr>
+                                            ) : movements.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={5} className="py-8 text-center text-slate-400 italic">Nenhuma movimentação.</td>
+                                                </tr>
+                                            ) : (
+                                                movements.map(m => (
+                                                    <tr key={m.id} className="group hover:bg-slate-50 transition-colors">
+                                                        <td className="py-3 text-slate-500">{new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                                                        <td className="py-3">
+                                                            <span className={cn(
+                                                                "px-1.5 py-0.5 rounded font-bold uppercase text-[9px]",
+                                                                m.movement_type === 'entrada' ? "bg-emerald-50 text-emerald-600" :
+                                                                m.movement_type === 'ajuste' ? "bg-slate-100 text-slate-600" : "bg-red-50 text-red-600"
+                                                            )}>
+                                                                {m.movement_type.replace('_', ' ')}
+                                                            </span>
+                                                        </td>
+                                                        <td className={cn(
+                                                            "py-3 text-center font-black",
+                                                            m.qty > 0 && m.movement_type !== 'ajuste' ? "text-emerald-600" : 
+                                                            m.qty < 0 || (m.movement_type.includes('saida')) ? "text-red-600" : "text-slate-600"
+                                                        )}>
+                                                            {m.qty > 0 ? `+${m.qty}` : m.qty}
+                                                        </td>
+                                                        <td className="py-3 text-slate-600 font-medium">{m.units?.name}</td>
+                                                        <td className="py-3 text-slate-500">
+                                                            {m.reference_id && m.reference_id.startsWith('#') ? (
+                                                                <Link href={`/os/${m.reference_id.split(' ')[0].replace('#', '')}`} className="text-indigo-600 hover:underline font-bold">
+                                                                    {m.reference_id}
+                                                                </Link>
+                                                            ) : (
+                                                                m.notes || m.reference_id || '-'
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {movementsTotalPages > 1 && (
+                                    <div className="flex items-center justify-between pt-2">
+                                        <button
+                                            type="button"
+                                            disabled={movementsPage === 1}
+                                            onClick={() => setMovementsPage(p => p - 1)}
+                                            className="p-1 px-3 border border-slate-200 rounded-lg text-[10px] font-bold disabled:opacity-50"
+                                        >
+                                            Anterior
+                                        </button>
+                                        <span className="text-[10px] text-slate-400 font-bold">Página {movementsPage} de {movementsTotalPages}</span>
+                                        <button
+                                            type="button"
+                                            disabled={movementsPage === movementsTotalPages}
+                                            onClick={() => setMovementsPage(p => p + 1)}
+                                            className="p-1 px-3 border border-slate-200 rounded-lg text-[10px] font-bold disabled:opacity-50"
+                                        >
+                                            Próxima
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </GlassCard>
+
+                        {itemType === 'peca' && (
+                            <GlassCard title="Modelos Compatíveis" icon={Smartphone}>
+                                <div className="space-y-4">
+                                    <div className="flex flex-wrap gap-2">
+                                        {compatibleModels.map((m, idx) => (
+                                            <div key={idx} className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-1 rounded-lg text-xs font-bold border border-indigo-100">
+                                                {m.deviceModelDisplay}
+                                                {isEditingModels && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCompatibleModels(prev => prev.filter((_, i) => i !== idx))}
+                                                        className="hover:text-red-500"
+                                                    >
+                                                        <X size={12} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                        {compatibleModels.length === 0 && !isEditingModels && (
+                                            <p className="text-xs text-slate-400 italic">Nenhum modelo específico cadastrado.</p>
+                                        )}
+                                    </div>
+
+                                    {isEditingModels ? (
+                                        <div className="space-y-2 pt-2 border-t border-slate-100">
+                                            <div className="relative">
+                                                <input
+                                                    value={newModelSearch}
+                                                    onChange={(e) => setNewModelSearch(e.target.value)}
+                                                    placeholder="Buscar modelo (ex: Moto E7)..."
+                                                    className="input-glass text-xs"
+                                                />
+                                                {modelSuggestions.length > 0 && (
+                                                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto">
+                                                        {modelSuggestions.map(s => (
+                                                            <button
+                                                                key={s.device_model}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (!compatibleModels.some(m => m.deviceModel === s.device_model)) {
+                                                                        setCompatibleModels(prev => [...prev, { deviceModel: s.device_model, deviceModelDisplay: s.device_model_display || s.device_model }]);
+                                                                    }
+                                                                    setNewModelSearch("");
+                                                                    setModelSuggestions([]);
+                                                                }}
+                                                                className="w-full px-4 py-2 text-left text-xs hover:bg-slate-50 border-b border-slate-100 last:border-0"
+                                                            >
+                                                                {s.device_model_display || s.device_model}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSaveModels}
+                                                    className="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors"
+                                                >
+                                                    Salvar Alterações
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsEditingModels(false)}
+                                                    className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors"
+                                                >
+                                                    Cancelar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsEditingModels(true)}
+                                            className="w-full py-2 border border-dashed border-indigo-200 text-indigo-500 rounded-xl text-xs font-bold hover:bg-indigo-50 transition-colors"
+                                        >
+                                            Editar Modelos Compatíveis
+                                        </button>
+                                    )}
+                                </div>
+                            </GlassCard>
+                        )}
 
                         <div className="pt-4">
                             <button
@@ -847,6 +1226,22 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                         ))}
                     </div>
                 </div>
+            )}
+
+            {showAdjustModal && (
+                <AdjustStockModal 
+                    itemId={params.id} 
+                    units={units}
+                    onClose={() => setShowAdjustModal(false)}
+                    onSuccess={() => loadData()}
+                />
+            )}
+
+            {showMovementModal && (
+                <MovimentacaoModal 
+                    produtoId={params.id} 
+                    onClose={() => setShowMovementModal(false)} 
+                />
             )}
         </div>
     );

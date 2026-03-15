@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import {
     LayoutDashboard,
     ClipboardList,
@@ -23,22 +24,31 @@ import {
     Bell,
     Shield,
     MessageCircle,
-    Megaphone
+    Megaphone,
+    X
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/context/AuthContext";
-import { usePermissions } from "@/hooks/usePermissions";
+import { hasFeature, Feature, Plan, getPlanForFeature, PLAN_NAMES } from "@/lib/plans/features";
 import { CompanySwitcher } from "./CompanySwitcher";
-import { X } from "lucide-react";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface SidebarProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
-const navItems = [
+interface NavItem {
+    label: string;
+    href: string;
+    icon: any;
+    permission?: string;
+    feature?: Feature;
+    children?: { label: string; href: string; feature?: Feature }[];
+}
+
+const navItems: NavItem[] = [
     {
         label: "Dashboard",
         href: "/dashboard",
@@ -53,10 +63,17 @@ const navItems = [
             { label: "Todas as OS", href: "/os" },
             { label: "Nova OS", href: "/os/nova" },
             { label: "Prateleira / Abandonos", href: "/os/prateleira" },
-            { label: "Garantia Estendida", href: "/os/garantias" },
+            { label: "Garantia Estendida", href: "/os/garantias", feature: "os_garantias" },
             { label: "Orçamento Rápido", href: "/orcamento" },
             { label: "Técnicos", href: "/tecnicos" },
         ]
+    },
+    {
+        label: "Garantias",
+        href: "/garantias",
+        icon: Shield,
+        permission: "ordens_servico",
+        feature: "os_garantias"
     },
     {
         label: "Solicitações",
@@ -89,7 +106,8 @@ const navItems = [
         children: [
             { label: "Produtos", href: "/estoque" },
             { label: "Películas & Acessórios", href: "/estoque/peliculas" },
-            { label: "Peças (Assistência)", href: "/estoque/pecas" },
+            { label: "Peças (Assistência)", href: "/estoque/pecas", feature: "estoque_pecas" },
+            { label: "Gestão de IMEIs", href: "/estoque/imeis", feature: "imei" },
             { label: "Compras / Entradas", href: "/compras" },
         ]
     },
@@ -100,10 +118,10 @@ const navItems = [
         permission: "financeiro",
         children: [
             { label: "Visão Geral", href: "/financeiro" },
-            { label: "A Receber", href: "/financeiro/receber" },
-            { label: "A Pagar", href: "/financeiro/pagar" },
+            { label: "A Receber", href: "/financeiro/receber", feature: "contas_pagar_receber" },
+            { label: "A Pagar", href: "/financeiro/pagar", feature: "contas_pagar_receber" },
             { label: "Caixa (PDV)", href: "/financeiro/caixa" },
-            { label: "DRE Gerencial", href: "/financeiro/dre" },
+            { label: "DRE Gerencial", href: "/financeiro/dre", feature: "relatorios_avancados" },
             { label: "Crediário", href: "/financeiro/crediario" },
         ]
     },
@@ -112,6 +130,7 @@ const navItems = [
         href: "/equipe",
         icon: Shield,
         permission: "equipe",
+        feature: "gestao_equipe",
         children: [
             { label: "Membros", href: "/equipe" },
             { label: "Metas de Vendas", href: "/equipe/metas" },
@@ -124,16 +143,18 @@ const navItems = [
         permission: "vendas",
         children: [
             { label: "Visão Geral", href: "/marketing" },
-            { label: "Pós-Venda", href: "/marketing/pos-venda" },
-            { label: "Templates", href: "/marketing/templates" },
-            { label: "Campanhas", href: "/marketing/campanhas" },
+            { label: "Lista de Preços", href: "/marketing/lista-precos", feature: "marketing_pdf" },
+            { label: "Pós-Venda", href: "/marketing/pos-venda", feature: "pos_venda_auto" },
+            { label: "Templates", href: "/marketing/templates", feature: "marketing_pdf" },
+            { label: "Campanhas", href: "/marketing/campanhas", feature: "marketing_campanhas" },
         ]
     },
     {
         label: "Relatórios",
         href: "/relatorios",
         icon: BarChart3,
-        permission: "financeiro"
+        permission: "financeiro",
+        feature: "relatorios_avancados"
     },
     {
         label: "Ferramentas",
@@ -144,6 +165,7 @@ const navItems = [
             { label: "Calculadora de Venda", href: "/ferramentas/calculadora" },
             { label: "Cálculo em Massa", href: "/ferramentas/calculo-em-massa" },
             { label: "Importação iPhone", href: "/ferramentas/importacao" },
+            { label: "IA & OCR", href: "/ferramentas/ia", feature: "ia_ocr" },
         ]
     },
     {
@@ -151,12 +173,13 @@ const navItems = [
         href: "/fiscal",
         icon: FileText,
         permission: "financeiro",
+        feature: "nfe",
         children: [
             { label: "Visão Geral", href: "/fiscal" },
-            { label: "NF-e (Produto)", href: "/fiscal/nfe" },
-            { label: "NFC-e (Consumidor)", href: "/fiscal/nfce" },
-            { label: "NFS-e (Serviços)", href: "/fiscal/nfse" },
-            { label: "Importar XML", href: "/fiscal/importar" }
+            { label: "NF-e (Produto)", href: "/fiscal/nfe", feature: "nfe" },
+            { label: "NFC-e (Consumidor)", href: "/fiscal/nfce", feature: "nfce" },
+            { label: "NFS-e (Serviços)", href: "/fiscal/nfse", feature: "nfse" },
+            { label: "Importar XML", href: "/fiscal/importar", feature: "xml_import" }
         ]
     },
     {
@@ -166,15 +189,17 @@ const navItems = [
         permission: "configuracoes",
         children: [
             { label: "Geral & Dados", href: "/configuracoes" },
-            { label: "Etiquetas", href: "/configuracoes/etiquetas/a4" },
-            { label: "Auditoria", href: "/configuracoes/auditoria" },
+            { label: "Gestão de Empresas", href: "/configuracoes/empresas" },
+            { label: "Etiquetas", href: "/configuracoes/etiquetas/a4", feature: "etiquetas" },
+            { label: "Auditoria", href: "/configuracoes/auditoria", feature: "auditoria_logs" },
+            { label: "Contabilidade", href: "/configuracoes/contador", feature: "hub_contabilidade_feature" },
         ]
     },
 ];
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
     const pathname = usePathname();
-    const { empresa, profile } = useAuth();
+    const { empresa, profile, isTrialExpired, activeAddons } = useAuth();
     const { can } = usePermissions();
     const [solicitationsCount, setSolicitationsCount] = useState(0);
     const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(() => {
@@ -253,7 +278,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                         <X size={20} />
                     </button>
                 </div>
-
             {/* Navigation */}
             <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-0.5 scrollbar-none">
                 <CompanySwitcher />
@@ -262,63 +286,94 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                     const hasChildren = !!item.children;
                     const isParentActive = pathname.startsWith(item.href);
                     const isOpen = openMenus[item.label] || false;
-
                     const isActive = pathname === item.href;
 
+                    const currentPlan = (profile?.plano ?? 'starter') as Plan;
+                    
+                    // Lógica de bloqueio: só bloqueia se o trial expirou E o plano não tem a feature
+                    const showLock = item.feature && isTrialExpired && !hasFeature(currentPlan, item.feature, activeAddons);
+                    const requiredPlan = item.feature ? getPlanForFeature(item.feature) : null;
+                    const lockTitle = showLock ? `Disponível no plano ${PLAN_NAMES[requiredPlan!]}` : undefined;
+
                     return (
-                        <div key={item.href} className="space-y-0.5">
+                        <div key={item.href} className="space-y-0.5" title={lockTitle}>
                             {hasChildren ? (
                                 <button
                                     onClick={() => toggleMenu(item.label)}
                                     className={cn(
                                         "w-full sidebar-item",
-                                        isParentActive && "bg-white/5 text-white"
+                                        isParentActive && "bg-white/5 text-white",
+                                        showLock && "opacity-60 cursor-not-allowed"
                                     )}
                                 >
                                     <Icon className="w-4.5 h-4.5 shrink-0" size={18} />
                                     <span className="flex-1 text-left">{item.label}</span>
-                                    {isOpen ? (
-                                        <ChevronDown className="w-3.5 h-3.5 text-white/40" size={14} />
+                                    {showLock ? (
+                                        <span className="text-[10px] bg-white/10 px-1 rounded text-white/50">🔒</span>
                                     ) : (
-                                        <ChevronRight className="w-3.5 h-3.5 text-white/40" size={14} />
+                                        isOpen ? (
+                                            <ChevronDown className="w-3.5 h-3.5 text-white/40" size={14} />
+                                        ) : (
+                                            <ChevronRight className="w-3.5 h-3.5 text-white/40" size={14} />
+                                        )
                                     )}
                                 </button>
                             ) : (
                                 <Link
-                                    href={item.href}
+                                    href={showLock ? `/planos?upgrade=${item.feature}&from=${pathname}` : item.href}
                                     onClick={onClose}
-                                    className={cn("sidebar-item", isActive && "active")}
+                                    className={cn(
+                                        "sidebar-item", 
+                                        isActive && "active",
+                                        showLock && "opacity-60"
+                                    )}
                                 >
                                     <Icon className="w-4.5 h-4.5 shrink-0" size={18} />
                                     <span className="flex-1">{item.label}</span>
-                                    {item.label === "Solicitações" && solicitationsCount > 0 && (
-                                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse-subtle">
-                                            {solicitationsCount}
-                                        </span>
-                                    )}
-                                    {isActive && (
-                                        <ChevronRight className="w-3.5 h-3.5 text-white/40" size={14} />
+                                    {showLock ? (
+                                        <span className="text-[10px] bg-white/10 px-1 rounded text-white/50">🔒</span>
+                                    ) : (
+                                        <>
+                                            {item.label === "Solicitações" && solicitationsCount > 0 && (
+                                                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse-subtle">
+                                                    {solicitationsCount}
+                                                </span>
+                                            )}
+                                            {isActive && (
+                                                <ChevronRight className="w-3.5 h-3.5 text-white/40" size={14} />
+                                            )}
+                                        </>
                                     )}
                                 </Link>
                             )}
 
-                            {hasChildren && isOpen && (
+                            {hasChildren && isOpen && !showLock && (
                                 <div className="ml-9 space-y-0.5 border-l border-white/10 pl-2 mt-1">
-                                    {item.children.map((child: any) => (
-                                        <Link
-                                            key={child.href}
-                                            href={child.href}
-                                            onClick={onClose}
-                                            className={cn(
-                                                "flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-all",
-                                                pathname === child.href
-                                                    ? "text-white bg-white/10 font-bold"
-                                                    : "text-white/50 hover:text-white hover:bg-white/5"
-                                            )}
-                                        >
-                                            {child.label}
-                                        </Link>
-                                    ))}
+                                    {(item.children || []).map((child: any) => {
+                                        const isChildActive = pathname === child.href;
+                                        const showChildLock = child.feature && isTrialExpired && !hasFeature(currentPlan, child.feature, activeAddons);
+                                        const childRequiredPlan = child.feature ? getPlanForFeature(child.feature) : null;
+                                        const childLockTitle = showChildLock ? `Disponível no plano ${PLAN_NAMES[childRequiredPlan!]}` : undefined;
+
+                                        return (
+                                            <Link
+                                                key={child.href}
+                                                href={showChildLock ? `/planos?upgrade=${child.feature}&from=${pathname}` : child.href}
+                                                onClick={onClose}
+                                                title={childLockTitle}
+                                                className={cn(
+                                                    "flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all",
+                                                    isChildActive
+                                                        ? "text-white bg-white/10 font-bold"
+                                                        : "text-white/50 hover:text-white hover:bg-white/5",
+                                                    showChildLock && "opacity-60"
+                                                )}
+                                            >
+                                                <span>{child.label}</span>
+                                                {showChildLock && <span className="text-[9px] opacity-40">🔒</span>}
+                                            </Link>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -329,20 +384,24 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
             {/* Plan badge */}
             <div className="px-4 py-4 border-t border-white/10">
-                <div className="bg-white/10 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                <Link
+                    href="/planos"
+                    className="bg-white/10 rounded-xl px-3 py-2.5 flex items-center justify-between hover:bg-white/15 transition-all group"
+                >
                     <div>
                         <p className="text-white/50 text-xs">Plano atual</p>
-                        <p className="text-white text-sm font-semibold capitalize">
-                            {empresa?.plano || "Starter"}
+                        <p className="text-white text-sm font-semibold">
+                            {isTrialExpired ? (
+                                <span className="text-red-400">Expirado</span>
+                            ) : (
+                                PLAN_NAMES[empresa?.plano as Plan] || "Starter"
+                            )}
                         </p>
                     </div>
-                    <Link
-                        href="/planos"
-                        className="text-xs text-brand-300 hover:text-white font-medium transition-colors"
-                    >
-                        Upgrade →
-                    </Link>
-                </div>
+                    <span className="text-xs text-brand-300 group-hover:text-white font-medium transition-colors">
+                        {isTrialExpired ? "Renovar →" : "Upgrade →"}
+                    </span>
+                </Link>
             </div>
             </aside>
         </>

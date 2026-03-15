@@ -75,7 +75,8 @@ export async function getOrdemServicoById(id: string) {
             cliente:clientes(*),
             equipamento:equipamentos(*),
             tecnico:usuarios(nome),
-            timeline:os_timeline(*)
+            timeline:os_timeline(*),
+            transfers:os_unit_transfers(*, from_unit:units!from_unit_id(name), to_unit:units!to_unit_id(name))
         `)
         .eq("id", id)
         .single();
@@ -285,6 +286,29 @@ export async function updateOSStatus(
             notifyOSStatusChange(id, status).catch(e => console.error("[WhatsApp Auto] Error:", e));
         } catch (e) {
             console.error("[WhatsApp Auto] Failed to import notifyOSStatusChange:", e);
+        }
+    }
+
+    // 8. Internal notification for transfers (when finished)
+    if (status === 'finalizada') {
+        const { data: transfer } = await supabase
+            .from('os_unit_transfers')
+            .select('from_unit_id, units:from_unit_id(name)')
+            .eq('os_id', id)
+            .eq('status', 'recebido')
+            .maybeSingle();
+        
+        if (transfer) {
+            const t = transfer as any;
+            const { data: osData } = await supabase.from('ordens_servico').select('numero, marca_equipamento, modelo_equipamento').eq('id', id).single();
+            if (osData) {
+                await (supabase.from('notifications') as any).insert({
+                    tenant_id: empresaId,
+                    unit_id: t.from_unit_id,
+                    message: `OS #${String((osData as any).numero).padStart(4, '0')} pronta — ${(osData as any).marca_equipamento} ${(osData as any).modelo_equipamento} reparado. Cliente retira na ${t.units.name}`,
+                    link: `/os/${id}`
+                });
+            }
         }
     }
 

@@ -17,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
 import { toast } from "sonner";
+import { FeatureGate } from "@/components/plans/FeatureGate";
 
 interface LabelConfigA4 {
     padrao: string;
@@ -192,7 +193,8 @@ export default function ConfigEtiquetasA4Page() {
     );
 
     return (
-        <div className="space-y-6 page-enter pb-20">
+        <FeatureGate feature="etiquetas" featureName="Impressão de Etiquetas">
+            <div className="space-y-6 page-enter pb-20">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -322,6 +324,7 @@ export default function ConfigEtiquetasA4Page() {
                     <p className="text-xs font-medium">As medidas em centímetros garantem o alinhamento perfeito na folha física.</p>
                 </div>
             </div>
-        </div>
+            </div>
+        </FeatureGate>
     );
 }

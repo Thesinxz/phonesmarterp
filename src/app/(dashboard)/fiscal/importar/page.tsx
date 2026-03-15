@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { cn } from "@/utils/cn";
 import { useAuth } from "@/context/AuthContext";
 import { getXmlImportacoes, upsertXmlImportacao, updateXmlImportacao } from "@/services/compras";
+import { FeatureGate } from "@/components/plans/FeatureGate";
 
 interface NFeParsedData {
     chave: string;
@@ -194,7 +195,8 @@ export default function ImportarXMLPage() {
     }
 
     return (
-        <div className="space-y-6 page-enter pb-20">
+        <FeatureGate feature="xml_import" featureName="Importação de XML">
+            <div className="space-y-6 page-enter pb-20">
             <div className="flex items-center gap-4">
                 <Link href="/fiscal" className="p-2 hover:bg-white/50 rounded-lg transition-colors">
                     <ArrowLeft className="w-5 h-5 text-slate-600" />
@@ -383,6 +385,7 @@ export default function ImportarXMLPage() {
                     </div>
                 )
             )}
-        </div>
+            </div>
+        </FeatureGate>
     );
 }

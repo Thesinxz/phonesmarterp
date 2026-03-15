@@ -24,6 +24,8 @@ import { formatCurrency } from "@/utils/formatCurrency";
 import { formatDate } from "@/utils/formatDate";
 import { getDocumentosFiscais, DocumentoFiscal } from "@/services/fiscal";
 import { useAuth } from "@/context/AuthContext";
+import { useFeatureGate } from "@/hooks/useFeatureGate";
+import { UpgradeBanner } from "@/components/plans/UpgradeBanner";
 
 export default function FiscalPage() {
     const { profile } = useAuth();
@@ -49,8 +51,27 @@ export default function FiscalPage() {
         loadData();
     }, [profile?.empresa_id]);
 
+    const { hasAccess, upgrade } = useFeatureGate('nfe');
+
     const totalEmitidas = documentos.length;
     const somaTotal = documentos.reduce((acc, doc) => acc + (doc.valor_total_centavos || 0), 0);
+
+    if (!hasAccess && !loading) {
+        return (
+            <div className="space-y-6 page-enter">
+                <div>
+                    <h1 className="text-xl md:text-2xl font-bold text-slate-800">Módulo Fiscal</h1>
+                    <p className="text-slate-500 text-[10px] md:text-sm mt-0.5">Gestão de documentos fiscais e conformidade</p>
+                </div>
+                
+                <UpgradeBanner 
+                    feature="Emissão de Notas Fiscais (NFe/NFCe/NFSe)"
+                    requiredPlan="essencial"
+                    className="mt-8"
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 page-enter pb-12">

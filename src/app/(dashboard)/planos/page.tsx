@@ -4,11 +4,14 @@ import { useAuth } from "@/context/AuthContext";
 import { GlassCard } from "@/components/ui/GlassCard";
 import {
     Zap, Check, X, Star, ShieldCheck, Crown,
-    Users, ClipboardList, Package, Receipt,
-    BarChart3, Building2, MessageSquare, Smartphone
+    Users, ClipboardList, Package, ArrowRight,
+    Search, Lightbulb
 } from "lucide-react";
 import { cn } from "@/utils/cn";
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { PLAN_FEATURES, PLAN_LIMITS, Feature, Plan, getPlanForFeature, PLAN_NAMES } from "@/lib/plans/features";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 
 const plans = [
     {
@@ -63,14 +66,19 @@ const plans = [
     {
         id: "pro",
         name: "Pro",
-        price: 8990,
-        priceAnual: 6990,
+        price: 9990,
+        priceAnual: 7990,
         description: "Para operações completas",
         icon: Crown,
         color: "text-purple-600",
         bg: "bg-purple-50",
         borderColor: "border-purple-200",
-        limits: { usuarios: 10, tecnicos: 5, os: "Ilimitadas", storage: "3GB" },
+        limits: { 
+            usuarios: PLAN_LIMITS.pro.maxUsuarios, 
+            tecnicos: PLAN_LIMITS.pro.maxTecnicos, 
+            os: PLAN_LIMITS.pro.maxOsPerMonth || "Ilimitadas", 
+            storage: `${PLAN_LIMITS.pro.maxStorageMB / 1024}GB` 
+        },
         features: [
             { text: "Tudo do Essencial", included: true },
             { text: "Multi-Empresa (até 3 lojas)", included: true },
@@ -87,14 +95,19 @@ const plans = [
     {
         id: "enterprise",
         name: "Enterprise",
-        price: 14990,
-        priceAnual: 11990,
+        price: 24900,
+        priceAnual: 19900,
         description: "Para redes e franquias",
         icon: ShieldCheck,
         color: "text-amber-600",
         bg: "bg-amber-50",
         borderColor: "border-amber-200",
-        limits: { usuarios: "Ilimitados", tecnicos: "Ilimitados", os: "Ilimitadas", storage: "10GB" },
+        limits: { 
+            usuarios: PLAN_LIMITS.enterprise.maxUsuarios || "Ilimitados", 
+            tecnicos: PLAN_LIMITS.enterprise.maxTecnicos || "Ilimitados", 
+            os: PLAN_LIMITS.enterprise.maxOsPerMonth || "Ilimitadas", 
+            storage: `${PLAN_LIMITS.enterprise.maxStorageMB / 1024}GB` 
+        },
         features: [
             { text: "Tudo do Pro", included: true },
             { text: "Lojas Ilimitadas", included: true },
@@ -114,13 +127,53 @@ function formatPrice(centavos: number) {
     return { reais, cents: cents.toString().padStart(2, "0") };
 }
 
-export default function PlanosPage() {
+function PlanosContent() {
     const { empresa } = useAuth();
+    const searchParams = useSearchParams();
     const currentPlan = empresa?.plano || "starter";
     const [isAnual, setIsAnual] = useState(false);
 
+    const upgradeFeature = searchParams.get('upgrade');
+    const fromPath = searchParams.get('from');
+
+    const recommendedPlanId = upgradeFeature 
+        ? getPlanForFeature(upgradeFeature as Feature) 
+        : 'essencial';
+
+    useEffect(() => {
+        if (recommendedPlanId) {
+            const element = document.getElementById(`plano-${recommendedPlanId}`);
+            if (element) {
+                setTimeout(() => {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 500);
+            }
+        }
+    }, [recommendedPlanId]);
+
     return (
         <div className="space-y-8 page-enter pb-12">
+            {/* Contexto de Upgrade */}
+            {upgradeFeature && (
+                <div className="max-w-4xl mx-auto">
+                    <div className="bg-indigo-600 text-white rounded-3xl p-6 shadow-xl shadow-indigo-500/20 flex flex-col md:flex-row items-center gap-6 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-32 translate-x-32" />
+                        <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
+                            <Lightbulb className="w-8 h-8 text-white" />
+                        </div>
+                        <div className="flex-1 text-center md:text-left">
+                            <h2 className="text-xl font-black uppercase tracking-tight">Você tentou acessar: <span className="underline decoration-indigo-300">{upgradeFeature.replace(/_/g, ' ')}</span></h2>
+                            <p className="text-indigo-100 text-sm mt-1">Este recurso está disponível a partir do plano <strong>{PLAN_NAMES[recommendedPlanId]}</strong>.</p>
+                        </div>
+                        {fromPath && (
+                            <Link href={fromPath} className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold transition-all border border-white/20">
+                                Voltar onde eu estava
+                            </Link>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <div className="text-center">
                 <h1 className="text-3xl font-black text-slate-800">Planos SmartOS</h1>
@@ -159,21 +212,29 @@ export default function PlanosPage() {
                 {plans.map((plan) => {
                     const PlanIcon = plan.icon;
                     const isCurrent = currentPlan === plan.id;
+                    const isRecommendedForFeature = recommendedPlanId === plan.id;
                     const price = isAnual ? plan.priceAnual : plan.price;
                     const { reais, cents } = formatPrice(price);
                     const originalPrice = isAnual ? formatPrice(plan.price) : null;
 
                     return (
-                        <div key={plan.id} className="relative flex">
-                            {plan.recommended && (
+                        <div key={plan.id} id={`plano-${plan.id}`} className="relative flex">
+                            {plan.recommended && !upgradeFeature && (
                                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg shadow-brand-500/30 z-10 uppercase tracking-wider">
                                     Mais Popular
                                 </div>
                             )}
+                            {isRecommendedForFeature && upgradeFeature && (
+                                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg shadow-indigo-500/30 z-10 uppercase tracking-wider">
+                                    Plano Necessário
+                                </div>
+                            )}
                             <GlassCard className={cn(
-                                "flex-1 flex flex-col p-6 transition-all hover:scale-[1.02] hover:shadow-xl",
-                                plan.recommended && "border-2 border-brand-400 shadow-brand-glow ring-1 ring-brand-200",
-                                isCurrent && "border-2 border-emerald-400 shadow-emerald-glow"
+                                "flex-1 flex flex-col p-6 transition-all border-2",
+                                plan.recommended && !upgradeFeature && "border-brand-400 shadow-brand-glow ring-1 ring-brand-200",
+                                isRecommendedForFeature && upgradeFeature && "border-indigo-500 shadow-indigo-glow scale-105 z-20",
+                                isCurrent && !isRecommendedForFeature && "border-emerald-400 shadow-emerald-glow",
+                                !isCurrent && !isRecommendedForFeature && !plan.recommended && "border-slate-200"
                             )}>
                                 {/* Icon + Name */}
                                 <div className="flex items-center gap-3 mb-4">
@@ -252,18 +313,19 @@ export default function PlanosPage() {
                                 </div>
 
                                 {/* CTA */}
-                                <button
+                                <Link
+                                    href={`/planos/checkout/${plan.id}`}
                                     className={cn(
-                                        "w-full py-3 rounded-xl font-bold text-sm transition-all",
+                                        "w-full py-3 rounded-xl font-bold text-sm transition-all text-center",
                                         isCurrent
                                             ? "bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default"
-                                            : plan.recommended
+                                            : plan.recommended || isRecommendedForFeature
                                                 ? "bg-brand-500 text-white shadow-lg shadow-brand-500/30 hover:bg-brand-600 hover:shadow-xl"
                                                 : "bg-slate-800 text-white hover:bg-slate-900 shadow-lg hover:shadow-xl"
                                     )}
                                 >
                                     {isCurrent ? "✓ Plano Atual" : "Assinar Agora"}
-                                </button>
+                                </Link>
                             </GlassCard>
                         </div>
                     );
@@ -290,16 +352,16 @@ export default function PlanosPage() {
                         </thead>
                         <tbody className="divide-y divide-slate-50">
                             {[
-                                { label: "Ordens de Serviço", values: ["80/mês", "200/mês", "Ilimitadas", "Ilimitadas"] },
-                                { label: "PDV", values: ["Simplificado", "Completo + Caixa", "✅", "✅"] },
-                                { label: "Notas Fiscais", values: ["—", "NF-e/NFC-e/NFS-e", "✅", "✅"] },
-                                { label: "Estoque", values: ["—", "✅ Completo", "✅", "✅"] },
+                                { label: "Ordens de Serviço", values: [PLAN_LIMITS.starter.maxOsPerMonth + "/mês", PLAN_LIMITS.essencial.maxOsPerMonth + "/mês", "Ilimitadas", "Ilimitadas"] },
+                                { label: "PDV (Ponto de Venda)", values: ["Simplificado", "Completo + Caixa", "✅", "✅"] },
+                                { label: "Notas Fiscais", values: [PLAN_FEATURES.starter.includes('nfe') ? "✅" : "—", "NF-e/NFC-e/NFS-e", "✅", "✅"] },
+                                { label: "Gestão de IMEIs", values: ["—", "✅", "✅", "✅"] },
                                 { label: "Financeiro", values: ["—", "✅ Completo", "✅", "✅"] },
-                                { label: "WhatsApp Automático", values: ["Básico", "✅", "✅", "✅"] },
                                 { label: "Multi-Empresa", values: ["—", "—", "Até 3 lojas", "Ilimitadas"] },
-                                { label: "DRE / Relatórios", values: ["—", "Básicos", "Completos", "✅"] },
-                                { label: "Hub Contabilidade", values: ["—", "—", "✅", "✅"] },
-                                { label: "Suporte", values: ["Sistema", "Sistema", "Prioritário", "VIP WhatsApp"] },
+                                { label: "Automações Marketing", values: ["—", "—", "✅", "✅"] },
+                                { label: "Balanço de Estoque", values: ["—", "—", "✅", "✅"] },
+                                { label: "Hub Contabilidade", values: ["—", "—", "—", "✅"] },
+                                { label: "Suporte VIP", values: ["—", "—", "—", "✅"] },
                             ].map((row, i) => (
                                 <tr key={i} className="hover:bg-slate-50/50">
                                     <td className="px-6 py-3 font-medium text-slate-700">{row.label}</td>
@@ -316,5 +378,17 @@ export default function PlanosPage() {
                 </div>
             </GlassCard>
         </div>
+    );
+}
+
+export default function PlanosPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+            </div>
+        }>
+            <PlanosContent />
+        </Suspense>
     );
 }

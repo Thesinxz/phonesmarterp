@@ -41,6 +41,7 @@ export interface CategoriaMargin {
     tipo_margem: "porcentagem" | "fixo";
     garantia_padrao_dias: number;
     nf_obrigatoria: boolean;
+    exigir_imei?: boolean;
     default_gateway_id?: string;
 }
 
