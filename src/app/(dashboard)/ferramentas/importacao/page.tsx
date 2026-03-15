@@ -19,7 +19,8 @@ import {
     FileSearch,
     Building2,
     Layers,
-    Tag
+    Tag,
+    RotateCcw
 } from "lucide-react";
 import Link from "next/link";
 import Tesseract from 'tesseract.js';
@@ -93,6 +94,7 @@ export default function ImportacaoPage() {
     }[]>([]);
     const [ocrStatus, setOcrStatus] = useState("");
     const [viewCurrency, setViewCurrency] = useState<'BRL' | 'USD'>('BRL');
+    const [produtosEditados, setProdutosEditados] = useState<Set<string>>(new Set());
 
     const brlToUsd = (brlCents: number, rate: number): number => {
         if (!rate || rate <= 0) return 0;
@@ -287,6 +289,14 @@ export default function ImportacaoPage() {
         }
     }
 
+    const calcularPrecoVenda = (custoCentavos: number, margem: number, tipo: 'percentual' | 'fixa') => {
+        if (tipo === 'percentual') {
+            return Math.round(custoCentavos * (1 + margem / 100));
+        } else {
+            return custoCentavos + Math.round(margem * 100);
+        }
+    };
+
     const calculateItem = (
         itemCustoUsd: number, 
         pricingSegmentId?: string, 
@@ -334,19 +344,13 @@ export default function ImportacaoPage() {
 
         if (precoCustomPix && precoCustomPix > 0) {
             precoSugeridoPix = precoCustomPix;
-            const lucroEfetivoBrl = (precoSugeridoPix * (1 - taxaNF - taxaPix)) - custoFinalBrl;
-            precoSugerido1x = (custoFinalBrl + lucroEfetivoBrl) / (1 - taxaNF - taxaCredito1x);
-            precoSugerido12x = (custoFinalBrl + lucroEfetivoBrl) / (1 - taxaNF - taxaCredito12x);
         } else {
-            // Lógica baseada em Segmento ou Margem customizada
-            const marginBrl = margemCustom !== undefined ? (margemCustom * 100) : (segment?.default_margin || 0);
-            
-            // Preço Base = (Custo + Margem Fixa) / (1 - Impostos)
-            const divisor = 1 - taxaNF;
-            precoSugeridoPix = Math.ceil((custoFinalBrl + marginBrl) / (divisor - taxaPix));
-            precoSugerido1x = Math.ceil((custoFinalBrl + marginBrl) / (divisor - taxaCredito1x));
-            precoSugerido12x = Math.ceil((custoFinalBrl + marginBrl) / (divisor - taxaCredito12x));
+            precoSugeridoPix = calcularPrecoVenda(custoFinalBrl * 100, valorMargem, tipoMargem) / 100;
         }
+
+        const lucroEfetivoBrl = (precoSugeridoPix * (1 - taxaNF - taxaPix)) - custoFinalBrl;
+        precoSugerido1x = (custoFinalBrl + lucroEfetivoBrl) / (1 - taxaNF - taxaCredito1x);
+        precoSugerido12x = (custoFinalBrl + lucroEfetivoBrl) / (1 - taxaNF - taxaCredito12x);
 
         return {
             custoMoedaBrl,
@@ -367,15 +371,25 @@ export default function ImportacaoPage() {
         toast.success("Copiado!");
     };
 
-    const applyGlobalMargin = (val: number) => {
-        setParams({ ...params, margemPadrao: val });
-        setItems(prev => prev.map(it => ({ 
-            ...it, 
-            margemCustom: val, 
-            margemTipoCustom: params.margemTipo,
-            precoCustomPix: undefined // Limpa preços manuais ao aplicar margem global
-        })));
-        toast.success(`Lucro de ${params.margemTipo === 'percentual' ? val + '%' : formatCurrency(val)} aplicado a todos!`);
+    const applyGlobalMargin = (val: number, tipo?: 'percentual' | 'fixa') => {
+        const targetTipo = tipo || params.margemTipo;
+        setItems(prev => prev.map(it => {
+            if (produtosEditados.has(it.id)) return it;
+            return {
+                ...it,
+                margemCustom: val,
+                margemTipoCustom: targetTipo,
+                precoCustomPix: undefined
+            };
+        }));
+        if (tipo) setParams({ ...params, margemTipo: tipo, margemPadrao: val });
+        else setParams({ ...params, margemPadrao: val });
+        
+        if (targetTipo === 'percentual' && val > 300) {
+            toast.warning(`Margem de ${val}% é muito alta. Verifique se o valor está correto.`, { duration: 5000 });
+        }
+
+        toast.success(`Margem de ${targetTipo === 'percentual' ? val + '%' : 'R$ ' + val} aplicada aos itens não editados.`);
     };
 
     const splitItem = (index: number) => {
@@ -1122,32 +1136,35 @@ export default function ImportacaoPage() {
                                 <div className="flex flex-col">
                                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lucro Global</label>
                                     <div className="flex items-center gap-2">
-                                        <div className="flex items-center text-emerald-600">
-                                            {params.margemTipo === 'fixa' && <span className="font-black text-xs mr-0.5">R$</span>}
+                                        <div className="flex items-center px-2 py-1 bg-emerald-50 rounded-lg border border-emerald-100 text-emerald-600">
+                                            {params.margemTipo === 'fixa' && <span className="font-black text-xs mr-1">R$</span>}
                                             <input 
                                                 type="number" 
-                                                className="w-16 bg-transparent border-none p-0 font-black text-lg focus:ring-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                                                className="w-16 bg-transparent border-none p-0 font-black text-sm focus:ring-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-center" 
                                                 value={params.margemPadrao} 
                                                 onChange={e => setParams({ ...params, margemPadrao: Number(e.target.value) })} 
+                                                min={0}
+                                                max={params.margemTipo === 'percentual' ? 999 : undefined}
+                                                step={params.margemTipo === 'percentual' ? 1 : 10}
                                             />
-                                            {params.margemTipo === 'percentual' && <span className="font-black text-base -ml-1">%</span>}
+                                            {params.margemTipo === 'percentual' && <span className="font-black text-xs ml-1">%</span>}
                                         </div>
                                         
                                         <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
                                             <button 
-                                                onClick={() => setParams({...params, margemTipo: 'percentual'})}
-                                                className={cn("px-1.5 py-0.5 text-[9px] font-black rounded-md transition-all", params.margemTipo === 'percentual' ? "bg-white shadow-sm text-brand-600" : "text-slate-400")}>
+                                                onClick={() => applyGlobalMargin(params.margemPadrao, 'percentual')}
+                                                className={cn("px-2 py-1 text-[10px] font-black rounded-md transition-all", params.margemTipo === 'percentual' ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-slate-600")}>
                                                 %
                                             </button>
                                             <button 
-                                                onClick={() => setParams({...params, margemTipo: 'fixa'})}
-                                                className={cn("px-1.5 py-0.5 text-[9px] font-black rounded-md transition-all", params.margemTipo === 'fixa' ? "bg-white shadow-sm text-brand-600" : "text-slate-400")}>
+                                                onClick={() => applyGlobalMargin(params.margemPadrao, 'fixa')}
+                                                className={cn("px-2 py-1 text-[10px] font-black rounded-md transition-all", params.margemTipo === 'fixa' ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-slate-600")}>
                                                 R$
                                             </button>
                                         </div>
 
                                         <button 
-                                            className="px-2 py-0.5 bg-emerald-600 text-[9px] font-black text-white rounded-md hover:bg-emerald-700 transition-colors uppercase"
+                                            className="px-3 py-1.5 bg-[#27500A] text-[10px] font-black text-white rounded-md hover:opacity-90 transition-opacity uppercase shadow-sm"
                                             onClick={() => applyGlobalMargin(params.margemPadrao)}
                                         >
                                             Ok
@@ -1255,26 +1272,52 @@ export default function ImportacaoPage() {
                                         {items.map((item, i) => {
                                             const calc = calculateItem(item.custoUsd, item.pricing_segment_id, item.margemCustom, item.margemTipoCustom, item.precoCustomPix);
                                             const usdValues = getProductUsdValues(item.custoUsd, calc.impostoBrl, calc.freteEuaBrl, calc.freteBrasilBrl, calc.custoFinalBrl, params.dolarCompra, item.precoVendaUsdCustom);
-                                            const { custoFinalBrl, precoSugeridoPix, precoSugerido1x, precoSugerido12x, taxaNF, taxaPix } = calc;
-                                            const tipoMargemEfetivo = item.margemTipoCustom || params.margemTipo;
-                                            const valorMargemEfetivo = item.precoCustomPix 
-                                                ? (item.precoCustomPix * (1 - taxaNF - taxaPix) - custoFinalBrl) // Se preço manual, mostra lucro real
-                                                : (item.margemCustom !== undefined ? item.margemCustom : params.margemPadrao);
+                                            const { custoFinalBrl, precoSugeridoPix, precoSugerido1x, precoSugerido12x } = calc;
                                             
-                                            const tipoMargemExibicao = item.precoCustomPix ? 'fixa' : tipoMargemEfetivo;
+                                            const isEditado = produtosEditados.has(item.id);
+                                            const tipoMargemExibicao = item.margemTipoCustom || params.margemTipo;
+                                            const valorMargemExibicao = item.margemCustom !== undefined ? item.margemCustom : params.margemPadrao;
+                                            
+                                            const lucroRealBrl = precoSugeridoPix - custoFinalBrl;
+                                            const margemRealPct = ((lucroRealBrl / custoFinalBrl) * 100);
+                                            const temPrejuizo = precoSugeridoPix < custoFinalBrl;
 
                                             return (
                                                 <tr key={item.id} className="hover:bg-slate-50/50">
                                                     <td className="px-3 py-4">
                                                         <div className="flex flex-col">
-                                                            <span className="font-bold text-slate-800 text-[12px] truncate" title={item.label}>{item.label}</span>
-                                                            <div className="flex gap-2 mt-1">
+                                                            <span className="font-bold text-slate-800 text-[12px] truncate flex items-center gap-2" title={item.label}>
+                                                                {item.label}
+                                                                {isEditado && (
+                                                                    <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[8px] font-black uppercase rounded-full">Editado</span>
+                                                                )}
+                                                            </span>
+                                                            <div className="flex flex-wrap gap-2 mt-1">
                                                                 <span className="text-[9px] font-black bg-amber-100 text-amber-700 px-1 rounded">IMEI: {item.imei || '---'}</span>
                                                                 {(item.condicao === 'seminovo' || item.condicao === 'usado') && (
                                                                     <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 px-1 rounded">Bat: {item.saudeBateria || '---'}%</span>
                                                                 )}
+                                                                {isEditado && (
+                                                                    <button 
+                                                                        onClick={() => {
+                                                                            setProdutosEditados(prev => {
+                                                                                const next = new Set(prev);
+                                                                                next.delete(item.id);
+                                                                                return next;
+                                                                            });
+                                                                            const newItems = [...items];
+                                                                            newItems[i].margemCustom = undefined;
+                                                                            newItems[i].margemTipoCustom = undefined;
+                                                                            newItems[i].precoCustomPix = undefined;
+                                                                            setItems(newItems);
+                                                                        }}
+                                                                        className="text-[8px] font-black text-slate-400 hover:text-slate-600 uppercase flex items-center gap-0.5"
+                                                                    >
+                                                                        <RotateCcw size={8} /> resetar
+                                                                    </button>
+                                                                )}
                                                                  {item.quantidade > 1 && (
-                                                                    <div className="flex flex-col gap-1">
+                                                                    <div className="flex flex-col gap-1 w-full">
                                                                         <span className="text-[9px] font-black bg-red-100 text-red-600 px-1 rounded animate-pulse">
                                                                             {item.quantidade} unidades agrupadas!
                                                                         </span>
@@ -1299,44 +1342,52 @@ export default function ImportacaoPage() {
                                                             {tipoMargemExibicao === 'fixa' && <span className="text-[10px] font-black text-emerald-600">R$</span>}
                                                             <input type="number" className={cn(
                                                                 "w-16 px-2 py-1.5 rounded-lg text-center font-black text-xs outline-none border transition-all",
-                                                                item.precoCustomPix ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-emerald-50 text-emerald-600 border-emerald-100"
+                                                                isEditado ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-emerald-50 text-emerald-600 border-emerald-100"
                                                             )} 
-                                                                value={valorMargemEfetivo.toFixed(2)} 
+                                                                value={valorMargemExibicao} 
                                                                 onChange={e => {
                                                                     const newItems = [...items];
                                                                     newItems[i].margemCustom = Number(e.target.value);
                                                                     newItems[i].margemTipoCustom = tipoMargemExibicao;
                                                                     newItems[i].precoCustomPix = undefined; // Limpa preço manual se editar margem
                                                                     setItems(newItems);
+                                                                    setProdutosEditados(prev => new Set(prev).add(item.id));
                                                                 }} />
                                                             {tipoMargemExibicao === 'percentual' && <span className="text-[10px] font-black text-emerald-600">%</span>}
                                                         </div>
                                                     </td>
                                                     <td className="px-3 py-4 text-center">
-                                                        <div className="flex items-center justify-center gap-2">
-                                                            <div className={cn(
-                                                                "flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border transition-all",
-                                                                item.precoCustomPix ? "bg-amber-100/30 border-amber-200" : "bg-emerald-100/30 border-emerald-100"
-                                                            )}>
-                                                                <span className={cn("text-[10px] font-black", item.precoCustomPix ? "text-amber-600" : "text-emerald-600")}>R$</span>
-                                                                <input 
-                                                                    type="number" 
-                                                                    step="0.01" 
-                                                                    className={cn(
-                                                                        "bg-transparent border-none outline-none font-black w-20 text-center text-sm",
-                                                                        item.precoCustomPix ? "text-amber-700" : "text-emerald-700"
-                                                                    )}
-                                                                    value={precoSugeridoPix}
-                                                                    onChange={e => {
-                                                                        const newVal = Number(e.target.value);
-                                                                        const newItems = [...items];
-                                                                        newItems[i].precoCustomPix = newVal;
-                                                                        newItems[i].margemCustom = undefined; // Limpa margem se editar preço
-                                                                        setItems(newItems);
-                                                                    }}
-                                                                />
+                                                        <div className="flex flex-col items-center gap-1">
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <div className={cn(
+                                                                    "flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border transition-all",
+                                                                    temPrejuizo ? "bg-red-50 border-red-200" : (isEditado ? "bg-amber-100/30 border-amber-200" : "bg-emerald-100/30 border-emerald-100")
+                                                                )}>
+                                                                    <span className={cn("text-[10px] font-black", temPrejuizo ? "text-red-600" : (isEditado ? "text-amber-600" : "text-emerald-600"))}>R$</span>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        step="0.01" 
+                                                                        className={cn(
+                                                                            "bg-transparent border-none outline-none font-black w-20 text-center text-sm",
+                                                                            temPrejuizo ? "text-red-700" : (isEditado ? "text-amber-700" : "text-emerald-700")
+                                                                        )}
+                                                                        value={precoSugeridoPix}
+                                                                        onChange={e => {
+                                                                            const newVal = Number(e.target.value);
+                                                                            const newItems = [...items];
+                                                                            newItems[i].precoCustomPix = newVal;
+                                                                            newItems[i].margemCustom = undefined; // Limpa margem se editar preço
+                                                                            setItems(newItems);
+                                                                            setProdutosEditados(prev => new Set(prev).add(item.id));
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <CopyButton value={precoSugeridoPix.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} label="Preço Pix (BRL)" />
                                                             </div>
-                                                            <CopyButton value={precoSugeridoPix.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} label="Preço Pix (BRL)" />
+                                                            <div className={cn("text-[9px] font-black uppercase tracking-tighter", temPrejuizo ? "text-red-500" : "text-slate-400")}>
+                                                                lucro real: {margemRealPct.toFixed(1)}% ({formatCurrency(Math.round(lucroRealBrl * 100))})
+                                                                {temPrejuizo && " ! PREJUÍZO"}
+                                                            </div>
                                                         </div>
                                                     </td>
                                                     <td className="px-3 py-4 text-center">
