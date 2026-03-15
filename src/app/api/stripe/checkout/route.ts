@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
 
+const PLAN_PRICES: Record<string, { monthly: number; yearly: number; name: string }> = {
+    starter: { monthly: 2490, yearly: 1990, name: "Plano Starter" },
+    essencial: { monthly: 4990, yearly: 3990, name: "Plano Essencial" },
+    pro: { monthly: 9990, yearly: 7990, name: "Plano Pro" },
+    enterprise: { monthly: 24900, yearly: 19900, name: "Plano Enterprise" },
+};
+
 export async function POST(req: Request) {
     try {
         const supabase = await createClient();
@@ -11,11 +18,18 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Não autorizado. Faça login primeiro." }, { status: 401 });
         }
 
-        const { empresaId, email } = await req.json();
+        const { empresaId, email, planId, isAnual } = await req.json();
 
-        if (!empresaId || !email) {
+        if (!empresaId || !planId) {
             return NextResponse.json({ error: "Dados inválidos." }, { status: 400 });
         }
+
+        const planConfig = PLAN_PRICES[planId];
+        if (!planConfig) {
+            return NextResponse.json({ error: "Plano inválido." }, { status: 400 });
+        }
+
+        const amount = isAnual ? planConfig.yearly : planConfig.monthly;
 
         // 1. Verificar se o usuário realmente pertence a esta empresa e tem permissão (Admin)
         const { data: profile } = await (supabase.from("usuarios") as any)
@@ -36,12 +50,12 @@ export async function POST(req: Request) {
                     price_data: {
                         currency: "brl",
                         product_data: {
-                            name: "Plano Profissional — Phone Smart ERP",
-                            description: "Assinatura mensal para controle total da sua assistência técnica.",
+                            name: `${planConfig.name} — Phone Smart ERP`,
+                            description: `Assinatura ${isAnual ? 'anual' : 'mensal'} para controle total da sua assistência técnica.`,
                         },
-                        unit_amount: 14900, // R$ 149,00
+                        unit_amount: amount,
                         recurring: {
-                            interval: "month",
+                            interval: isAnual ? "year" : "month",
                         },
                     },
                     quantity: 1,
@@ -49,12 +63,14 @@ export async function POST(req: Request) {
             ],
             mode: "subscription",
             success_url: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/dashboard?payment=success`,
-            cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/dashboard?payment=cancel`,
+            cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/planos/checkout/${planId}?payment=cancel`,
             metadata: {
                 empresa_id: empresaId,
-                user_id: authSession.user.id
+                user_id: authSession.user.id,
+                plan_id: planId,
+                is_anual: String(isAnual)
             },
-            customer_email: email,
+            customer_email: email || authSession.user.email,
         });
 
         return NextResponse.json({ url: session.url });
@@ -63,3 +79,4 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Erro interno ao processar pagamento." }, { status: 500 });
     }
 }
+

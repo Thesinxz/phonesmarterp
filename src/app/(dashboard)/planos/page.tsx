@@ -314,7 +314,7 @@ function PlanosContent() {
 
                                 {/* CTA */}
                                 <Link
-                                    href={`/planos/checkout/${plan.id}`}
+                                    href={`/planos/checkout/${plan.id}${isAnual ? '?anual=true' : ''}`}
                                     className={cn(
                                         "w-full py-3 rounded-xl font-bold text-sm transition-all text-center",
                                         isCurrent
@@ -326,6 +326,7 @@ function PlanosContent() {
                                 >
                                     {isCurrent ? "✓ Plano Atual" : "Assinar Agora"}
                                 </Link>
+
                             </GlassCard>
                         </div>
                     );

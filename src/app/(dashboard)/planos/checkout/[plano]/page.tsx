@@ -10,39 +10,76 @@ import {
     ArrowLeft,
     Loader2,
     ShieldCheck,
-    Lock
+    Lock,
+    CreditCard,
+    QrCode
 } from "lucide-react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { PLAN_NAMES, PLAN_FEATURES, Plan } from "@/lib/plans/features";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { registrarInteresse } from "@/app/actions/plans";
 import { toast } from "sonner";
+import { cn } from "@/utils/cn";
 
 const PLAN_PRICES = {
-    starter: 2490,
-    essencial: 4990,
-    pro: 9990,
-    enterprise: 24900
+    starter: { monthly: 2490, yearly: 1990 },
+    essencial: { monthly: 4990, yearly: 3990 },
+    pro: { monthly: 9990, yearly: 7990 },
+    enterprise: { monthly: 24900, yearly: 19900 }
 };
 
-export default function CheckoutPage() {
+function CheckoutContent() {
     const { plano } = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { user, empresa } = useAuth();
-    const [loading, setLoading] = useState(false);
+    
+    const [loadingStripe, setLoadingStripe] = useState(false);
+    const [loadingInteresse, setLoadingInteresse] = useState(false);
     const [telefone, setTelefone] = useState("");
-    const [success, setSuccess] = useState(false);
+    const [successInteresse, setSuccessInteresse] = useState(false);
 
+    const isAnual = searchParams.get('anual') === 'true';
     const planId = plano as Plan;
     const planName = PLAN_NAMES[planId] || "Plano";
-    const planPrice = PLAN_PRICES[planId] || 0;
+    const prices = PLAN_PRICES[planId] || { monthly: 0, yearly: 0 };
+    const planPrice = isAnual ? prices.yearly : prices.monthly;
+
+    const handleStripeCheckout = async () => {
+        if (!empresa?.id) return;
+        setLoadingStripe(true);
+        try {
+            const response = await fetch("/api/stripe/checkout", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    empresaId: empresa.id,
+                    email: user?.email,
+                    planId: planId,
+                    isAnual: isAnual
+                }),
+            });
+
+            const data = await response.json();
+            if (data.url) {
+                window.location.href = data.url;
+            } else {
+                toast.error(data.error || "Erro ao iniciar checkout.");
+                setLoadingStripe(false);
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("Erro na conexão com o servidor de pagamentos.");
+            setLoadingStripe(false);
+        }
+    };
 
     const handleInteresse = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user) return;
         
-        setLoading(true);
+        setLoadingInteresse(true);
         try {
             await registrarInteresse({
                 userId: user.id,
@@ -51,20 +88,20 @@ export default function CheckoutPage() {
                 planoDesejado: planId,
                 telefone
             });
-            setSuccess(true);
+            setSuccessInteresse(true);
             toast.success("Interesse registrado! Entraremos em contato em breve.");
         } catch (error) {
             toast.error("Ocorreu um erro ao registrar seu interesse.");
         } finally {
-            setLoading(false);
+            setLoadingInteresse(false);
         }
     };
 
     const whatsappUrl = `https://wa.me/5567991444131?text=${encodeURIComponent(
-        `Olá! Estou usando o SmartOS ERP e quero assinar o plano ${planName.toUpperCase()}. Meu e-mail é ${user?.email}.`
+        `Olá! Estou usando o SmartOS ERP e quero assinar o plano ${planName.toUpperCase()} (${isAnual ? 'ANUAL' : 'MENSAL'}). Meu e-mail é ${user?.email}.`
     )}`;
 
-    if (success) {
+    if (successInteresse) {
         return (
             <div className="min-h-[70vh] flex items-center justify-center p-6">
                 <GlassCard className="max-w-md w-full p-8 text-center space-y-6">
@@ -111,15 +148,21 @@ export default function CheckoutPage() {
                             </div>
                             <div>
                                 <h3 className="text-lg font-black text-slate-800">{planName}</h3>
-                                <p className="text-xs text-brand-600 font-bold uppercase tracking-wider">Assinatura Mensal</p>
+                                <p className="text-xs text-brand-600 font-bold uppercase tracking-wider">Assinatura {isAnual ? 'Anual' : 'Mensal'}</p>
                             </div>
                         </div>
 
-                        <div className="flex items-baseline gap-1 mb-8">
+                        <div className="flex items-baseline gap-1 mb-2">
                             <span className="text-sm font-bold text-slate-400">R$</span>
                             <span className="text-5xl font-black text-slate-900">{(planPrice / 100).toFixed(2).replace('.', ',')}</span>
                             <span className="text-sm font-bold text-slate-500">/mês</span>
                         </div>
+                        {isAnual && (
+                            <p className="text-xs text-emerald-600 font-bold mb-8">
+                                Valor total: R$ {((planPrice * 12) / 100).toFixed(2).replace('.', ',')} /ano
+                            </p>
+                        )}
+                        {!isAnual && <div className="mb-8" />}
 
                         <div className="space-y-3 pt-6 border-t border-slate-100">
                             <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">O que está incluído:</p>
@@ -136,9 +179,9 @@ export default function CheckoutPage() {
                     <div className="bg-slate-50 rounded-2xl p-4 flex items-start gap-4 border border-slate-200">
                         <Lock size={20} className="text-slate-400 mt-1 shrink-0" />
                         <div>
-                            <p className="text-sm font-bold text-slate-800">Pagamento Seguro</p>
+                            <p className="text-sm font-bold text-slate-800">Pagamento Seguro via Stripe</p>
                             <p className="text-xs text-slate-500">
-                                Seus dados estão protegidos. Atualmente operamos com faturamento manual via Boleto, PIX ou Cartão após validação do suporte.
+                                Seus dados de pagamento são processados de forma criptografada pelo Stripe, líder mundial em pagamentos online.
                             </p>
                         </div>
                     </div>
@@ -146,11 +189,46 @@ export default function CheckoutPage() {
 
                 {/* Coluna da Direita: Ações de Checkout */}
                 <div className="space-y-6">
-                    <GlassCard title="Como você prefere assinar?" className="p-6">
+                    <GlassCard title="Escolha a forma de pagamento" className="p-6">
                         <div className="space-y-6">
-                            {/* Opção 1: WhatsApp (Mais rápida) */}
+                            {/* Opção 1: Stripe (Cartão ou PIX) */}
                             <div>
-                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Opção rápida (Recomendada)</p>
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Pagamento Automático</p>
+                                <button 
+                                    onClick={handleStripeCheckout}
+                                    disabled={loadingStripe}
+                                    className={cn(
+                                        "w-full flex items-center justify-between p-4 bg-brand-50 hover:bg-brand-100 border border-brand-100 rounded-2xl transition-all group",
+                                        loadingStripe && "opacity-70 cursor-not-allowed"
+                                    )}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-brand-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-brand-500/20 group-hover:scale-110 transition-transform">
+                                            {loadingStripe ? <Loader2 className="animate-spin" size={24} /> : <CreditCard size={24} />}
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="font-black text-brand-900">Cartão ou PIX</p>
+                                            <p className="text-xs text-brand-700">Ativação imediata via Stripe</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <CreditCard size={18} className="text-brand-300" />
+                                        <QrCode size={18} className="text-brand-300" />
+                                    </div>
+                                </button>
+                            </div>
+
+                            <div className="relative">
+                                <div className="absolute inset-0 flex items-center">
+                                    <div className="w-full border-t border-slate-100"></div>
+                                </div>
+                                <div className="relative flex justify-center text-xs uppercase">
+                                    <span className="bg-white px-2 text-slate-400 font-bold">Ou outras opções</span>
+                                </div>
+                            </div>
+
+                            {/* Opção 2: WhatsApp */}
+                            <div>
                                 <a 
                                     href={whatsappUrl}
                                     target="_blank"
@@ -162,25 +240,16 @@ export default function CheckoutPage() {
                                             <MessageCircle size={24} />
                                         </div>
                                         <div className="text-left">
-                                            <p className="font-black text-emerald-900">Ativação via WhatsApp</p>
-                                            <p className="text-xs text-emerald-700">Fale com um consultor agora</p>
+                                            <p className="font-black text-emerald-900">Suporte WhatsApp</p>
+                                            <p className="text-xs text-emerald-700">Fale com um consultor</p>
                                         </div>
                                     </div>
                                     <ArrowLeft size={20} className="text-emerald-400 rotate-180 group-hover:translate-x-1 transition-transform" />
                                 </a>
                             </div>
 
-                            <div className="relative">
-                                <div className="absolute inset-0 flex items-center">
-                                    <div className="w-full border-t border-slate-100"></div>
-                                </div>
-                                <div className="relative flex justify-center text-xs uppercase">
-                                    <span className="bg-white px-2 text-slate-400 font-bold">Ou</span>
-                                </div>
-                            </div>
-
-                            {/* Opção 2: Formulário Interno */}
-                            <div>
+                            {/* Opção 3: Formulário Interno */}
+                            <div className="pt-4 border-t border-slate-50">
                                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Quero ser contactado</p>
                                 <form onSubmit={handleInteresse} className="space-y-4">
                                     <div>
@@ -199,15 +268,12 @@ export default function CheckoutPage() {
                                     </div>
                                     <button 
                                         type="submit" 
-                                        disabled={loading || !telefone}
+                                        disabled={loadingInteresse || !telefone}
                                         className="w-full h-14 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-2xl transition-all shadow-lg shadow-slate-200 disabled:opacity-50 flex items-center justify-center gap-2"
                                     >
-                                        {loading ? <Loader2 className="animate-spin" size={20} /> : <AtSign size={20} />}
+                                        {loadingInteresse ? <Loader2 className="animate-spin" size={20} /> : <AtSign size={20} />}
                                         Registrar Interesse
                                     </button>
-                                    <p className="text-[10px] text-slate-400 text-center px-4">
-                                        Ao clicar, nossa equipe receberá seu contato e o plano desejado ({planName}) para processar a ativação.
-                                    </p>
                                 </form>
                             </div>
                         </div>
@@ -215,5 +281,17 @@ export default function CheckoutPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function CheckoutPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <Loader2 className="animate-spin text-brand-500" size={32} />
+            </div>
+        }>
+            <CheckoutContent />
+        </Suspense>
     );
 }
