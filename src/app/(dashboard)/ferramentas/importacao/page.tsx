@@ -528,6 +528,45 @@ export default function ImportacaoPage() {
         }
     };
 
+    const copyAllStep2 = async () => {
+        const lines = items.map(item => {
+            const calc = calculateItem(item.custoUsd, item.pricing_segment_id, item.margemCustom, item.margemTipoCustom, item.precoCustomPix);
+            const usdValues = getProductUsdValues(item.custoUsd, calc.impostoBrl, calc.freteEuaBrl, calc.freteBrasilBrl, calc.custoFinalBrl, params.dolarCompra, item.precoVendaUsdCustom);
+
+            if (viewCurrency === 'BRL') {
+                const total = (calc.custoFinalBrl * (item.quantidade || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                return item.quantidade > 1 ? `${item.quantidade}x ${item.label} — R$ ${total}` : `${item.label} — R$ ${total}`;
+            } else {
+                const total = (usdValues.totalUsd * (item.quantidade || 1)).toFixed(2);
+                return item.quantidade > 1 ? `${item.quantidade}x ${item.label} — $ ${total}` : `${item.label} — $ ${total}`;
+            }
+        });
+
+        if (viewCurrency === 'BRL') {
+            const totalGeralBrl = items.reduce((acc, it) => {
+                const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
+                return acc + (calc.custoFinalBrl * (it.quantidade || 0));
+            }, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+            lines.push(`\nTOTAL LOTE (${items.length} produtos) — R$ ${totalGeralBrl}`);
+        } else {
+            const totalGeralUsd = items.reduce((acc, it) => {
+                const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
+                const usdValues = getProductUsdValues(it.custoUsd, calc.impostoBrl, calc.freteEuaBrl, calc.freteBrasilBrl, calc.custoFinalBrl, params.dolarCompra, it.precoVendaUsdCustom);
+                return acc + (usdValues.totalUsd * (it.quantidade || 0));
+            }, 0).toFixed(2);
+            lines.push(`\nTOTAL LOTE (${items.length} produtos) — $ ${totalGeralUsd}`);
+        }
+
+        const text = lines.join('\n');
+        try {
+            await navigator.clipboard.writeText(text);
+            toast.success(`Lista copiada! (${items.length} produtos)`);
+        } catch (err) {
+            console.error("Failed to copy:", err);
+            toast.error("Erro ao copiar.");
+        }
+    };
+
     if (!mounted) return null;
 
     const isLoadingConfig = configLoading && !config;
@@ -666,24 +705,32 @@ export default function ImportacaoPage() {
                     <GlassCard title={
                         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                             <span>Tabela de Produtos ({items.length})</span>
-                            <div className="flex bg-slate-100/50 p-1 rounded-lg border border-slate-200">
+                            <div className="flex items-center gap-2">
+                                <div className="flex bg-slate-100/50 p-1 rounded-lg border border-slate-200">
+                                    <button
+                                        onClick={() => setViewCurrency('BRL')}
+                                        className={cn(
+                                            "px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all",
+                                            viewCurrency === 'BRL' ? "bg-white text-slate-800 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                                        )}
+                                    >
+                                        R$ Reais
+                                    </button>
+                                    <button
+                                        onClick={() => setViewCurrency('USD')}
+                                        className={cn(
+                                            "px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all",
+                                            viewCurrency === 'USD' ? "bg-[#185FA5] text-white shadow-sm shadow-brand-500/30" : "text-slate-400 hover:text-slate-600"
+                                        )}
+                                    >
+                                        US$ Dólar
+                                    </button>
+                                </div>
                                 <button
-                                    onClick={() => setViewCurrency('BRL')}
-                                    className={cn(
-                                        "px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all",
-                                        viewCurrency === 'BRL' ? "bg-white text-slate-800 shadow-sm" : "text-slate-400 hover:text-slate-600"
-                                    )}
+                                    onClick={copyAllStep2}
+                                    className="px-3 py-1.5 text-[11px] font-bold uppercase rounded-md bg-transparent border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all flex items-center gap-1"
                                 >
-                                    R$ Reais
-                                </button>
-                                <button
-                                    onClick={() => setViewCurrency('USD')}
-                                    className={cn(
-                                        "px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all",
-                                        viewCurrency === 'USD' ? "bg-[#185FA5] text-white shadow-sm shadow-brand-500/30" : "text-slate-400 hover:text-slate-600"
-                                    )}
-                                >
-                                    US$ Dólar
+                                    ⎘ Copiar tudo
                                 </button>
                             </div>
                         </div>
@@ -884,7 +931,7 @@ export default function ImportacaoPage() {
                                                             <span className="text-xs font-black text-slate-800">
                                                                 {formatCurrency(Math.round(calc.custoFinalBrl * 100))}
                                                             </span>
-                                                            <CopyButton value={calc.custoFinalBrl.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} label="custo total em R$" />
+                                                            <CopyButton value={`${item.quantidade > 1 ? `${item.quantidade}x ` : ''}${item.label} — R$ ${(calc.custoFinalBrl * (item.quantidade || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} label="custo total em R$" />
                                                         </div>
                                                     </td>
                                                 </>
@@ -907,7 +954,7 @@ export default function ImportacaoPage() {
                                                             <span className="text-xs font-black text-slate-800">
                                                                 {formatUsd(usdValues.totalUsd)}
                                                             </span>
-                                                            <CopyButton value={usdValues.totalUsd.toFixed(2)} label="custo total em US$" />
+                                                            <CopyButton value={`${item.quantidade > 1 ? `${item.quantidade}x ` : ''}${item.label} — $ ${(usdValues.totalUsd * (item.quantidade || 1)).toFixed(2)}`} label="custo total em US$" />
                                                         </div>
                                                     </td>
                                                     <td className="px-2 py-2 text-right text-[10px]">
@@ -985,10 +1032,10 @@ export default function ImportacaoPage() {
                                                                     return acc + (calc.custoFinalBrl * (it.quantidade || 0));
                                                                 }, 0) * 100))}
                                                             </span>
-                                                            <CopyButton value={items.reduce((acc, it) => {
+                                                            <CopyButton value={`TOTAL LOTE (${items.length} produtos) — R$ ${items.reduce((acc, it) => {
                                                                 const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
                                                                 return acc + (calc.custoFinalBrl * (it.quantidade || 0));
-                                                            }, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} label="custo total do lote em R$" />
+                                                            }, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} label="custo total do lote em R$" />
                                                         </div>
                                                     </td>
                                                 </>
@@ -1035,7 +1082,7 @@ export default function ImportacaoPage() {
                                                                     <span className="text-xs font-black text-brand-600">
                                                                         {formatUsd(totals.totalGeralUsd)}
                                                                     </span>
-                                                                    <CopyButton value={totals.totalGeralUsd.toFixed(2)} label="custo total do lote em US$" />
+                                                                    <CopyButton value={`TOTAL LOTE (${items.length} produtos) — $ ${totals.totalGeralUsd.toFixed(2)}`} label="custo total do lote em US$" />
                                                                 </div>
                                                             </td>
                                                             <td className="px-2 py-3 text-right text-[10px]">
