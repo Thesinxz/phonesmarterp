@@ -521,7 +521,7 @@ export default function ImportacaoPage() {
                 ? `R$ ${calc.precoSugeridoPix.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
                 : null;
             const atacado = usdValues.vendaUsd > 0
-                ? `US$ ${usdValues.vendaUsd.toFixed(2)}`
+                ? `US$ ${(usdValues.vendaUsd / 100).toFixed(2)}`
                 : null;
 
             const cond = item.condicao !== 'novo_lacrado' && item.saudeBateria ? ` (Bat ${item.saudeBateria}%)` : '';
@@ -551,7 +551,7 @@ export default function ImportacaoPage() {
                 const total = (calc.custoFinalBrl * (item.quantidade || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
                 return item.quantidade > 1 ? `${item.quantidade}x ${item.label} — R$ ${total}` : `${item.label} — R$ ${total}`;
             } else {
-                const total = (usdValues.totalUsd * (item.quantidade || 1)).toFixed(2);
+                const total = (usdValues.totalUsd * (item.quantidade || 1) / 100).toFixed(2);
                 return item.quantidade > 1 ? `${item.quantidade}x ${item.label} — $ ${total}` : `${item.label} — $ ${total}`;
             }
         });
@@ -567,8 +567,8 @@ export default function ImportacaoPage() {
                 const calc = calculateItem(it.custoUsd, it.pricing_segment_id, it.margemCustom, it.margemTipoCustom, it.precoCustomPix);
                 const usdValues = getProductUsdValues(it.custoUsd, calc.impostoBrl, calc.freteEuaBrl, calc.freteBrasilBrl, calc.custoFinalBrl, params.dolarCompra, it.precoVendaUsdCustom);
                 return acc + (usdValues.totalUsd * (it.quantidade || 0));
-            }, 0).toFixed(2);
-            lines.push(`\nTOTAL LOTE (${items.length} produtos) — $ ${totalGeralUsd}`);
+            }, 0);
+            lines.push(`\nTOTAL LOTE (${items.length} produtos) — $ ${(totalGeralUsd / 100).toFixed(2)}`);
         }
 
         const text = lines.join('\n');
@@ -968,7 +968,7 @@ export default function ImportacaoPage() {
                                                             <span className="text-xs font-black text-slate-800">
                                                                 {formatUsd(usdValues.totalUsd)}
                                                             </span>
-                                                            <CopyButton value={`${item.quantidade > 1 ? `${item.quantidade}x ` : ''}${item.label} — $ ${(usdValues.totalUsd * (item.quantidade || 1)).toFixed(2)}`} label="custo total em US$" />
+                                                            <CopyButton value={`${item.quantidade > 1 ? `${item.quantidade}x ` : ''}${item.label} — $ ${(usdValues.totalUsd * (item.quantidade || 1) / 100).toFixed(2)}`} label="custo total em US$" />
                                                         </div>
                                                     </td>
                                                     <td className="px-2 py-2 text-right text-[10px]">
@@ -1096,7 +1096,7 @@ export default function ImportacaoPage() {
                                                                     <span className="text-xs font-black text-brand-600">
                                                                         {formatUsd(totals.totalGeralUsd)}
                                                                     </span>
-                                                                    <CopyButton value={`TOTAL LOTE (${items.length} produtos) — $ ${totals.totalGeralUsd.toFixed(2)}`} label="custo total do lote em US$" />
+                                                                    <CopyButton value={`TOTAL LOTE (${items.length} produtos) — $ ${(totals.totalGeralUsd / 100).toFixed(2)}`} label="custo total do lote em US$" />
                                                                 </div>
                                                             </td>
                                                             <td className="px-2 py-3 text-right text-[10px]">
@@ -1413,7 +1413,7 @@ export default function ImportacaoPage() {
                                                                     }}
                                                                 />
                                                             </div>
-                                                            <CopyButton value={usdValues.vendaUsd.toFixed(2)} label="Preço Atacado (USD)" />
+                                                            <CopyButton value={(usdValues.vendaUsd / 100).toFixed(2)} label="Preço Atacado (USD)" />
                                                         </div>
                                                     </td>
                                                     <td className="px-3 py-4 text-center">
