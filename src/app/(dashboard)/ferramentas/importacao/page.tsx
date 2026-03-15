@@ -110,7 +110,11 @@ export default function ImportacaoPage() {
         const freteEuaUsd = brlToUsd(freteEuaBrl * 100, dolarCompra);
         const freteBrUsd = brlToUsd(freteBrasilBrl * 100, dolarCompra);
         const totalUsd = brlToUsd(totalBrl * 100, dolarCompra);
-        const vendaUsd = precoSugeridoUsd !== undefined ? Math.round(precoSugeridoUsd * 100) : 0;
+        // Sugestão automática de 15% de margem no atacado USD se não houver valor customizado
+        const vendaUsd = precoSugeridoUsd !== undefined 
+            ? Math.round(precoSugeridoUsd * 100) 
+            : Math.round(totalUsd * 1.15);
+            
         const margemUsd = (vendaUsd > 0 && totalUsd > 0) ? vendaUsd - totalUsd : null;
 
         return {
@@ -460,6 +464,15 @@ export default function ImportacaoPage() {
                     );
                     
                     const { custoFinalBrl, precoSugeridoPix } = calc;
+                    const usdValues = getProductUsdValues(
+                        item.custoUsd, 
+                        calc.impostoBrl, 
+                        calc.freteEuaBrl, 
+                        calc.freteBrasilBrl, 
+                        calc.custoFinalBrl, 
+                        params.dolarCompra, 
+                        item.precoVendaUsdCustom
+                    );
                     const type = productTypes.find(t => t.id === item.product_type_id);
                     
                     produtosParaInserir.push({
@@ -481,7 +494,9 @@ export default function ImportacaoPage() {
                         cfop: "5102",
                         origem: "1",
                         descricao: "Importado via Calculadora Pro",
-                        exibir_vitrine: true
+                        exibir_vitrine: true,
+                        sale_price_usd: usdValues.vendaUsd,
+                        sale_price_usd_rate: params.dolarCompra
                     });
                 });
                 

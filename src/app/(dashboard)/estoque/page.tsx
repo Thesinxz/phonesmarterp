@@ -363,12 +363,19 @@ export default function EstoquePage() {
                                                 {selectedUnitId === 'todos' ? (item.stock_qty || 0) : (unitStocks.find(us => us.unit_id === selectedUnitId && us.catalog_item_id === item.id)?.qty || 0)} em est.
                                             </span>
                                         </div>
-                                        <span className="text-sm font-bold text-emerald-600 mt-1">
-                                            {item.sale_price > 0 
-                                                ? ((item.sale_price || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                                                : <span className="text-[10px] text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 uppercase tracking-tighter">Aguardando Precificação</span>
-                                            }
-                                        </span>
+                                        <div className="flex flex-col items-end mt-1">
+                                            <span className="text-sm font-bold text-emerald-600">
+                                                {item.sale_price > 0 
+                                                    ? ((item.sale_price || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                                                    : <span className="text-[10px] text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 uppercase tracking-tighter">Aguardando Precificação</span>
+                                                }
+                                            </span>
+                                            {(item as any).sale_price_usd > 0 && (
+                                                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 rounded-md mt-0.5">
+                                                    $ {((item as any).sale_price_usd / 100).toFixed(2)} Atacado
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0 ml-2">
@@ -400,6 +407,7 @@ export default function EstoquePage() {
                                     {activeTab === 'peca' && <th className="px-6 py-4">Qualidade</th>}
                                     <th className="px-6 py-4 text-right">Custo</th>
                                     <th className="px-6 py-4 text-right">Venda</th>
+                                    <th className="px-6 py-4 text-right">Atacado (US$)</th>
                                     <th className="px-6 py-4 text-center">Estoque</th>
                                     <th className="px-6 py-4 text-right">Ações</th>
                                 </tr>
@@ -470,6 +478,20 @@ export default function EstoquePage() {
                                                     ? ((item.sale_price || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
                                                     : <span className="text-[10px] text-amber-500 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 uppercase tracking-tighter whitespace-nowrap">Aguardando Precificação</span>
                                                 }
+                                            </td>
+                                            <td className="px-6 py-3 text-right">
+                                                {(item as any).sale_price_usd > 0 ? (
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100/50">
+                                                            $ {((item as any).sale_price_usd / 100).toFixed(2)}
+                                                        </span>
+                                                        {(item as any).sale_price_usd_rate > 0 && (
+                                                            <span className="text-[9px] text-slate-400 mt-1 font-bold">@ {(item as any).sale_price_usd_rate.toFixed(2)}</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[10px] text-slate-300">---</span>
+                                                )}
                                             </td>
                                             <td className="px-6 py-3 text-center">
                                                 <div className="flex flex-col items-center gap-1">

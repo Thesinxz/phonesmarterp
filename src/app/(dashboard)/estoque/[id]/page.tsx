@@ -105,8 +105,10 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
         cest: "",
         // Legado (backup)
         categoria: "",
-        subcategoria: ""
-    });
+        descricao: "",
+        sale_price_usd: "0,00",
+        sale_price_usd_rate: "0,00",
+        // Relacionais
 
     const loadMovements = async (itemId: string, page: number, filters: any) => {
         setMovementsLoading(true);
@@ -162,7 +164,9 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                     origem: catItem.origin_code || "0",
                     cest: catItem.cest || "",
                     brand_id: catItem.brand_id || "",
-                    pricing_segment_id: catItem.pricing_segment_id || ""
+                    pricing_segment_id: catItem.pricing_segment_id || "",
+                    sale_price_usd: (catItem.sale_price_usd / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+                    sale_price_usd_rate: (catItem.sale_price_usd_rate || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
                 }));
 
                 if (catItem.item_type === 'peca') {
@@ -211,7 +215,9 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                         subcategoria: data.subcategoria || "",
                         product_type_id: (data as any).product_type_id || "",
                         brand_id: (data as any).brand_id || "",
-                        pricing_segment_id: (data as any).pricing_segment_id || ""
+                        pricing_segment_id: (data as any).pricing_segment_id || "",
+                        sale_price_usd: ((data as any).sale_price_usd / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+                        sale_price_usd_rate: ((data as any).sale_price_usd_rate || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
                     };
                 });
 
@@ -347,6 +353,13 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
             const custoCentavos = Math.round(custoVal * 100);
             const vendaCentavos = Math.round(vendaVal * 100);
 
+            const cleanUsd = form.sale_price_usd.replace(/\./g, '').replace(',', '.').trim();
+            const cleanRate = form.sale_price_usd_rate.replace(/\./g, '').replace(',', '.').trim();
+            const usdVal = parseFloat(cleanUsd);
+            const rateVal = parseFloat(cleanRate);
+            const usdCentavos = isNaN(usdVal) ? 0 : Math.round(usdVal * 100);
+            const rateFinal = isNaN(rateVal) ? 0 : rateVal;
+
             // Validar IMEI se preenchido (deve ter 15 dígitos)
             if (form.imei && !/^\d{15}$/.test(form.imei)) {
                 toast.error("O IMEI deve conter exatamente 15 números.");
@@ -383,6 +396,8 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                     brand_id: form.brand_id || null,
                     pricing_segment_id: form.pricing_segment_id || null,
                     subcategory: form.categoria || null,
+                    sale_price_usd: usdCentavos,
+                    sale_price_usd_rate: rateFinal,
                 });
             } else {
                 // Legado: produtos
@@ -411,7 +426,9 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                     categoria: selectedType?.name || form.categoria, // Mantém compatibilidade
                     product_type_id: form.product_type_id || null,
                     brand_id: form.brand_id || null,
-                    pricing_segment_id: form.pricing_segment_id || null
+                    pricing_segment_id: form.pricing_segment_id || null,
+                    sale_price_usd: usdCentavos,
+                    sale_price_usd_rate: rateFinal,
                 } as any);
             }
 
@@ -725,6 +742,33 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                             ↩ Recalcular pela categoria
                                         </button>
                                     )}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 mt-4">
+                                <div>
+                                    <label className="label-sm flex items-center gap-1.5 text-indigo-600">
+                                        <DollarSign size={12} /> Preço Atacado (USD)
+                                    </label>
+                                    <input
+                                        name="sale_price_usd"
+                                        value={form.sale_price_usd}
+                                        onChange={handleChange}
+                                        className="input-glass mt-1.5 font-bold text-indigo-700 bg-indigo-50/20"
+                                        placeholder="0,00"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label-sm flex items-center gap-1.5 text-slate-500">
+                                        <RefreshCw size={12} /> Cotação Base (R$)
+                                    </label>
+                                    <input
+                                        name="sale_price_usd_rate"
+                                        value={form.sale_price_usd_rate}
+                                        onChange={handleChange}
+                                        className="input-glass mt-1.5 font-bold text-slate-700 bg-slate-50/50"
+                                        placeholder="0,00"
+                                    />
                                 </div>
                             </div>
 
