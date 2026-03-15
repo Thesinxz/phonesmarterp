@@ -105,10 +105,9 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
         cest: "",
         // Legado (backup)
         categoria: "",
-        descricao: "",
         sale_price_usd: "0,00",
-        sale_price_usd_rate: "0,00",
-        // Relacionais
+        sale_price_usd_rate: "0,00"
+    });
 
     const loadMovements = async (itemId: string, page: number, filters: any) => {
         setMovementsLoading(true);

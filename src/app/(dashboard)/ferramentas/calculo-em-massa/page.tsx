@@ -685,7 +685,9 @@ export default function CalculoEmMassa() {
                         imagem_url: null,
                         product_type_id: null,
                         pricing_segment_id: null,
-                        brand_id: null
+                        brand_id: null,
+                        sale_price_usd: currencyType === 'USD' ? Math.round(baseCost * 1.15 * 100) : 0,
+                        sale_price_usd_rate: currencyType === 'USD' ? dollarRate : 0
                     };
                 });
 
