@@ -46,12 +46,15 @@ export function Header({ title, onMenuClick, className }: HeaderProps) {
 
                     setSolicitationsCount(sCount || 0);
 
+                    const unitFilter = profile?.unit_id ? `unit_id.is.null,unit_id.eq.${profile.unit_id}` : `unit_id.is.null`;
+                    const userFilter = profile?.id ? `user_id.is.null,user_id.eq.${profile.id}` : `user_id.is.null`;
+
                     const { count: nCount } = await (supabase.from("notifications") as any)
                         .select("*", { count: 'exact', head: true })
                         .eq("tenant_id", profile.empresa_id)
                         .is("read_at", null)
-                        .or(`unit_id.is.null,unit_id.eq.${profile.unit_id}`)
-                        .or(`user_id.is.null,user_id.eq.${profile.id}`);
+                        .or(unitFilter)
+                        .or(userFilter);
 
                     setNotificationsCount(nCount || 0);
                 }
@@ -87,12 +90,15 @@ export function Header({ title, onMenuClick, className }: HeaderProps) {
                     'postgres_changes',
                     { event: '*', schema: 'public', table: 'notifications', filter: `tenant_id=eq.${profile.empresa_id}` },
                     () => {
+                        const unitFilter = profile?.unit_id ? `unit_id.is.null,unit_id.eq.${profile.unit_id}` : `unit_id.is.null`;
+                        const userFilter = profile?.id ? `user_id.is.null,user_id.eq.${profile.id}` : `user_id.is.null`;
+
                         (supabase.from("notifications") as any)
                             .select("*", { count: 'exact', head: true })
                             .eq("tenant_id", profile.empresa_id)
                             .is("read_at", null)
-                            .or(`unit_id.is.null,unit_id.eq.${profile.unit_id}`)
-                            .or(`user_id.is.null,user_id.eq.${profile.id}`)
+                            .or(unitFilter)
+                            .or(userFilter)
                             .then(({ count }: any) => setNotificationsCount(count || 0));
                     }
                 )

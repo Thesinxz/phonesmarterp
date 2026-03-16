@@ -51,14 +51,15 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 2. Verificar se o usuário pertence à empresa (segurança)
+        // 2. Verificar se o usuário pertence à específica empresa (segurança)
         const { data: userProfile } = await supabaseAdmin
             .from("usuarios")
-            .select("empresa_id")
+            .select("id")
             .eq("auth_user_id", user.id)
+            .eq("empresa_id", empresa_id)
             .maybeSingle();
 
-        if (!userProfile || userProfile.empresa_id !== empresa_id) {
+        if (!userProfile) {
             return NextResponse.json({ success: false, error: "Acesso negado" }, { status: 403 });
         }
 

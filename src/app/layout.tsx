@@ -40,6 +40,11 @@ export const metadata: Metadata = {
         follow: true,
     },
     manifest: "/manifest.json",
+    appleWebApp: {
+        capable: true,
+        statusBarStyle: "black-translucent",
+        title: "SmartOS",
+    },
     other: {
         'mobile-web-app-capable': 'yes',
     },

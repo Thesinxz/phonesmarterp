@@ -136,7 +136,7 @@ export function useDashboardMetrics() {
                 supabase.from("ordens_servico").select("*", { count: "exact", head: true }).eq("status", "aberta"),
                 supabase.from("clientes").select("*", { count: "exact", head: true }),
                 supabase.from("vendas").select("*", { count: "exact", head: true })
-                    .not("status_pedido", "in", '("entregue","cancelado")')
+                    .not("status_pedido", "in", ["entregue", "cancelado"])
                     .not("status_pedido", "is", null),
             ]);
 
@@ -154,7 +154,7 @@ export function useDashboardMetrics() {
             const qtdOS = (dataOSRealizadas || []).length;
             const ticketMedioOS = qtdOS > 0 ? Math.round(totalOSValor / qtdOS) : 0;
 
-            const { data: dataVendasRealizadas } = await supabase.from("vendas").select("total_centavos").not("status_pedido", "in", '("cancelado")').gte("created_at", startOfMonth.toISOString());
+            const { data: dataVendasRealizadas } = await supabase.from("vendas").select("total_centavos").not("status_pedido", "in", ["cancelado"]).gte("created_at", startOfMonth.toISOString());
             const totalVendasValor = (dataVendasRealizadas || []).reduce((acc: number, curr: any) => acc + (curr.total_centavos || 0), 0);
             const qtdVendas = (dataVendasRealizadas || []).length;
             const ticketMedioVendas = qtdVendas > 0 ? Math.round(totalVendasValor / qtdVendas) : 0;
@@ -220,7 +220,7 @@ export function useDashboardMetrics() {
                 .from("ordens_servico")
                 .select("*", { count: "exact", head: true })
                 .lt("data_prevista", today.toISOString().split('T')[0])
-                .not("status", "in", '("finalizada","entregue","cancelada")');
+                .not("status", "in", ["finalizada", "entregue", "cancelada"]);
 
             setOsStatus({
                 aguardando: agCount || 0,
@@ -235,7 +235,7 @@ export function useDashboardMetrics() {
             const { data: paradosData } = await supabase
                 .from("ordens_servico")
                 .select("id, equipamento, cliente_nome, created_at, status")
-                .not("status", "in", '("finalizada","entregue","cancelada")')
+                .not("status", "in", ["finalizada", "entregue", "cancelada"])
                 .lt("created_at", tresDiasAtras.toISOString())
                 .order("created_at", { ascending: true })
                 .limit(5);
