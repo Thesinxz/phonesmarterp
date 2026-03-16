@@ -41,7 +41,16 @@ export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagament
     };
 
     const loadTecnicos = async () => {
-        if (!profile?.empresa_id) return;
+        if (!profile?.empresa_id) {
+            // Se ainda está carregando o perfil, ou não tem empresa, esperamos.
+            // Mas não setamos false se o profile ainda for undefined (carregando)
+            if (profile === null) {
+                 setTecnicos([{ id: 'auto', nome: 'Auto-atribuir (Pendente)', avatar_url: null }]);
+                 setIsLoadingTecnicos(false);
+            }
+            return;
+        }
+
         setIsLoadingTecnicos(true);
         setErroTecnicos(false);
         try {
@@ -50,10 +59,16 @@ export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagament
                 .from("usuarios")
                 .select("id, nome")
                 .eq("empresa_id", profile.empresa_id)
+                .in("papel", ["tecnico", "admin", "gerente"])
                 .eq("ativo", true);
 
             if (error) throw error;
-            setTecnicos(users || []);
+            
+            if (!users || users.length === 0) {
+                 setTecnicos([{ id: 'auto', nome: 'Auto-atribuir (Nenhum técnico encontrado)', avatar_url: null }]);
+            } else {
+                 setTecnicos(users);
+            }
         } catch (error) {
             console.error("Erro ao carregar técnicos:", error);
             setErroTecnicos(true);
@@ -63,7 +78,9 @@ export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagament
     };
 
     useEffect(() => {
-        loadTecnicos();
+        if (profile?.empresa_id) {
+            loadTecnicos();
+        }
     }, [profile?.empresa_id]);
 
     const PAGAMENTOS = [
@@ -84,81 +101,82 @@ export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagament
     ];
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-6">
+            <div className="step-header">
+                <div className="step-num">5</div>
+                <h2>Agenda e Pagamento</h2>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Agendamento */}
-                <div className="space-y-6">
-                    <label className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                        <Clock size={16} /> Agendamento e Responsabilidade
-                    </label>
+                <div>
+                    <div className="section-label">RESPONSÁVEL E PRAZOS</div>
 
                     <div className="space-y-4">
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-end">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Técnico Responsável *</label>
-                                <button
-                                    type="button"
-                                    onClick={handleAutoAssign}
-                                    disabled={isAutoAssigning || tecnicos.length === 0}
-                                    className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1 disabled:opacity-50"
-                                >
-                                    {isAutoAssigning && <Loader2 size={12} className="animate-spin" />}
-                                    Auto-atribuir
-                                </button>
-                            </div>
-
-                            {isLoadingTecnicos ? (
-                                <div className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-slate-50 flex items-center gap-2 text-slate-500">
-                                    <Loader2 size={16} className="animate-spin text-indigo-500" />
-                                    <span className="text-sm font-medium">Buscando técnicos...</span>
-                                </div>
-                            ) : erroTecnicos ? (
-                                <div className="w-full h-12 px-4 rounded-xl border border-red-200 bg-red-50 flex items-center justify-between text-red-600">
-                                    <div className="flex items-center gap-2">
-                                        <AlertCircle size={16} />
-                                        <span className="text-sm font-medium">Erro de conexão</span>
+                            <div className="wizard-field">
+                                <label>TÉCNICO RESPONSÁVEL *</label>
+                                {isLoadingTecnicos ? (
+                                    <div className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-slate-50 flex items-center gap-2 text-slate-500">
+                                        <Loader2 size={16} className="animate-spin text-indigo-500" />
+                                        <span className="text-sm font-medium">Buscando técnicos...</span>
                                     </div>
+                                ) : erroTecnicos ? (
+                                    <div className="w-full h-12 px-4 rounded-xl border border-red-200 bg-red-50 flex items-center justify-between text-red-600">
+                                        <div className="flex items-center gap-2">
+                                            <AlertCircle size={16} />
+                                            <span className="text-sm font-medium">Erro de conexão</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={loadTecnicos}
+                                            className="text-xs font-bold bg-white text-red-600 px-3 py-1 rounded-lg border border-red-200 hover:bg-red-50 transition-colors"
+                                        >
+                                            Tentar Novamente
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <select
+                                        className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white shadow-sm outline-none transition-all focus:border-indigo-600 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%20%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M5%207.5L10%2012.5L15%207.5%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E')] bg-[position:right_1rem_center] bg-no-repeat"
+                                        value={data.tecnicoId}
+                                        onChange={e => onChange({ ...data, tecnicoId: e.target.value })}
+                                    >
+                                        <option value="">Selecione o técnico...</option>
+                                        {tecnicos.map(t => (
+                                            <option key={t.id} value={t.id}>{t.nome}</option>
+                                        ))}
+                                    </select>
+                                )}
+                                <div className="mt-1 flex justify-end">
                                     <button
                                         type="button"
-                                        onClick={loadTecnicos}
-                                        className="text-xs font-bold bg-white text-red-600 px-3 py-1 rounded-lg border border-red-200 hover:bg-red-50 transition-colors"
+                                        onClick={handleAutoAssign}
+                                        disabled={isAutoAssigning || tecnicos.length === 0}
+                                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 disabled:opacity-50 tracking-wider uppercase"
                                     >
-                                        Tentar Novamente
+                                        {isAutoAssigning && <Loader2 size={10} className="animate-spin" />}
+                                        Auto-atribuir
                                     </button>
                                 </div>
-                            ) : (
-                                <select
-                                    className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-white shadow-sm outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
-                                    value={data.tecnicoId}
-                                    onChange={e => onChange({ ...data, tecnicoId: e.target.value })}
-                                >
-                                    <option value="">Selecione o técnico...</option>
-                                    {tecnicos.map(t => (
-                                        <option key={t.id} value={t.id}>{t.nome}</option>
-                                    ))}
-                                </select>
-                            )}
-                        </div>
+                            </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Prazo Estimado *</label>
+                            <div className="wizard-field mb-0">
+                                <label>PRAZO ESTIMADO *</label>
                                 <input
                                     type="datetime-local"
-                                    className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-white shadow-sm outline-none focus:ring-2 focus:ring-indigo-500"
                                     value={data.prazo}
                                     onChange={e => onChange({ ...data, prazo: e.target.value })}
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Prioridade</label>
-                                <div className="flex gap-2">
+                            <div className="wizard-field mb-0">
+                                <label>PRIORIDADE</label>
+                                <div className="flex gap-2 h-12">
                                     <button
                                         type="button"
                                         onClick={() => onChange({ ...data, prioridade: "normal" })}
                                         className={cn(
-                                            "flex-1 h-12 rounded-xl font-bold text-xs uppercase tracking-wider border transition-all",
-                                            data.prioridade === "normal" ? "bg-slate-100 border-slate-200 text-slate-700" : "bg-white border-slate-100 text-slate-300"
+                                            "flex-1 rounded-xl font-bold text-xs uppercase tracking-wider border transition-all",
+                                            data.prioridade === "normal" ? "bg-slate-100 border-slate-200 text-slate-700" : "bg-white border-slate-100 text-slate-300 hover:border-slate-200"
                                         )}
                                     >
                                         Normal
@@ -167,8 +185,8 @@ export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagament
                                         type="button"
                                         onClick={() => onChange({ ...data, prioridade: "urgente" })}
                                         className={cn(
-                                            "flex-1 h-12 rounded-xl font-bold text-xs uppercase tracking-wider border transition-all",
-                                            data.prioridade === "urgente" ? "bg-red-50 border-red-100 text-red-600 ring-2 ring-red-100" : "bg-white border-slate-100 text-slate-300"
+                                            "flex-1 rounded-xl font-bold text-xs uppercase tracking-wider border transition-all",
+                                            data.prioridade === "urgente" ? "bg-red-50 border-red-100 text-red-600 ring-1 ring-red-100" : "bg-white border-slate-100 text-slate-300 hover:border-slate-200"
                                         )}
                                     >
                                         🚀 Urgente
@@ -180,14 +198,12 @@ export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagament
                 </div>
 
                 {/* Pagamento e Garantia */}
-                <div className="space-y-6">
-                    <label className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                        <CreditCard size={16} /> Pagamento e Garantia
-                    </label>
+                <div>
+                    <div className="section-label">PAGAMENTO E GARANTIA</div>
 
                     <div className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Forma de Pagamento Preferencial</label>
+                        <div className="wizard-field">
+                            <label>FORMA DE PAGAMENTO PREFERENCIAL</label>
                             <div className="grid grid-cols-2 gap-2">
                                 {PAGAMENTOS.map(p => (
                                     <button
@@ -205,10 +221,8 @@ export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagament
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                                <Shield size={12} /> Prazo de Garantia
-                            </label>
+                        <div className="wizard-field mb-0">
+                            <label>PRAZO DE GARANTIA</label>
                             <div className="flex flex-wrap gap-2">
                                 {GARANTIAS.map(g => (
                                     <button
@@ -216,14 +230,39 @@ export function OSStep5AgendaPagamento({ data, onChange }: OSStep5AgendaPagament
                                         type="button"
                                         onClick={() => onChange({ ...data, financas: { ...data.financas, garantia: g.val } })}
                                         className={cn(
-                                            "px-4 py-2 rounded-full text-xs font-bold border transition-all",
-                                            data.financas.garantia === g.val ? "bg-indigo-100 border-indigo-200 text-indigo-700" : "bg-white border-slate-100 text-slate-400 hover:border-slate-200"
+                                            "px-4 py-2 rounded-lg text-xs font-bold border transition-all",
+                                            data.financas.garantia === g.val ? "bg-indigo-600 border-indigo-600 text-white shadow-sm" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"
                                         )}
                                     >
                                         {g.label}
                                     </button>
                                 ))}
                             </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-8">
+                        <div className="section-label flex items-center gap-2">
+                            💰 ADIANTAMENTO NESTA OS
+                            <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-400 rounded-md normal-case font-medium">opcional</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 -mt-2 mb-3 italic leading-relaxed">
+                            Sinal pago pelo cliente neste exato momento e que será descontado no total.
+                        </p>
+
+                        <div className="relative wizard-field mb-0">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">R$</span>
+                            <input
+                                type="text"
+                                className="w-full h-12 pl-10 pr-4"
+                                placeholder="0,00"
+                                value={data.valorAdiantado ? (data.valorAdiantado / 100).toFixed(2).replace(".", ",") : ""}
+                                onChange={e => {
+                                    const digits = e.target.value.replace(/\D/g, "");
+                                    const val = Math.round(parseFloat(digits) || 0);
+                                    onChange({ ...data, valorAdiantado: val });
+                                }}
+                            />
                         </div>
                     </div>
                 </div>

@@ -41,7 +41,7 @@ const STAGES: { label: string; status: OsStatus; color: string }[] = [
 
 export default function OSPage() {
     const router = useRouter();
-    const { profile } = useAuth();
+    const { profile, isLoading: authLoading } = useAuth();
     const [orders, setOrders] = useState<any[]>([]);
     const [tecnicos, setTecnicos] = useState<any[]>([]);
     const [selectedOS, setSelectedOS] = useState<any>(null);
@@ -62,9 +62,13 @@ export default function OSPage() {
     const [totalItems, setTotalItems] = useState(0);
 
     useEffect(() => {
-        if (!profile?.empresa_id) return;
+        if (authLoading) return;
+        if (!profile?.empresa_id) {
+            setLoading(false);
+            return;
+        }
         loadOS();
-    }, [profile?.empresa_id, currentPage, viewMode, filterTecnico, filterStart, filterEnd]);
+    }, [profile?.empresa_id, currentPage, viewMode, filterTecnico, filterStart, filterEnd, authLoading]);
 
     // Busca com debounce simples
     useEffect(() => {
@@ -223,9 +227,17 @@ export default function OSPage() {
             </div>
 
             {/* Conteúdo Principal */}
-            {loading ? (
+            {loading || authLoading ? (
                 <div className="h-96 flex items-center justify-center">
                     <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+            ) : !profile?.empresa_id ? (
+                <div className="h-96 flex flex-col items-center justify-center bg-slate-50/20 rounded-3xl border border-slate-100 p-6">
+                    <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                        <Search className="text-slate-300" size={32} />
+                    </div>
+                    <h3 className="text-slate-800 font-bold text-lg">Nenhuma empresa encontrada</h3>
+                    <p className="text-slate-500 text-sm mt-1 text-center max-w-sm">Você precisa estar vinculado a uma empresa para visualizar as ordens de serviço.</p>
                 </div>
             ) : viewMode === "kanban" ? (
                 <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-thin">

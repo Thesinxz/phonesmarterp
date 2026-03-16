@@ -189,14 +189,10 @@ export default function PrintOSPage({ params }: { params: { id: string } }) {
                         <h3 className="text-base font-black text-slate-800">
                             {os.marca_equipamento || os.equipamento?.marca} {os.modelo_equipamento || os.equipamento?.modelo}
                         </h3>
-                        <div className="grid grid-cols-2 gap-2 mt-4">
+                        <div className="grid grid-cols-1 gap-2 mt-4">
                             <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 overflow-hidden">
                                 <p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">IMEI / SÉRIE</p>
                                 <p className="text-xs font-bold text-slate-700 truncate">{os.imei_equipamento || os.equipamento?.imei || "N/A"}</p>
-                            </div>
-                            <div className="bg-indigo-50 p-2 rounded-xl border border-indigo-100 overflow-hidden">
-                                <p className="text-[8px] font-black text-indigo-400 uppercase mb-0.5">SENHA / PIN</p>
-                                <p className="text-xs font-black text-indigo-700 truncate">{os.senha_dispositivo || "N/I"}</p>
                             </div>
                         </div>
                     </div>

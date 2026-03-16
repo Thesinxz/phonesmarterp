@@ -12,51 +12,47 @@ interface OSStep3ProblemaProps {
 
 export function OSStep3Problema({ data, onChange }: OSStep3ProblemaProps) {
     return (
-        <div className="space-y-8">
+        <div className="space-y-6">
+            <div className="step-header">
+                <div className="step-num">3</div>
+                <h2>O que está acontecendo?</h2>
+            </div>
+
             {/* Relato do Problema */}
-            <div className="space-y-4">
-                <label className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                    <Wrench size={16} /> Relato do Problema e Defeitos *
-                </label>
-
-                <TagsProblemas
-                    selected={data.tags || []}
-                    onChange={(tags) => onChange({ ...data, tags })}
-                />
-
+            <div>
+                <div className="section-label">RELATO DO PROBLEMA E DEFEITOS *</div>
+                <div className="mb-4">
+                    <TagsProblemas
+                        selected={data.tags || []}
+                        onChange={(tags) => onChange({ ...data, tags })}
+                    />
+                </div>
                 <textarea
                     placeholder="Descreva detalhadamente o que está acontecendo com o aparelho..."
-                    className="w-full h-32 p-4 rounded-2xl border border-slate-100 bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 resize-none"
+                    className="wizard-field w-full h-32 p-4 mb-0 resize-none text-sm"
                     value={data.problema}
                     onChange={e => onChange({ ...data, problema: e.target.value })}
                 />
             </div>
 
             {/* Checklist de Entrada */}
-            <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <label className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                        <ClipboardCheck size={16} /> Checklist de Entrada (Inspeção Visual)
-                    </label>
-                </div>
-
-                <GlassCard className="bg-slate-50/50 border-slate-100">
+            <div className="mt-8">
+                <div className="section-label">CHECKLIST DE ENTRADA (INSPEÇÃO VISUAL)</div>
+                <div className="bg-white rounded-xl border border-slate-200">
                     <ChecklistInspecao
                         tipo="entrada"
                         value={data.checklist}
                         onChange={(val) => onChange({ ...data, checklist: val })}
                     />
-                </GlassCard>
+                </div>
             </div>
 
             {/* Observações Internas */}
-            <div className="space-y-4">
-                <label className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                    <Info size={16} /> Observações Internas (Só para a Equipe)
-                </label>
+            <div className="wizard-field mt-8 mb-0">
+                <label>OBSERVAÇÕES INTERNAS (SÓ PARA A EQUIPE)</label>
                 <textarea
                     placeholder="Anotações sobre senhas, histórico de reparos anteriores, detalhes técnicos..."
-                    className="w-full h-24 p-4 rounded-2xl border border-slate-100 bg-slate-50 focus:ring-2 focus:ring-slate-300 outline-none text-slate-600 resize-none text-sm italic"
+                    className="w-full h-24 p-4 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 focus:border-indigo-300 outline-none text-slate-600 resize-none text-sm italic transition-all"
                     value={data.obsInternas}
                     onChange={e => onChange({ ...data, obsInternas: e.target.value })}
                 />

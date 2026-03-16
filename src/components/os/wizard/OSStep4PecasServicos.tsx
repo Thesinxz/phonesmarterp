@@ -67,88 +67,97 @@ export function OSStep4PecasServicos({ data, onChange }: OSStep4PecasServicosPro
     const totalServicos = (data.servicos || []).reduce((acc: number, s: any) => acc + s.valor, 0);
     const totalGeral = totalPecas + totalServicos - (data.desconto || 0);
 
+    const formatMoney = (val: string) => {
+        return (parseInt(val.replace(/\D/g, "")) / 100).toFixed(2).replace(".", ",");
+    };
+
+    const addTagServico = (tag: string) => {
+        setMaoObraManual({ ...maoObraManual, descricao: tag });
+    };
+
     return (
-        <div className="space-y-8">
+        <div className="space-y-6">
+            <div className="step-header">
+                <div className="step-num">4</div>
+                <h2>Materiais e Mão de Obra</h2>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Coluna 1: Peças */}
-                <div className="space-y-4">
-                    <label className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                        <Package size={16} /> Peças do Estoque
-                    </label>
+                <div>
+                    <div className="section-label">PEÇAS DO ESTOQUE (CATÁLOGO)</div>
+                    <div className="mb-4">
+                        <BuscaPecaEstoque onSelect={addPeca} modeloEquipamento={data.modelo_equipamento} addedParts={data.pecas || []} />
+                    </div>
 
-                    <BuscaPecaEstoque onSelect={addPeca} modeloEquipamento={data.modelo_equipamento} />
-
-                    <div className="space-y-3">
+                    <div className="flex flex-col gap-3">
                         {(data.pecas || []).map((p: any) => (
-                            <div key={p.id} className="flex flex-col p-4 bg-white rounded-2xl border border-slate-100 shadow-sm animate-in fade-in zoom-in-95 gap-3">
-                                <div className="flex items-center justify-between">
+                            <div key={p.id} className="sidebar-card flex-col gap-3" style={{ padding: '16px' }}>
+                                <div className="flex items-start justify-between">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                                            <Package size={20} />
+                                        <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                                            <Package size={16} />
                                         </div>
                                         <div>
-                                            <p className="text-sm font-bold text-slate-800">{p.nome}</p>
+                                            <p className="text-sm font-bold text-slate-800 leading-tight">{p.nome}</p>
                                             {p.isManual && (
-                                                <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">Peça Manual</span>
+                                                <span className="text-[9px] font-black uppercase text-amber-500 tracking-widest mt-0.5 block">Peça Manual</span>
                                             )}
                                         </div>
                                     </div>
                                     <button
                                         type="button"
                                         onClick={() => removePeca(p.id)}
-                                        className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                                        className="text-slate-300 hover:text-red-500 transition-colors shrink-0"
                                     >
-                                        <Trash2 size={18} />
+                                        <Trash2 size={16} />
                                     </button>
                                 </div>
 
-                                <div className="flex items-center justify-between pt-3 border-t border-slate-50 gap-4">
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex flex-col gap-1">
-                                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Qtd</label>
+                                <div className="flex items-center gap-4 pt-3 border-t border-slate-100/50 mt-1">
+                                    <div className="flex flex-col gap-1 w-20">
+                                        <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Qtd</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            className="w-full h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-bold outline-none transition-all focus:border-indigo-500"
+                                            value={p.qtd}
+                                            onChange={(e) => {
+                                                const val = parseInt(e.target.value) || 1;
+                                                onChange({
+                                                    ...data,
+                                                    pecas: data.pecas.map((item: any) => item.id === p.id ? { ...item, qtd: val } : item)
+                                                });
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1 w-28">
+                                        <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Preço Un.</label>
+                                        <div className="relative">
+                                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-bold">R$</span>
                                             <input
-                                                type="number"
-                                                min="1"
-                                                className="w-16 h-9 rounded-lg border border-slate-100 bg-slate-50 px-2 text-sm font-bold focus:bg-white outline-none"
-                                                value={p.qtd}
+                                                type="text"
+                                                className="w-full h-8 pl-6 pr-2 rounded-md border border-slate-200 bg-white text-xs font-bold outline-none transition-all focus:border-indigo-500"
+                                                value={(p.preco / 100).toFixed(2).replace(".", ",")}
                                                 onChange={(e) => {
-                                                    const val = parseInt(e.target.value) || 1;
+                                                    const val = Math.round(parseFloat(e.target.value.replace(",", ".")) * 100) || 0;
                                                     onChange({
                                                         ...data,
-                                                        pecas: data.pecas.map((item: any) => item.id === p.id ? { ...item, qtd: val } : item)
+                                                        pecas: data.pecas.map((item: any) => item.id === p.id ? { ...item, preco: val } : item)
                                                     });
                                                 }}
                                             />
                                         </div>
-                                        <div className="flex flex-col gap-1">
-                                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Preço Un.</label>
-                                            <div className="relative">
-                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-bold">R$</span>
-                                                <input
-                                                    type="text"
-                                                    className="w-24 h-9 pl-7 pr-2 rounded-lg border border-slate-100 bg-slate-50 text-sm font-bold focus:bg-white outline-none"
-                                                    value={(p.preco / 100).toFixed(2)}
-                                                    onChange={(e) => {
-                                                        const val = Math.round(parseFloat(e.target.value.replace(",", ".")) * 100) || 0;
-                                                        onChange({
-                                                            ...data,
-                                                            pecas: data.pecas.map((item: any) => item.id === p.id ? { ...item, preco: val } : item)
-                                                        });
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
                                     </div>
-
-                                    <div className="text-right">
-                                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Subtotal</p>
-                                        <p className="text-base font-black text-slate-700">R$ {(p.preco * p.qtd / 100).toFixed(2)}</p>
+                                    <div className="flex-1 text-right">
+                                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Subtotal</p>
+                                        <p className="text-sm font-black text-slate-700">R$ {(p.preco * p.qtd / 100).toFixed(2).replace(".", ",")}</p>
                                     </div>
                                 </div>
                             </div>
                         ))}
                         {(!data.pecas || data.pecas.length === 0) && (
-                            <div className="py-8 text-center border-2 border-dashed border-slate-100 rounded-2xl text-slate-300 text-xs uppercase font-bold tracking-widest">
+                            <div className="py-8 text-center border-2 border-dashed border-slate-100 rounded-xl text-slate-400 text-xs font-bold">
                                 Nenhuma peça adicionada
                             </div>
                         )}
@@ -156,53 +165,68 @@ export function OSStep4PecasServicos({ data, onChange }: OSStep4PecasServicosPro
                 </div>
 
                 {/* Coluna 2: Mão de Obra */}
-                <div className="space-y-4">
-                    <label className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                        <Wrench size={16} /> Mão de Obra / Serviços
-                    </label>
-
-                    <div className="flex gap-2">
+                <div>
+                    <div className="section-label">MÃO DE OBRA / SERVIÇOS</div>
+                    
+                    <div className="flex gap-2 mb-3">
                         <input
                             type="text"
                             placeholder="Descrição do serviço..."
-                            className="flex-1 h-12 px-4 rounded-xl border border-slate-100 bg-white text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="flex-1 h-12 px-4 rounded-xl border border-slate-200 bg-white text-sm outline-none transition-all focus:border-indigo-600"
                             value={maoObraManual.descricao}
                             onChange={e => setMaoObraManual(p => ({ ...p, descricao: e.target.value }))}
                         />
                         <div className="relative w-32">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">R$</span>
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">R$</span>
                             <input
                                 type="text"
                                 placeholder="0,00"
-                                className="w-full h-12 pl-8 pr-4 rounded-xl border border-slate-100 bg-white text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                className="w-full h-12 pl-8 pr-4 rounded-xl border border-slate-200 bg-white text-sm font-bold outline-none transition-all focus:border-indigo-600"
                                 value={maoObraManual.valor}
-                                onChange={e => setMaoObraManual(p => ({ ...p, valor: e.target.value }))}
+                                onChange={e => {
+                                    const digits = e.target.value.replace(/\D/g, "");
+                                    if(digits === "") return setMaoObraManual(p => ({ ...p, valor: "" }));
+                                    setMaoObraManual(p => ({ ...p, valor: formatMoney(digits) }));
+                                }}
                             />
                         </div>
                         <button
                             type="button"
                             onClick={addMaoObra}
-                            className="h-12 w-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20 active:scale-95 transition-transform"
+                            className="h-12 w-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20 active:scale-95 transition-transform shrink-0"
                         >
                             <Plus size={20} />
                         </button>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2 mb-6">
+                        {['Limpeza', 'Desoxidação', 'Software', 'Solda', 'Troca de Tela', 'Bateria'].map(s => (
+                            <button 
+                                key={s} 
+                                type="button" 
+                                onClick={() => addTagServico(s)}
+                                className="px-3 py-1.5 rounded-md border border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-600 hover:bg-slate-100 transition-colors uppercase tracking-wider"
+                            >
+                                {s}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="flex flex-col gap-2">
                         {(data.servicos || []).map((s: any, i: number) => (
-                            <div key={i} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
+                            <div key={i} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm transition-all hover:border-slate-200">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs">
-                                        <ShoppingBag size={14} />
+                                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                                        <Wrench size={14} />
                                     </div>
                                     <p className="text-sm font-bold text-slate-800">{s.descricao}</p>
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    <p className="text-sm font-black text-slate-700">R$ {(s.valor / 100).toFixed(2)}</p>
+                                    <p className="text-sm font-black text-slate-700">R$ {(s.valor / 100).toFixed(2).replace(".", ",")}</p>
                                     <button
                                         type="button"
                                         onClick={() => removeServico(i)}
-                                        className="text-slate-300 hover:text-red-500 transition-colors"
+                                        className="text-slate-300 hover:text-red-500 transition-colors shrink-0"
                                     >
                                         <Trash2 size={16} />
                                     </button>
@@ -210,40 +234,57 @@ export function OSStep4PecasServicos({ data, onChange }: OSStep4PecasServicosPro
                             </div>
                         ))}
                     </div>
+                    
+                    <div className="mt-8">
+                        <div className="flex justify-between items-center mb-2">
+                            <div className="section-label mb-0">DESCONTO NESTA OS</div>
+                            <div className="flex bg-slate-100 p-1 rounded-lg">
+                                <button
+                                    type="button"
+                                    onClick={() => onChange({ ...data, desconto: 0, descontoTipo: "valor" })}
+                                    className={cn(
+                                        "px-3 py-1 text-[10px] font-black uppercase rounded-md transition-all",
+                                        data.descontoTipo === "valor" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400"
+                                    )}
+                                >
+                                    R$
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => onChange({ ...data, desconto: 0, descontoTipo: "porcentagem" })}
+                                    className={cn(
+                                        "px-3 py-1 text-[10px] font-black uppercase rounded-md transition-all",
+                                        data.descontoTipo === "porcentagem" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400"
+                                    )}
+                                >
+                                    %
+                                </button>
+                            </div>
+                        </div>
+                        <div className="relative wizard-field mb-0">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">
+                                {data.descontoTipo === "porcentagem" ? "%" : "R$"}
+                            </span>
+                            <input
+                                type="text"
+                                placeholder="0,00"
+                                className="w-full h-12 pl-12 pr-4"
+                                value={data.descontoTipo === "porcentagem" ? (data.desconto || "") : (data.desconto ? (data.desconto / 100).toFixed(2).replace(".", ",") : "")}
+                                onChange={e => {
+                                    if (data.descontoTipo === "porcentagem") {
+                                        const val = Math.min(100, parseInt(e.target.value.replace(/\D/g, "")) || 0);
+                                        onChange({ ...data, desconto: val });
+                                    } else {
+                                        const digits = e.target.value.replace(/\D/g, "");
+                                        const val = Math.round(parseFloat(digits) || 0);
+                                        onChange({ ...data, desconto: val });
+                                    }
+                                }}
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
-
-            {/* Resumo Financeiro da Etapa */}
-            <GlassCard className="bg-indigo-900 border-indigo-800 text-white overflow-hidden relative">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full -mr-16 -mt-16 blur-3xl" />
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-6 items-center">
-                    <div>
-                        <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-1">Total Peças</p>
-                        <p className="text-xl font-bold">R$ {(totalPecas / 100).toFixed(2)}</p>
-                    </div>
-                    <div>
-                        <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-1">Total Serviços</p>
-                        <p className="text-xl font-bold">R$ {(totalServicos / 100).toFixed(2)}</p>
-                    </div>
-                    <div>
-                        <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-1">Desconto</p>
-                        <input
-                            type="text"
-                            placeholder="0,00"
-                            className="bg-indigo-800/50 border border-indigo-700 rounded-lg px-3 py-1 text-sm font-bold w-24 outline-none focus:ring-1 focus:ring-white"
-                            value={(data.desconto / 100).toFixed(2)}
-                            onChange={e => {
-                                const val = Math.round(parseFloat(e.target.value.replace(",", ".")) * 100) || 0;
-                                onChange({ ...data, desconto: val });
-                            }}
-                        />
-                    </div>
-                    <div className="text-right">
-                        <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1">VALOR TOTAL ESTIMADO</p>
-                        <p className="text-3xl font-black text-white">R$ {(totalGeral / 100).toFixed(2)}</p>
-                    </div>
-                </div>
-            </GlassCard>
         </div>
     );
 }

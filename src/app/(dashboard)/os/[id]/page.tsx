@@ -37,6 +37,8 @@ import { ChecklistInspecao, type ChecklistData } from "@/components/os/Checklist
 import { AssinaturaPad } from "@/components/os/AssinaturaPad";
 import { EditOSModal } from "@/components/os/EditOSModal";
 import { cn } from "@/utils/cn";
+import { PasswordReveal } from "@/components/os/PasswordReveal";
+import { PatternLock } from "@/components/os/wizard/PatternLock";
 import { formatDate } from "@/utils/formatDate";
 import { notifyOSStatusChange } from "@/actions/notifications";
 import { useRealtimeSubscription } from "@/hooks/useRealtime";
@@ -713,11 +715,22 @@ export default function OSDetalhePage({ params }: { params: { id: string } }) {
                         </div>
                         <div className="grid grid-cols-2 gap-6 mt-4 pt-4 border-t border-slate-100">
                             <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Smartphone size={10} /> Senha / PIN / Padrão</p>
-                                <p className="font-bold text-indigo-600">
-                                    {os.senha_dispositivo || "Não informada"}
-                                    {os.senha_tipo === 'padrao' && <span className="text-[8px] ml-2 text-amber-500 uppercase font-bold">(Desenho)</span>}
+                                <p className="text-[10px] font-black uppercase text-indigo-400 tracking-[0.2em] mb-2 flex items-center gap-2">
+                                    <Shield size={10} /> Segurança (Uso Interno)
                                 </p>
+                                {os.senha_tipo === 'padrao' ? (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Padrão Android:</span>
+                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-bold uppercase tracking-widest">Abaixo</span>
+                                        </div>
+                                        <div className="bg-slate-50/50 p-2 rounded-2xl border border-slate-100/50 w-fit">
+                                            <PatternLock value={os.senha_dispositivo} readOnly className="scale-75 -m-6" />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <PasswordReveal value={os.senha_dispositivo} />
+                                )}
                             </div>
                             <div>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Smartphone size={10} /> Acessórios Deixados</p>

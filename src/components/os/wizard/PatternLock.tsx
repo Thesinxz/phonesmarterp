@@ -5,11 +5,12 @@ import { cn } from "@/utils/cn";
 
 interface PatternLockProps {
     value: string; // Sequence like "1-2-3"
-    onChange: (value: string) => void;
+    onChange?: (value: string) => void;
     className?: string;
+    readOnly?: boolean;
 }
 
-export function PatternLock({ value, onChange, className }: PatternLockProps) {
+export function PatternLock({ value, onChange, className, readOnly = false }: PatternLockProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [path, setPath] = useState<number[]>([]);
@@ -43,13 +44,14 @@ export function PatternLock({ value, onChange, className }: PatternLockProps) {
     };
 
     const handleStart = (node: number) => {
+        if (readOnly) return;
         setIsDrawing(true);
         setPath([node]);
-        onChange(node.toString());
+        onChange?.(node.toString());
     };
 
     const handleMove = (e: React.MouseEvent | React.TouchEvent) => {
-        if (!isDrawing || !containerRef.current) return;
+        if (readOnly || !isDrawing || !containerRef.current) return;
 
         const rect = containerRef.current.getBoundingClientRect();
         let clientX, clientY;
@@ -77,7 +79,7 @@ export function PatternLock({ value, onChange, className }: PatternLockProps) {
             if (!path.includes(node)) {
                 const newPath = [...path, node];
                 setPath(newPath);
-                onChange(newPath.join("-"));
+                onChange?.(newPath.join("-"));
             }
         }
     };
@@ -88,7 +90,7 @@ export function PatternLock({ value, onChange, className }: PatternLockProps) {
 
     return (
         <div
-            className={cn("relative w-64 h-64 mx-auto touch-none select-none p-4 bg-slate-50/50 rounded-3xl border border-white/50 shadow-inner", className)}
+            className={cn("relative w-[180px] h-[180px] mx-auto touch-none select-none p-4 bg-slate-50/50 rounded-3xl border border-slate-100 shadow-inner", className)}
             onMouseMove={handleMove}
             onTouchMove={handleMove}
             onMouseLeave={handleEnd}
@@ -170,16 +172,18 @@ export function PatternLock({ value, onChange, className }: PatternLockProps) {
                 })}
             </div>
 
-            <button
-                type="button"
-                onClick={() => {
-                    setPath([]);
-                    onChange("");
-                }}
-                className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-[10px] font-black uppercase text-slate-400 tracking-widest hover:text-indigo-500 transition-colors"
-            >
-                Limpar Desenho
-            </button>
+            {!readOnly && (
+                <button
+                    type="button"
+                    onClick={() => {
+                        setPath([]);
+                        onChange?.("");
+                    }}
+                    className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-[10px] font-black uppercase text-slate-400 tracking-widest hover:text-indigo-500 transition-colors"
+                >
+                    Limpar Desenho
+                </button>
+            )}
         </div>
     );
 }

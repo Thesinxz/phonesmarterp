@@ -474,7 +474,7 @@ export async function getTecnicoComMenosOS(empresaId: string) {
             .select("id, nome, papel")
             .eq("empresa_id", empresaId)
             .in("papel", ["tecnico", "admin"])
-            .eq("status", "ativo");
+            .eq("ativo", true);
 
         if (errEquipe) throw errEquipe;
         if (!equipe || equipe.length === 0) return null;

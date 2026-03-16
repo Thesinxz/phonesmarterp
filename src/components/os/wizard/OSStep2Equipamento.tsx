@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SeletorTipoEquipamento } from "./SeletorTipoEquipamento";
+import { SeletorMarcaModelo } from "./SeletorMarcaModelo";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Smartphone, Tag, Palette, Hash, Box, ClipboardList, PenTool, Image as ImageIcon, Check, Loader2 } from "lucide-react";
 import { PatternLock } from "./PatternLock";
@@ -35,166 +36,135 @@ export function OSStep2Equipamento({ data, onChange }: OSStep2EquipamentoProps) 
     };
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-6">
+            <div className="step-header">
+                <div className="step-num">2</div>
+                <h2>Qual o equipamento?</h2>
+            </div>
+
             {/* Tipo de Aparelho */}
-            <div className="space-y-4">
-                <label className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                    <Smartphone size={16} /> Tipo de Aparelho
-                </label>
+            <div>
+                <div className="section-label">TIPO DE APARELHO</div>
                 <SeletorTipoEquipamento
                     value={data.tipoEquipamento}
                     onChange={(v) => onChange({ ...data, tipoEquipamento: v })}
                 />
             </div>
 
-            {/* Marca e Modelo */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                        <Tag size={12} /> Marca *
-                    </label>
-                    <input
-                        type="text"
-                        placeholder="Ex: Apple, Samsung, Motorola..."
-                        className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                        value={data.marca}
-                        onChange={e => onChange({ ...data, marca: e.target.value })}
-                    />
-                </div>
-                <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                        <Smartphone size={12} /> Modelo *
-                    </label>
-                    <input
-                        type="text"
-                        placeholder="Ex: iPhone 14 Pro Max, S23 Ultra..."
-                        className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                        value={data.modelo}
-                        onChange={e => onChange({ ...data, modelo: e.target.value })}
-                    />
-                </div>
-            </div>
+            {/* Marca e Modelo Inteligentes */}
+            <SeletorMarcaModelo
+                marca={data.marca}
+                modelo={data.modelo}
+                onChange={(m, mod) => onChange({ ...data, marca: m, modelo: mod })}
+            />
 
             {/* Cor do Aparelho */}
-            <div className="space-y-4">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                    <Palette size={12} /> Cor do Aparelho
-                </label>
-                <div className="flex flex-wrap gap-3">
+            <div>
+                <div className="section-label">COR DO APARELHO</div>
+                <div className="flex flex-wrap gap-2">
                     {CORES.map(cor => (
-                        <button
+                        <div
                             key={cor.label}
-                            type="button"
                             onClick={() => onChange({ ...data, cor: cor.label })}
                             className={cn(
-                                "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all",
-                                data.cor === cor.label ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500" : "border-slate-100 bg-white hover:border-slate-200"
+                                "flex items-center justify-center w-8 h-8 rounded-full cursor-pointer transition-all border-2",
+                                cor.bg,
+                                data.cor === cor.label ? "ring-2 ring-indigo-500 ring-offset-2 border-transparent scale-110" : "border-transparent opacity-80 hover:opacity-100"
                             )}
-                        >
-                            <div className={cn("w-4 h-4 rounded-full", cor.bg)} />
-                            <span className="text-sm font-medium text-slate-700">{cor.label}</span>
-                        </button>
+                            title={cor.label}
+                        />
                     ))}
                 </div>
             </div>
 
             {/* Identificação (IMEI/SN) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                        <Hash size={12} /> IMEI / Serial (obrigatório para celulares)
+            {/* Identificação (IMEI/SN) e Senha */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="wizard-field">
+                    <label>
+                        IMEI / SERIAL <span className="badge-lock ml-auto">🔒 não impresso</span>
                     </label>
                     <input
                         type="text"
-                        placeholder="IMEI do aparelho"
-                        className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                        placeholder="IMEI do aparelho (15 dígitos)"
                         value={data.imei}
                         onChange={e => onChange({ ...data, imei: e.target.value })}
                     />
                 </div>
-                <div className="space-y-4 md:col-span-2">
-                    <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                            <Hash size={12} /> Senha / PIN / Padrão (necessário para testes)
-                        </label>
-                        <div className="flex bg-slate-100 p-1 rounded-lg">
-                            <button
-                                type="button"
-                                onClick={() => onChange({ ...data, senhaTipo: "texto", senhaDispositivo: "" })}
-                                className={cn(
-                                    "px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-md transition-all",
-                                    data.senhaTipo === "texto" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
-                                )}
-                            >
-                                PIN / Texto
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => onChange({ ...data, senhaTipo: "padrao", senhaDispositivo: "" })}
-                                className={cn(
-                                    "px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-md transition-all",
-                                    data.senhaTipo === "padrao" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
-                                )}
-                            >
-                                Desenho Android
-                            </button>
-                        </div>
-                    </div>
-
-                    {data.senhaTipo === "padrao" ? (
-                        <div className="animate-in fade-in zoom-in-95 duration-300">
-                            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center gap-4">
-                                <PatternLock
-                                    value={data.senhaDispositivo}
-                                    onChange={(val: string) => onChange({ ...data, senhaDispositivo: val })}
-                                />
-                                <div className="text-center">
-                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Sequência do Padrão</p>
-                                    <p className="text-lg font-black text-indigo-600 font-mono tracking-tighter">{data.senhaDispositivo || "Desenhe no quadro acima"}</p>
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="relative animate-in fade-in slide-in-from-top-2 duration-300">
-                            <input
-                                type="text"
-                                placeholder="Ex: 1234, Senha123, PIN 0000..."
-                                className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                                value={data.senhaDispositivo}
-                                onChange={e => onChange({ ...data, senhaDispositivo: e.target.value })}
-                            />
-                            {/* Botão para forçar modo padrão se estiver vazio */}
-                            {data.senhaDispositivo === "" && (
-                                <button
-                                    type="button"
-                                    onClick={() => onChange({ ...data, senhaTipo: "padrao", senhaDispositivo: "" })}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg hover:bg-indigo-100 transition-colors"
-                                >
-                                    Usar Desenho
-                                </button>
-                            )}
-                        </div>
-                    )}
-                </div>
-                <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                        <Box size={12} /> Outras Identificações
-                    </label>
+                <div className="wizard-field">
+                    <label>SÉRIE / PATRIMÔNIO</label>
                     <input
                         type="text"
-                        placeholder="Nº de Série, Patrimônio..."
-                        className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                        placeholder="Nº de patrimônio ou outra ref..."
                         value={data.serie}
                         onChange={e => onChange({ ...data, serie: e.target.value })}
                     />
                 </div>
             </div>
 
+            <div>
+                <div className="flex items-center justify-between mb-2">
+                    <div className="section-label mb-0 flex items-center gap-2">
+                        SENHA / PIN / PADRÃO
+                        <span className="badge-lock">🔒 não impresso</span>
+                    </div>
+                    <div className="flex bg-slate-100 p-0.5 rounded-md">
+                        <button
+                            type="button"
+                            onClick={() => onChange({ ...data, senhaTipo: "texto", senhaDispositivo: "" })}
+                            className={cn(
+                                "px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded transition-all",
+                                data.senhaTipo === "texto" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                            )}
+                        >
+                            PIN / Texto
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => onChange({ ...data, senhaTipo: "padrao", senhaDispositivo: "" })}
+                            className={cn(
+                                "px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded transition-all",
+                                data.senhaTipo === "padrao" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                            )}
+                        >
+                            Desenho
+                        </button>
+                    </div>
+                </div>
+
+                {data.senhaTipo === "padrao" ? (
+                    <div className="p-5 rounded-lg border border-slate-200 bg-white grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-6 items-center">
+                        <div>
+                            <p className="text-xs text-slate-500 leading-relaxed">
+                                Desenhe o padrão de desbloqueio do aparelho.<br />
+                                Necessário para realizar testes internos.
+                            </p>
+                            <p className="text-[10px] text-slate-400 mt-2 italic">
+                                Esta informação não é exibida ao cliente.
+                            </p>
+                        </div>
+                        <div className="flex justify-center sm:justify-end">
+                            <PatternLock
+                                value={data.senhaDispositivo}
+                                onChange={(val: string) => onChange({ ...data, senhaDispositivo: val })}
+                            />
+                        </div>
+                    </div>
+                ) : (
+                    <div className="wizard-field mb-0">
+                        <input
+                            type="text"
+                            placeholder="Ex: 1234, Senha123, PIN 0000..."
+                            value={data.senhaDispositivo}
+                            onChange={e => onChange({ ...data, senhaDispositivo: e.target.value })}
+                        />
+                    </div>
+                )}
+            </div>
+
             {/* Acessórios Recebidos */}
-            <div className="space-y-4">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                    <Box size={12} /> Acessórios Deixados com o Aparelho
-                </label>
+            <div>
+                <div className="section-label">ACESSÓRIOS DEIXADOS COM O APARELHO</div>
                 <div className="flex flex-wrap gap-2">
                     {ACESSORIOS_SUGESTOES.map(acc => {
                         const active = data.acessorios?.includes(acc);
@@ -204,10 +174,10 @@ export function OSStep2Equipamento({ data, onChange }: OSStep2EquipamentoProps) 
                                 type="button"
                                 onClick={() => toggleAcessorio(acc)}
                                 className={cn(
-                                    "px-4 py-2 rounded-full text-xs font-bold border transition-all flex items-center gap-2",
+                                    "px-3 py-1.5 rounded-md text-xs font-semibold border transition-all flex items-center gap-1.5",
                                     active
-                                        ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-500/20"
-                                        : "bg-white border-slate-100 text-slate-400 hover:border-slate-200"
+                                        ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
+                                        : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"
                                 )}
                             >
                                 {active && <Check size={12} />}

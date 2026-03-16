@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, X, User, Phone, Mail, FileText, Search, Check, MapPin, Building2, Save, Loader2, RotateCcw } from "lucide-react";
+import { Plus, X, User, Phone, Mail, FileText, Search, Check, MapPin, Building2, Save, Loader2, RotateCcw, ChevronRight } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
@@ -243,59 +243,67 @@ export function OSStep1Cliente({ onSelect, selectedId }: OSStep1ClienteProps) {
 
     return (
         <div className="space-y-6">
-            {!selectedClient ? (
+            <div className="step-header">
+                <div className="step-num">1</div>
+                <h2>Quem é o cliente?</h2>
+            </div>
+
+            {!selectedClient && (
                 <div className="space-y-4">
-                    <div className="flex gap-2">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                            <input
-                                type="text"
-                                placeholder="Buscar por nome, CPF ou telefone..."
-                                className="w-full h-14 pl-12 pr-4 rounded-2xl border border-slate-100 bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 transition-all outline-none text-lg"
-                                value={search}
-                                onChange={(e) => handleSearch(e.target.value)}
-                            />
+                    <div className="flex gap-2 relative">
+                        <div style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}>
+                            <Search size={20} />
                         </div>
+                        <input
+                            type="text"
+                            placeholder="Buscar por nome, CPF ou telefone..."
+                            className="w-full h-12 pl-12 pr-4 rounded-lg border border-slate-200 bg-white shadow-sm outline-none text-sm transition-all focus:border-indigo-600"
+                            value={search}
+                            onChange={(e) => handleSearch(e.target.value)}
+                            autoFocus
+                        />
                         <button
                             type="button"
                             onClick={openNewForm}
-                            className="h-14 px-6 rounded-2xl bg-indigo-600 text-white font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 shrink-0"
+                            className="btn-primary shrink-0"
                             title="Novo Cliente"
                         >
-                            <Plus size={24} />
-                            <span className="hidden sm:inline">Novo Cliente</span>
+                            <Plus size={16} className="mr-2" />
+                            Novo Cliente
                         </button>
                     </div>
 
                     {/* Clientes Recentes ou Resultados */}
                     {search.length === 0 && !searching && recentClients.length > 0 && (
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between px-2">
-                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Clientes Recentes</p>
+                        <div className="space-y-3 mt-6">
+                            <div className="section-label flex items-center justify-between mb-0">
+                                <span>CLIENTES RECENTES</span>
                                 <button
                                     onClick={loadRecentClients}
-                                    className="text-[10px] font-black uppercase text-indigo-500 hover:text-indigo-700 transition-colors flex items-center gap-1"
+                                    className="text-indigo-500 hover:text-indigo-700 transition-colors flex items-center gap-1 normal-case tracking-normal"
                                 >
                                     <RotateCcw size={10} /> Atualizar
                                 </button>
                             </div>
-                            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-50">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {recentClients.map(client => (
-                                    <button
+                                    <div
                                         key={client.id}
                                         onClick={() => handleSelect(client)}
-                                        className="w-full p-4 flex items-center justify-between hover:bg-indigo-50 transition-colors text-left"
+                                        className="sidebar-card hover:border-indigo-300 hover:bg-indigo-50/30 transition-colors cursor-pointer flex-row items-center gap-3"
+                                        style={{ padding: '12px 16px' }}
                                     >
-                                        <div>
-                                            <p className="font-bold text-slate-800">{client.nome}</p>
-                                            <p className="text-xs text-slate-400 line-clamp-1">
-                                                {client.telefone} {client.email ? `• ${client.email}` : ''}
-                                            </p>
+                                        <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-sm shrink-0">
+                                            {client.nome.charAt(0).toUpperCase()}
                                         </div>
-                                        <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-300">
-                                            <User size={14} />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-bold text-sm text-slate-800 truncate">{client.nome}</div>
+                                            <div className="text-xs text-slate-500 truncate mt-0.5">
+                                                {client.telefone} {client.email ? `· ${client.email}` : ''}
+                                            </div>
                                         </div>
-                                    </button>
+                                        <ChevronRight size={16} className="text-slate-300 shrink-0" />
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -303,19 +311,26 @@ export function OSStep1Cliente({ onSelect, selectedId }: OSStep1ClienteProps) {
 
                     {/* Resultados da busca */}
                     {results.length > 0 && (
-                        <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-top-4">
+                        <div className="mt-6 flex flex-col gap-2">
+                            <div className="section-label">RESULTADOS DA BUSCA</div>
                             {results.map(client => (
-                                <button
+                                <div
                                     key={client.id}
                                     onClick={() => handleSelect(client)}
-                                    className="w-full p-4 flex items-center justify-between hover:bg-indigo-50 transition-colors text-left border-b border-slate-50 last:border-0"
+                                    className="sidebar-card hover:border-indigo-300 hover:bg-indigo-50/30 transition-colors cursor-pointer flex-row items-center gap-3"
+                                    style={{ padding: '12px 16px' }}
                                 >
-                                    <div>
-                                        <p className="font-bold text-slate-800">{client.nome}</p>
-                                        <p className="text-xs text-slate-400">{client.telefone} {client.email ? `• ${client.email}` : ''} {client.cpf_cnpj ? `• ${client.cpf_cnpj}` : ''}</p>
+                                    <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-sm shrink-0">
+                                        {client.nome.charAt(0).toUpperCase()}
                                     </div>
-                                    <Check className="text-indigo-500" size={18} />
-                                </button>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-bold text-sm text-slate-800 truncate">{client.nome}</div>
+                                        <div className="text-xs text-slate-500 truncate mt-0.5">
+                                            {client.telefone} {client.email ? `· ${client.email}` : ''} {client.cpf_cnpj ? `· ${client.cpf_cnpj}` : ''}
+                                        </div>
+                                    </div>
+                                    <Check className="text-indigo-500 shrink-0" size={18} />
+                                </div>
                             ))}
                         </div>
                     )}
@@ -333,16 +348,18 @@ export function OSStep1Cliente({ onSelect, selectedId }: OSStep1ClienteProps) {
                         </div>
                     )}
                 </div>
-            ) : (
-                <GlassCard className="relative overflow-hidden border-2 border-emerald-100 bg-emerald-50/20">
+            )}
+
+            {selectedClient && (
+                <div className="sidebar-card bg-emerald-50/30 border-emerald-100">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                                <User size={32} />
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-sm">
+                                {selectedClient.nome.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                                <h3 className="text-xl font-bold text-slate-800">{selectedClient.nome}</h3>
-                                <div className="flex gap-3 mt-1">
+                                <h3 className="font-bold text-slate-800 text-sm">{selectedClient.nome}</h3>
+                                <div className="flex gap-2 mt-0.5">
                                     <span className="text-xs text-slate-500 flex items-center gap-1">
                                         <Phone size={12} /> {selectedClient.telefone}
                                     </span>
@@ -362,7 +379,7 @@ export function OSStep1Cliente({ onSelect, selectedId }: OSStep1ClienteProps) {
                             <X size={20} />
                         </button>
                     </div>
-                </GlassCard>
+                </div>
             )}
 
             {/* Form Completo para Novo Cliente ( Wizard Mode ) */}

@@ -1,135 +1,100 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, Plus, Package, X, Loader2, Save, ShoppingCart, Wrench } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { createProduto } from "@/services/estoque";
-import { getPecasPorModelo, TIPOS_PECA, type PecaCatalogo } from "@/services/pecas";
 import { toast } from "sonner";
 import { cn } from "@/utils/cn";
 import { formatCurrency } from "@/utils/formatCurrency";
+import { PartCard } from "./PartCard";
+import { ModelPartsPopup } from "./ModelPartsPopup";
 
 interface BuscaPecaEstoqueProps {
     onSelect: (peca: any) => void;
     modeloEquipamento?: string; // Modelo do aparelho da OS atual
+    addedParts?: any[];
 }
 
-export function BuscaPecaEstoque({ onSelect, modeloEquipamento }: BuscaPecaEstoqueProps) {
+export function BuscaPecaEstoque({ onSelect, modeloEquipamento, addedParts = [] }: BuscaPecaEstoqueProps) {
     const { profile } = useAuth();
     const [search, setSearch] = useState("");
     const [results, setResults] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [showNewForm, setShowNewForm] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [showModelPopup, setShowModelPopup] = useState(false);
+    const [hasOpenedAuto, setHasOpenedAuto] = useState(false);
+    
+    // Lista de marcas conhecidas para detecção de busca por modelo
+    const brands = ['iphone', 'samsung', 'motorola', 'moto', 'xiaomi', 'redmi', 'poco', 'realme', 'lg', 'asus', 'positivo', 'multilaser'];
 
-    // Peças sugeridas do catálogo (por modelo)
-    const [pecasSugeridas, setPecasSugeridas] = useState<PecaCatalogo[]>([]);
-    const [loadingSugeridas, setLoadingSugeridas] = useState(false);
+    const isModelSearch = (term: string): boolean => {
+        const termLower = term.toLowerCase();
+        return brands.some(b => termLower.includes(b)) || /^(a\d{2}|s\d{2}|g\d{2})/i.test(term);
+    };
 
-    const [newProduct, setNewProduct] = useState({
-        nome: "",
-        preco_venda: "",
-        preco_custo: "",
-        estoque_qtd: "1",
-        categoria: "peças"
-    });
+    const containerRef = useRef<HTMLDivElement>(null);
 
-    // Carregar peças sugeridas quando houver modelo do equipamento
+    // Auto-abrir popup se houver modelo ao focar ou ao iniciar
     useEffect(() => {
-        if (modeloEquipamento && profile?.empresa_id) {
-            loadSugeridas();
+        if (modeloEquipamento && !hasOpenedAuto && !showModelPopup) {
+            setShowModelPopup(true);
+            setHasOpenedAuto(true);
         }
-    }, [modeloEquipamento, profile?.empresa_id]);
-
-    async function loadSugeridas() {
-        if (!modeloEquipamento || !profile?.empresa_id) return;
-        setLoadingSugeridas(true);
-        try {
-            const pecas = await getPecasPorModelo(profile.empresa_id, modeloEquipamento);
-            setPecasSugeridas(pecas);
-        } catch (e) {
-            console.warn("Erro ao buscar peças sugeridas:", e);
-        } finally {
-            setLoadingSugeridas(false);
-        }
-    }
+    }, [modeloEquipamento, hasOpenedAuto]);
 
     const handleSearch = async (val: string) => {
         setSearch(val);
-        const term = val.trim().toLowerCase();
+        const term = val.trim();
 
-        // Sempre começamos filtrando as sugeridas localmente (instantâneo)
-        const localMatches = term === ""
-            ? pecasSugeridas
-            : pecasSugeridas.filter(p => p.nome.toLowerCase().includes(term));
-
-        const formattedLocal = localMatches.map((p: any) => ({
-            id: p.id,
-            nome: p.nome,
-            preco_venda_centavos: p.preco_venda_centavos,
-            preco_custo_centavos: p.preco_custo_centavos,
-            estoque_qtd: p.estoque_qtd,
-            categoria: p.tipo_peca,
-            qualidade: p.qualidade,
-            marca: p.marca || null,
-            modelo: p.modelo || null,
-            _source: "catalogo"
-        }));
-
-        // Se for muito curto, apenas mostre as correspondências locais
         if (term.length < 2) {
-            setResults(formattedLocal);
+            setResults([]);
             return;
         }
 
+        if (isModelSearch(term)) {
+            // Modo modelo → popup abre ao digitar se detectado
+            // Mas talvez seja melhor o usuário dar enter ou clicar em algo
+            // O request diz: "Ao digitar modelo no campo de busca (modo 1 detectado) -> Abrir popup"
+            setShowModelPopup(true);
+            return;
+        }
+
+        // Modo peça → busca inline
         if (!profile?.empresa_id) return;
 
         setLoading(true);
         const supabase = createClient();
         try {
-            // Buscar tanto no estoque de produtos quanto no catálogo de peças
-            const [produtosRes, pecasRes] = await Promise.all([
-                supabase
-                    .from("produtos")
-                    .select("id, nome, preco_venda_centavos, preco_custo_centavos, estoque_qtd, categoria")
-                    .eq("empresa_id", profile.empresa_id)
-                    .ilike("nome", `%${val}%`)
-                    .limit(5),
-                supabase
-                    .from("pecas_catalogo")
-                    .select("*")
-                    .eq("empresa_id", profile.empresa_id)
-                    .ilike("nome", `%${val}%`)
-                    .limit(5)
-            ]);
+            const { data, error } = await (supabase as any)
+                .from('catalog_items')
+                .select('id, name, sale_price, cost_price, stock_qty, part_type, quality, shelf_location, image_url')
+                .eq('empresa_id', profile.empresa_id)
+                .eq('item_type', 'peca')
+                .ilike('name', `%${term}%`)
+                .order('stock_qty', { ascending: false })
+                .limit(8);
 
-            const prods = (produtosRes.data || []).map((p: any) => ({ ...p, _source: "produto" }));
-            const pecas = (pecasRes.data || []).map((p: any) => ({
-                id: p.id,
-                nome: p.nome,
-                preco_venda_centavos: p.preco_venda_centavos,
-                preco_custo_centavos: p.preco_custo_centavos,
-                estoque_qtd: p.estoque_qtd,
-                categoria: p.tipo_peca,
-                qualidade: p.qualidade,
-                marca: p.marca || null,
-                modelo: p.modelo || null,
-                _source: "catalogo"
-            }));
-
-            // Mesclar e desduplicar (evitar que a mesma peça do catálogo apareça duas vezes)
-            const map = new Map();
-            [...formattedLocal, ...pecas, ...prods].forEach(item => {
-                map.set(item.id, item);
-            });
-
-            setResults(Array.from(map.values()));
+            if (error) throw error;
+            setResults(data || []);
         } catch (err) {
-            console.error("Erro na busca:", err);
+            console.error("Erro na busca inline:", err);
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleAddFromSource = (part: any, qty: number) => {
+        onSelect({
+            id: part.id,
+            nome: part.name,
+            preco: part.sale_price,
+            custo: part.cost_price,
+            qtd: qty
+        });
+        // Feedback ja é dado no OSStep4PecasServicos
     };
 
     const handleCreateProduct = async () => {
@@ -164,7 +129,6 @@ export function BuscaPecaEstoque({ onSelect, modeloEquipamento }: BuscaPecaEstoq
             toast.success("Peça cadastrada e adicionada!");
             onSelect({
                 id: data.id,
-                produto_id: data.id,
                 nome: data.nome,
                 preco: data.preco_venda_centavos || precoVendaCentavos,
                 custo: data.preco_custo_centavos || precoCustoCentavos,
@@ -181,45 +145,39 @@ export function BuscaPecaEstoque({ onSelect, modeloEquipamento }: BuscaPecaEstoq
         }
     };
 
-    const handleSearchClick = (prod: any) => {
-        onSelect({
-            id: prod.id,
-            nome: prod.nome,
-            preco: prod.preco_venda_centavos,
-            custo: prod.preco_custo_centavos,
-            qtd: 1
-        });
-        setResults([]);
-        setSearch("");
-        toast.success(`${prod.nome} adicionado!`);
-    };
+    const [newProduct, setNewProduct] = useState({
+        nome: "",
+        preco_venda: "",
+        preco_custo: "",
+        estoque_qtd: "1",
+        categoria: "peças"
+    });
 
-    const handleSelectSugerida = (peca: PecaCatalogo) => {
-        onSelect({
-            id: peca.id,
-            nome: peca.nome,
-            preco: peca.preco_venda_centavos,
-            custo: peca.preco_custo_centavos,
-            qtd: 1
-        });
-        toast.success(`${peca.nome} adicionado!`);
-    };
-
-    // Agrupar sugeridas por tipo
-    const sugeridasPorTipo = pecasSugeridas.reduce((acc, p) => {
-        const tipo = p.tipo_peca;
-        if (!acc[tipo]) acc[tipo] = [];
-        acc[tipo].push(p);
-        return acc;
-    }, {} as Record<string, PecaCatalogo[]>);
+    // Close results when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+          if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+            setResults([]);
+          }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     return (
-        <div className="space-y-4 relative">
-
-            {loadingSugeridas && modeloEquipamento && (
-                <div className="text-center py-4 text-sm text-slate-400 flex items-center justify-center gap-2">
-                    <Loader2 size={14} className="animate-spin" /> Buscando peças para {modeloEquipamento}...
-                </div>
+        <div className="space-y-4 relative" ref={containerRef}>
+            
+            {showModelPopup && (
+                <ModelPartsPopup 
+                  modelo={isModelSearch(search) ? search : (modeloEquipamento || "")}
+                  onAdd={handleAddFromSource}
+                  onClose={() => {
+                      setShowModelPopup(false);
+                      setSearch("");
+                      setResults([]);
+                  }}
+                  addedParts={addedParts}
+                />
             )}
 
             {/* Busca manual */}
@@ -228,50 +186,12 @@ export function BuscaPecaEstoque({ onSelect, modeloEquipamento }: BuscaPecaEstoq
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                     <input
                         type="text"
-                        placeholder={pecasSugeridas.length > 0 ? `Buscar... (${pecasSugeridas.length} peças para ${modeloEquipamento})` : "Buscar peça no estoque ou catálogo..."}
+                        placeholder={modeloEquipamento ? `Buscar peças para ${modeloEquipamento}...` : "Buscar peça (ex: frontal, bateria...)"}
                         className="w-full h-14 pl-12 pr-12 rounded-2xl border border-slate-100 bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none text-lg transition-all"
                         value={search}
+                        onChange={(e) => handleSearch(e.target.value)}
                         onFocus={() => {
-                            if (!search && pecasSugeridas.length > 0) {
-                                setResults(pecasSugeridas.map((p: any) => ({
-                                    ...p,
-                                    categoria: p.tipo_peca,
-                                    marca: p.marca || null,
-                                    modelo: p.modelo || null,
-                                    _source: "catalogo"
-                                })));
-                            }
-                        }}
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            setSearch(val);
-                            if (val.trim() === "" && pecasSugeridas.length > 0) {
-                                setResults(pecasSugeridas.map((p: any) => ({
-                                    ...p,
-                                    categoria: p.tipo_peca,
-                                    marca: p.marca || null,
-                                    modelo: p.modelo || null,
-                                    _source: "catalogo"
-                                })));
-                            } else {
-                                handleSearch(val);
-                            }
-                        }}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && search && results.length === 0) {
-                                onSelect({
-                                    id: `manual-${Date.now()}`,
-                                    produto_id: null,
-                                    nome: search,
-                                    preco: 0,
-                                    custo: 0,
-                                    qtd: 1,
-                                    isManual: true
-                                });
-                                setSearch("");
-                                setResults([]);
-                                toast.info("Peça manual adicionada! Ajuste o preço abaixo.");
-                            }
+                            if (!search && modeloEquipamento) setShowModelPopup(true);
                         }}
                     />
                     {search && (
@@ -279,17 +199,7 @@ export function BuscaPecaEstoque({ onSelect, modeloEquipamento }: BuscaPecaEstoq
                             type="button"
                             onClick={() => {
                                 setSearch("");
-                                if (pecasSugeridas.length > 0) {
-                                    setResults(pecasSugeridas.map((p: any) => ({
-                                        ...p,
-                                        categoria: p.tipo_peca,
-                                        marca: p.marca || null,
-                                        modelo: p.modelo || null,
-                                        _source: "catalogo"
-                                    })));
-                                } else {
-                                    setResults([]);
-                                }
+                                setResults([]);
                             }}
                             className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
                         >
@@ -316,198 +226,116 @@ export function BuscaPecaEstoque({ onSelect, modeloEquipamento }: BuscaPecaEstoq
                 </button>
             </div>
 
-            {/* Resultados da busca */}
-            {!showNewForm && results.length > 0 && (
-                <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-top-4 z-20 absolute left-0 right-0 max-h-[400px] overflow-y-auto">
-                    {results.map(prod => (
-                        <button
-                            key={prod.id}
-                            type="button"
-                            onClick={() => handleSearchClick(prod)}
-                            className="w-full p-4 flex items-center justify-between hover:bg-indigo-50 transition-colors text-left border-b border-slate-100 last:border-0"
-                        >
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
-                                    {prod._source === "catalogo" ? <Wrench size={24} /> : <Package size={24} />}
-                                </div>
-                                <div>
-                                    <p className="font-bold text-slate-800 text-base">{prod.nome}</p>
-                                    <div className="flex gap-2 mt-1 flex-wrap">
-                                        {prod.marca && (
-                                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 uppercase">{prod.marca}</span>
-                                        )}
-                                        {prod.modelo && (
-                                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-600">{prod.modelo}</span>
-                                        )}
-                                        <span className={cn(
-                                            "text-[10px] font-black uppercase px-2 py-0.5 rounded tracking-widest",
-                                            prod.estoque_qtd > 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
-                                        )}>
-                                            {prod.estoque_qtd > 0 ? `Estoque: ${prod.estoque_qtd}` : "Sem estoque"}
-                                        </span>
-                                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest bg-slate-50 px-2 py-0.5 rounded">
-                                            {prod._source === "catalogo" ? `🔧 ${prod.categoria}` : prod.categoria}
-                                        </span>
-                                        {prod.qualidade && (
-                                            <span className="text-[10px] font-black uppercase text-blue-500 tracking-widest bg-blue-50 px-2 py-0.5 rounded">
-                                                {prod.qualidade}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-xl font-black text-brand-600">{formatCurrency(prod.preco_venda_centavos)}</p>
-                            </div>
-                        </button>
+            {/* Resultados da busca (Dropdown) */}
+            {results.length > 0 && !showModelPopup && (
+                <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 max-h-[400px] overflow-y-auto p-2">
+                    {results.map(part => (
+                        <PartCard 
+                            key={part.id}
+                            part={part}
+                            onAdd={(qty) => {
+                                handleAddFromSource(part, qty);
+                                setResults([]);
+                                setSearch("");
+                            }}
+                            alreadyAdded={addedParts.some(p => p.id === part.id)}
+                            osModelo={modeloEquipamento}
+                        />
                     ))}
                 </div>
             )}
 
             {/* Empty State / Manual */}
-            {!showNewForm && search.length >= 2 && results.length === 0 && !loading && (
-                <div className="p-10 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200 space-y-6 shadow-sm">
-                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
-                        <Package className="text-slate-300" size={32} />
+            {!showNewForm && search.length >= 2 && results.length === 0 && !loading && !showModelPopup && (
+                <div className="p-8 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200 space-y-4 shadow-sm">
+                    <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
+                        <Package size={24} className="text-slate-300" />
                     </div>
                     <div>
-                        <p className="text-slate-700 font-bold text-lg">"{search}" não encontrado</p>
-                        <p className="text-slate-400 text-sm">O que você deseja fazer?</p>
+                        <p className="font-bold text-slate-700">Peça não encontrada no estoque</p>
+                        <p className="text-xs text-slate-400 mt-1">Deseja adicionar como item manual ou cadastrar?</p>
                     </div>
-                    <div className="max-w-xs mx-auto space-y-3">
-                        <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">R$</span>
-                            <input
-                                type="text"
-                                placeholder="0,00"
-                                id="manual-price-input"
-                                className="w-full h-12 pl-10 pr-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-center"
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        const priceBtn = document.getElementById('add-manual-btn');
-                                        priceBtn?.click();
-                                    }
-                                }}
-                            />
-                        </div>
+                    
+                    <div className="flex flex-col sm:flex-row gap-2 max-w-sm mx-auto">
                         <button
                             type="button"
-                            id="add-manual-btn"
                             onClick={() => {
-                                const priceInput = document.getElementById('manual-price-input') as HTMLInputElement;
-                                const val = Math.round(parseFloat(priceInput?.value.replace(",", ".") || "0") * 100);
                                 onSelect({
                                     id: `manual-${Date.now()}`,
-                                    produto_id: null,
                                     nome: search,
-                                    preco: val,
+                                    preco: 0,
                                     custo: 0,
                                     qtd: 1,
                                     isManual: true
                                 });
                                 setSearch("");
                                 setResults([]);
-                                toast.success("Peça manual adicionada!");
+                                toast.info("Item manual adicionado. Ajuste o preço abaixo.");
                             }}
-                            className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all active:scale-95"
+                            className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all"
                         >
-                            <ShoppingCart size={20} /> Adicionar Manualmente
+                            Adicionar Manual
                         </button>
-                    </div>
-
-                    <div className="pt-4 border-t border-slate-50">
                         <button
                             type="button"
-                            onClick={() => {
-                                setNewProduct(p => ({ ...p, nome: search }));
-                                setShowNewForm(true);
-                            }}
-                            className="text-indigo-600 font-bold text-sm hover:underline flex items-center gap-2 mx-auto"
+                            onClick={() => setShowNewForm(true)}
+                            className="flex-1 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-xs font-bold transition-all"
                         >
-                            <Plus size={16} /> Cadastrar permanentemente no Estoque
+                            Cadastrar no Estoque
                         </button>
                     </div>
                 </div>
             )}
 
-            {/* Formulário de Cadastro Rápido */}
+            {/* Modal de Cadastro Rápido (Simplificado) */}
             {showNewForm && (
-                <div className="bg-white rounded-3xl shadow-2xl border border-indigo-100 overflow-hidden animate-in zoom-in-95">
-                    <div className="bg-indigo-600 px-8 py-4 flex items-center justify-between">
-                        <div className="flex items-center gap-3 text-white">
-                            <Plus size={20} />
-                            <h3 className="font-bold">Cadastro Rápido de Peça</h3>
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowNewForm(false)} />
+                    <div className="relative w-full max-w-lg bg-white rounded-[24px] shadow-2xl overflow-hidden animate-in zoom-in-95">
+                        <div className="bg-indigo-600 px-6 py-4 flex items-center justify-between">
+                            <h3 className="text-white font-bold">Nova Peça no Estoque</h3>
+                            <button onClick={() => setShowNewForm(false)} className="text-white/60 hover:text-white">
+                                <X size={20} />
+                            </button>
                         </div>
-                        <button type="button" onClick={() => setShowNewForm(false)} className="text-white/60 hover:text-white transition-colors">
-                            <X size={24} />
-                        </button>
-                    </div>
-
-                    <div className="p-8 space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-2 md:col-span-2">
-                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Nome do Produto / Peça</label>
-                                <input
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Descrição</label>
+                                <input 
                                     type="text"
-                                    className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
+                                    className="w-full h-11 px-4 bg-slate-50 border border-slate-100 rounded-xl mt-1 outline-none focus:ring-2 focus:ring-indigo-500"
                                     value={newProduct.nome}
                                     onChange={e => setNewProduct(p => ({ ...p, nome: e.target.value }))}
-                                    placeholder="Ex: Tela Original iPhone 13"
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Preço de Venda (R$)</label>
-                                <input
-                                    type="text"
-                                    className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
-                                    value={newProduct.preco_venda}
-                                    onChange={e => setNewProduct(p => ({ ...p, preco_venda: e.target.value }))}
-                                    placeholder="0,00"
-                                />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Preço Venda</label>
+                                    <input 
+                                        type="text"
+                                        className="w-full h-11 px-4 bg-slate-50 border border-slate-100 rounded-xl mt-1 outline-none"
+                                        value={newProduct.preco_venda}
+                                        onChange={e => setNewProduct(p => ({ ...p, preco_venda: e.target.value }))}
+                                        placeholder="0,00"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Preço Custo</label>
+                                    <input 
+                                        type="text"
+                                        className="w-full h-11 px-4 bg-slate-50 border border-slate-100 rounded-xl mt-1 outline-none"
+                                        value={newProduct.preco_custo}
+                                        onChange={e => setNewProduct(p => ({ ...p, preco_custo: e.target.value }))}
+                                        placeholder="0,00"
+                                    />
+                                </div>
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Preço de Custo (R$)</label>
-                                <input
-                                    type="text"
-                                    className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
-                                    value={newProduct.preco_custo}
-                                    onChange={e => setNewProduct(p => ({ ...p, preco_custo: e.target.value }))}
-                                    placeholder="0,00"
-                                />
+                            <div className="flex gap-3 pt-4">
+                                <button type="button" onClick={() => setShowNewForm(false)} className="flex-1 h-11 rounded-xl border border-slate-200 font-bold text-slate-500">Cancelar</button>
+                                <button type="button" onClick={handleCreateProduct} disabled={saving} className="flex-1 h-11 bg-indigo-600 rounded-xl text-white font-bold shadow-lg shadow-indigo-200">
+                                    {saving ? "Salvando..." : "Cadastrar e Adicionar"}
+                                </button>
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Qtd em Estoque</label>
-                                <input
-                                    type="number"
-                                    className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
-                                    value={newProduct.estoque_qtd}
-                                    onChange={e => setNewProduct(p => ({ ...p, estoque_qtd: e.target.value }))}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Categoria</label>
-                                <select
-                                    className="w-full h-12 px-4 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
-                                    value={newProduct.categoria}
-                                    onChange={e => setNewProduct(p => ({ ...p, categoria: e.target.value }))}
-                                >
-                                    <option value="peças">Peças</option>
-                                    <option value="acessórios">Acessórios</option>
-                                    <option value="periféricos">Periféricos</option>
-                                    <option value="diversos">Diversos</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="flex gap-4 pt-4">
-                            <button type="button" onClick={() => setShowNewForm(false)}
-                                className="flex-1 h-12 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all">
-                                Cancelar
-                            </button>
-                            <button type="button" onClick={handleCreateProduct} disabled={saving}
-                                className="flex-1 h-12 rounded-xl bg-indigo-600 text-white font-bold shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
-                                {saving ? <Loader2 className="animate-spin" size={20} /> : <Save size={18} />}
-                                {saving ? "Salvando..." : "Salvar e Adicionar"}
-                            </button>
                         </div>
                     </div>
                 </div>

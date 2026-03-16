@@ -82,27 +82,32 @@ export function ChecklistInspecao({ tipo, value, onChange, readOnly = false, com
     return (
         <div className="space-y-4">
             {/* Header com stats */}
-            <div className="flex items-center justify-between">
-                <div className="flex gap-3">
-                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg flex items-center gap-1">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <div className="flex gap-2">
+                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg flex items-center gap-1 border border-emerald-100">
                         <Check size={12} /> {stats.ok} OK
                     </span>
-                    <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg flex items-center gap-1">
+                    <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg flex items-center gap-1 border border-rose-100">
                         <X size={12} /> {stats.defeito} Defeito
                     </span>
-                    <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-lg flex items-center gap-1">
+                    <span className="text-xs font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-lg flex items-center gap-1 border border-slate-200">
                         <Minus size={12} /> {stats.na} N/A
                     </span>
                 </div>
-                {!readOnly && (
-                    <button
-                        type="button"
-                        onClick={marcarTodosOK}
-                        className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors"
-                    >
-                        <RotateCcw size={12} /> Marcar tudo OK
-                    </button>
-                )}
+                <div className="flex items-center gap-4">
+                    <span className="text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
+                        {stats.ok + stats.defeito} / {CHECKLIST_PADRAO.length} avaliados
+                    </span>
+                    {!readOnly && (
+                        <button
+                            type="button"
+                            onClick={marcarTodosOK}
+                            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 transition-colors bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-3 py-1.5 rounded-lg"
+                        >
+                            <RotateCcw size={14} /> Marcar tudo OK
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Checklist por categoria */}
@@ -116,46 +121,69 @@ export function ChecklistInspecao({ tipo, value, onChange, readOnly = false, com
                             const divergência = compararCom && compStatus && status !== compStatus;
 
                             return (
-                                <button
+                                <div
                                     key={item.id}
-                                    type="button"
-                                    onClick={() => handleToggle(item.id)}
-                                    disabled={readOnly}
                                     className={cn(
-                                        "flex items-center gap-3 p-3 rounded-xl border transition-all text-left group",
-                                        status === "ok" && "bg-emerald-50/80 border-emerald-200 hover:border-emerald-300",
-                                        status === "defeito" && "bg-rose-50/80 border-rose-200 hover:border-rose-300",
-                                        status === "na" && "bg-white border-slate-100 hover:border-slate-200",
-                                        readOnly && "cursor-default",
-                                        divergência && "ring-2 ring-amber-400"
+                                        "flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border transition-all bg-white",
+                                        divergência ? "ring-2 ring-amber-400" : "border-slate-100"
                                     )}
                                 >
-                                    <div className={cn(
-                                        "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all",
-                                        status === "ok" && "bg-emerald-500 text-white",
-                                        status === "defeito" && "bg-rose-500 text-white",
-                                        status === "na" && "bg-slate-100 text-slate-400"
-                                    )}>
-                                        {status === "ok" && <Check size={14} />}
-                                        {status === "defeito" && <X size={14} />}
-                                        {status === "na" && <Minus size={14} />}
-                                    </div>
                                     <div className="flex-1 min-w-0">
-                                        <span className={cn(
-                                            "text-sm font-semibold block truncate",
-                                            status === "ok" && "text-emerald-800",
-                                            status === "defeito" && "text-rose-800",
-                                            status === "na" && "text-slate-500"
-                                        )}>
-                                            {item.label}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            {item.icon && <span className="text-slate-400">{item.icon}</span>}
+                                            <span className="text-sm font-semibold text-slate-700 block truncate">
+                                                {item.label}
+                                            </span>
+                                        </div>
                                         {divergência && (
-                                            <span className="text-[10px] text-amber-600 font-bold">
+                                            <span className="text-[10px] text-amber-600 font-bold mt-1 block">
                                                 Entrada: {compStatus === "ok" ? "OK" : compStatus === "defeito" ? "Defeito" : "N/A"}
                                             </span>
                                         )}
                                     </div>
-                                </button>
+                                    
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => !readOnly && onChange({ ...value, [item.id]: "ok" })}
+                                            disabled={readOnly}
+                                            className={cn(
+                                                "w-10 h-10 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center transition-all border outline-none",
+                                                status === "ok" 
+                                                    ? "bg-emerald-100 text-emerald-700 border-emerald-300 ring-2 ring-emerald-500/20 shadow-sm" 
+                                                    : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100"
+                                            )}
+                                        >
+                                            <Check size={16} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => !readOnly && onChange({ ...value, [item.id]: "defeito" })}
+                                            disabled={readOnly}
+                                            className={cn(
+                                                "w-10 h-10 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center transition-all border outline-none",
+                                                status === "defeito" 
+                                                    ? "bg-rose-100 text-rose-700 border-rose-300 ring-2 ring-rose-500/20 shadow-sm" 
+                                                    : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100"
+                                            )}
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => !readOnly && onChange({ ...value, [item.id]: "na" })}
+                                            disabled={readOnly}
+                                            className={cn(
+                                                "w-10 h-10 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center transition-all border outline-none",
+                                                status === "na" 
+                                                    ? "bg-slate-200 text-slate-600 border-slate-300 ring-2 ring-slate-500/20 shadow-sm" 
+                                                    : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100"
+                                            )}
+                                        >
+                                            <Minus size={16} />
+                                        </button>
+                                    </div>
+                                </div>
                             );
                         })}
                     </div>
