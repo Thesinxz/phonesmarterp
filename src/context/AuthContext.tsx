@@ -141,6 +141,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (companies.length === 0) {
                     logger.log("[AuthContext] Nenhum vínculo de empresa encontrado. Verificando dados para auto-provisão...");
 
+                    // GUARD: Se estamos numa página de auth (login/cadastro), NÃO provisionar.
+                    // O processo de cadastro (handleCadastro) cuida disso.
+                    const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+                    if (['/login', '/cadastro', '/recuperar-senha', '/nova-senha', '/verificar-email'].includes(currentPath)) {
+                        logger.log("[AuthContext] Estamos em page de auth, pulando auto-provisão.");
+                        return;
+                    }
+
+                    // GUARD: Validar que a sessão é real (não fantasma/deletada)
+                    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+                    if (authError || !authUser) {
+                        logger.warn("[AuthContext] Sessão inválida/expirada (403). Fazendo signOut automático.", authError);
+                        await supabase.auth.signOut();
+                        setProfile(null);
+                        setEmpresa(null);
+                        setUserCompanies([]);
+                        return;
+                    }
+
                     let pendingData: any = null;
                     try {
                         const raw = localStorage.getItem("smartos_pending_signup");
@@ -148,7 +167,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     } catch { }
 
                     if (!pendingData) {
-                        const { data: { user: authUser } } = await supabase.auth.getUser();
                         if (authUser?.user_metadata) {
                             logger.log("[AuthContext] Usando metadados do AuthUser para provisão:", authUser.user_metadata);
                             pendingData = {
@@ -180,6 +198,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                         if (provErr) {
                             logger.error("[AuthContext] Erro fatal na auto-provisão:", provErr);
+                            // Se 409 (Conflict), provavelmente empresa/usuário já existe parcialmente
+                            if (provErr.code === '23505' || provErr.code === '409') {
+                                logger.warn("[AuthContext] Conflito detectado, tentando recarregar perfil...");
+                                return fetchProfile(userId, userEmail, false);
+                            }
                             toast.error("Erro ao criar sua empresa inicial. Contate o suporte.");
                         } else if (provisionData && provisionData.length > 0) {
                             logger.log("[AuthContext] Auto-provisão concluída com sucesso!", provisionData[0]);
