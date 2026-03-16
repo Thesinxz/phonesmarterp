@@ -264,57 +264,72 @@ export default function EstoquePage() {
             </div>
 
             {/* Filtros */}
-            <GlassCard className="p-3 sm:p-4 flex flex-col md:flex-row gap-3 sm:gap-4 items-center w-full">
-                <div className="relative w-full md:flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input
-                        className="w-full bg-slate-50 border-none outline-none focus:ring-2 focus:ring-brand-500 rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium"
-                        placeholder="Buscar produto ou modelo (ex: iPhone 13)..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                    />
-                </div>
+            <GlassCard className="p-4 flex flex-col gap-4 w-full shadow-sm">
+                {/* Primeira Linha: Busca e Unidades */}
+                <div className="flex flex-col md:flex-row gap-4 w-full">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                        <input
+                            className="w-full bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 rounded-2xl pl-12 pr-4 py-3 text-sm font-bold transition-all"
+                            placeholder="Buscar produto ou modelo (ex: iPhone 13)..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                        />
+                    </div>
 
-                <div className="w-full md:w-auto">
-                    <select 
-                        value={selectedUnitId} 
-                        onChange={(e) => setSelectedUnitId(e.target.value)}
-                        className="w-full input-glass text-xs font-bold md:w-48"
-                    >
-                        <option value="todos">Todas as Unidades</option>
-                        {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
-                </div>
-                
-                <div className="w-full overflow-x-auto hide-scrollbar">
-                    <div className="flex items-center gap-2 min-w-max pb-1 md:pb-0">
-                        {['todos', 'celular', 'acessorio', 'peca'].map(t => (
-                            <button
-                                key={t}
-                                onClick={() => setActiveTab(t)}
-                                className={cn(
-                                    "px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all",
-                                    activeTab === t ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                                )}>
-                                {t === 'todos' ? 'Todos' : t === 'celular' ? 'Celulares' : t === 'acessorio' ? 'Acessórios' : 'Peças'}
-                            </button>
-                        ))}
+                    <div className="w-full md:w-64">
+                        <select 
+                            value={selectedUnitId} 
+                            onChange={(e) => setSelectedUnitId(e.target.value)}
+                            className="w-full h-[46px] bg-white border border-slate-200 rounded-2xl px-4 text-xs font-black text-slate-700 focus:ring-2 focus:ring-brand-500/20 outline-none cursor-pointer appearance-none"
+                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' }}
+                        >
+                            <option value="todos">Todas as Unidades</option>
+                            {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
                     </div>
                 </div>
+                
+                {/* Segunda Linha: Categorias e Status */}
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4 w-full pt-1 border-t border-slate-50">
+                    <div className="w-full md:w-auto overflow-x-auto hide-scrollbar">
+                        <div className="flex items-center gap-2 min-w-max">
+                            {['todos', 'celular', 'acessorio', 'peca'].map(t => (
+                                <button
+                                    key={t}
+                                    onClick={() => setActiveTab(t)}
+                                    className={cn(
+                                        "px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                                        activeTab === t ? "bg-slate-900 text-white shadow-lg" : "bg-slate-50 text-slate-500 hover:bg-slate-100"
+                                    )}>
+                                    {t === 'todos' ? 'Todos' : t === 'celular' ? 'Celulares' : t === 'acessorio' ? 'Acessórios' : 'Peças'}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
 
-                <div className="flex gap-2 w-full md:w-auto">
-                    {(activeTab === 'todos' || activeTab === 'celular') && (
-                        <select className="input-glass text-xs font-bold w-1/2 md:w-32" value={brandFilter} onChange={e => setBrandFilter(e.target.value)}>
-                            <option value="">Todas Marcas</option>
-                            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    <div className="flex gap-2 w-full md:w-auto">
+                        {(activeTab === 'todos' || activeTab === 'celular') && (
+                            <select 
+                                className="h-10 bg-slate-50 border border-slate-100 rounded-xl px-4 text-[10px] font-black uppercase tracking-widest text-slate-600 focus:ring-2 focus:ring-brand-500/20 outline-none w-1/2 md:w-40" 
+                                value={brandFilter} 
+                                onChange={e => setBrandFilter(e.target.value)}
+                            >
+                                <option value="">Todas Marcas</option>
+                                {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            </select>
+                        )}
+                        <select 
+                            className="h-10 bg-slate-50 border border-slate-100 rounded-xl px-4 text-[10px] font-black uppercase tracking-widest text-slate-600 focus:ring-2 focus:ring-brand-500/20 outline-none flex-1 md:w-44" 
+                            value={stockFilter} 
+                            onChange={e => setStockFilter(e.target.value)}
+                        >
+                            <option value="todos">Todo o Estoque</option>
+                            <option value="in_stock">Em Estoque</option>
+                            <option value="low_stock">Estoque Baixo</option>
+                            <option value="out_of_stock">Sem Estoque</option>
                         </select>
-                    )}
-                    <select className="input-glass text-xs font-bold flex-1 md:w-36" value={stockFilter} onChange={e => setStockFilter(e.target.value)}>
-                        <option value="todos">Todo o Estoque</option>
-                        <option value="in_stock">Em Estoque</option>
-                        <option value="low_stock">Estoque Baixo</option>
-                        <option value="out_of_stock">Sem Estoque</option>
-                    </select>
+                    </div>
                 </div>
             </GlassCard>
 

@@ -5,15 +5,41 @@ const supabase = createClient();
 
 export async function getTecnicos() {
     const { data, error } = await supabase
-        .from("tecnicos")
+        .from("usuarios")
         .select(`
-            *,
-            usuario:usuarios(nome, email, papel, ativo)
+            id,
+            nome,
+            email,
+            papel,
+            ativo,
+            tecnicos!tecnicos_usuario_id_fkey (
+                id,
+                comissao_pct,
+                meta_mensal_centavos,
+                especialidades,
+                ativo
+            )
         `)
-        .order("created_at", { ascending: false });
+        .eq("excluido", false)
+        .order("nome", { ascending: true });
 
     if (error) throw error;
-    return data as any[];
+
+    // Map back to a consistent structure that the page expects
+    return ((data as any[]) || []).map(u => ({
+        id: u.tecnicos?.[0]?.id || `temp-${u.id}`,
+        usuario_id: u.id,
+        usuario: {
+            nome: u.nome,
+            email: u.email,
+            papel: u.papel,
+            ativo: u.ativo
+        },
+        comissao_pct: u.tecnicos?.[0]?.comissao_pct || 0,
+        meta_mensal_centavos: u.tecnicos?.[0]?.meta_mensal_centavos || 0,
+        especialidades: u.tecnicos?.[0]?.especialidades || [],
+        ativo: u.tecnicos?.[0]?.ativo ?? u.ativo
+    }));
 }
 
 export async function createTecnico(tecnico: Database["public"]["Tables"]["tecnicos"]["Insert"]) {

@@ -128,8 +128,24 @@ export async function middleware(request: NextRequest) {
         }
     );
 
-    // Refresh session — isso é necessário para manter os tokens atualizados
-    const { data: { user } } = await supabase.auth.getUser();
+    let user = null;
+    try {
+        // Refresh session — isso é necessário para manter os tokens atualizados
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError) {
+            // Se for erro de refresh token, ignoramos o log ruidoso no terminal
+            if (authError.code === 'refresh_token_not_found') {
+                console.log("[Middleware] Sessão expirada ou inválida (refresh token não encontrado). Tratando como deslogado.");
+            } else {
+                console.error("[Middleware] Erro ao obter usuário:", authError.message);
+            }
+        } else {
+            user = authUser;
+        }
+    } catch (e) {
+        console.error("[Middleware] Exceção inesperada na validação de auth:", e);
+    }
 
     // Redirecionar usuários não-autenticados para login (exceto rotas públicas/api)
     if (!user && !isPublicPath && !isApiPath) {

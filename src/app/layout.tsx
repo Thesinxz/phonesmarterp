@@ -15,8 +15,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
     title: {
-        default: "Phone Smart ERP | Gestão Inteligente para Assistências Técnicas",
-        template: "%s | Phone Smart ERP",
+        default: "Smart OS | Gestão Inteligente para Assistências Técnicas",
+        template: "%s | Smart OS",
     },
     description:
         "O sistema ERP mais completo para assistências de celulares. Gestão de OS, estoque com OCR, integração WhatsApp e Inteligência Artificial.",

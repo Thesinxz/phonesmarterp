@@ -14,7 +14,8 @@ import {
     User as UserIcon,
     DollarSign,
     Edit3,
-    Trash2
+    Trash2,
+    ChevronDown
 } from "lucide-react";
 import Link from "next/link";
 import { getOrdensServico, updateOSStatus, deleteOS } from "@/services/os";
@@ -168,33 +169,34 @@ export default function OSPage() {
                 </div>
             </div>
 
-            {/* Filtros e Busca */}
-            <div className="flex flex-col gap-4">
-                <div className="flex-1 relative group">
+            {/* Filtros e Busca - Refatorado para melhor organização */}
+            <div className="flex flex-wrap items-center gap-4 bg-slate-50/50 p-4 rounded-3xl border border-slate-100">
+                <div className="flex-1 min-w-[280px] relative group">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
                     <input
                         type="text"
-                        placeholder="Buscar..."
+                        placeholder="Buscar por cliente, equipamento, número..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="w-full h-12 pl-12 pr-4 bg-white rounded-2xl border border-slate-100 shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
+                        className="w-full h-11 pl-11 pr-4 bg-white rounded-xl border border-slate-200 shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
                     />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
-                    <div className="relative flex-1 min-w-[140px]">
-                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                    <div className="relative min-w-[160px] flex-1 sm:flex-initial">
+                        <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                         <select
                             value={filterTecnico}
                             onChange={(e) => setFilterTecnico(e.target.value)}
-                            className="w-full h-12 pl-10 pr-8 bg-white rounded-2xl border border-slate-100 shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold text-slate-600 appearance-none"
+                            className="w-full h-11 pl-9 pr-8 bg-white rounded-xl border border-slate-200 shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs font-bold text-slate-600 appearance-none cursor-pointer"
                         >
-                            <option value="">Técnicos</option>
+                            <option value="">Todos Técnicos</option>
                             {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
                         </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
                     </div>
 
-                    <div className="flex-1 min-w-[200px] overflow-x-auto scrollbar-none bg-white rounded-2xl border border-slate-100 shadow-sm px-2">
+                    <div className="flex-1 sm:flex-initial bg-white rounded-xl border border-slate-200 shadow-sm px-2 h-11 flex items-center overflow-x-auto scrollbar-none">
                         <DateRangeFilter
                             onChange={(start, end) => {
                                 setFilterStart(start || "");
@@ -203,24 +205,24 @@ export default function OSPage() {
                         />
                     </div>
 
-                    <div className="flex h-12 bg-slate-100 p-1 rounded-2xl border border-slate-200 shadow-inner w-full sm:w-auto ml-auto">
+                    <div className="flex h-11 bg-slate-200/50 p-1 rounded-xl border border-slate-200 shadow-inner ml-auto">
                         <button
                             onClick={() => setViewMode("kanban")}
                             className={cn(
-                                "flex-1 sm:px-4 flex items-center justify-center gap-2 rounded-xl text-xs font-bold transition-all",
+                                "px-3 flex items-center justify-center gap-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
                                 viewMode === "kanban" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                             )}
                         >
-                            <LayoutGrid size={16} /> <span className="hidden xs:inline">Kanban</span>
+                            <LayoutGrid size={14} /> <span className="hidden xs:inline">Kanban</span>
                         </button>
                         <button
                             onClick={() => setViewMode("list")}
                             className={cn(
-                                "flex-1 sm:px-4 flex items-center justify-center gap-2 rounded-xl text-xs font-bold transition-all",
+                                "px-3 flex items-center justify-center gap-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
                                 viewMode === "list" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                             )}
                         >
-                            <List size={16} /> <span className="hidden xs:inline">Lista</span>
+                            <List size={14} /> <span className="hidden xs:inline">Lista</span>
                         </button>
                     </div>
                 </div>
@@ -240,21 +242,21 @@ export default function OSPage() {
                     <p className="text-slate-500 text-sm mt-1 text-center max-w-sm">Você precisa estar vinculado a uma empresa para visualizar as ordens de serviço.</p>
                 </div>
             ) : viewMode === "kanban" ? (
-                <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-thin">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 pb-10">
                     {STAGES.map((stage) => (
-                        <div key={stage.status} className="flex-shrink-0 w-80 flex flex-col gap-4">
-                            <div className="flex items-center justify-between px-2">
+                        <div key={stage.status} className="flex flex-col gap-3 min-w-0 transition-all">
+                            <div className="flex items-center justify-between px-1">
                                 <div className="flex items-center gap-2">
-                                    <div className={cn("w-2 h-6 rounded-full", stage.color)} />
-                                    <h3 className="font-black text-slate-700 text-sm uppercase tracking-tighter">{stage.label}</h3>
-                                    <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-lg border border-slate-200">
+                                    <div className={cn("w-1.5 h-4 rounded-full", stage.color)} />
+                                    <h3 className="font-black text-slate-700 text-[10px] uppercase tracking-wider">{stage.label}</h3>
+                                    <span className="px-1.5 py-0.5 bg-white text-slate-400 text-[9px] font-black rounded-lg border border-slate-100 shadow-sm">
                                         {orders.filter(o => o.status === stage.status).length}
                                     </span>
                                 </div>
                             </div>
 
                             <div
-                                className="flex-1 bg-slate-50/50 rounded-3xl p-3 border border-dashed border-slate-200 min-h-[500px]"
+                                className="flex-1 bg-slate-50/40 rounded-[2rem] p-2 border border-slate-100 min-h-[300px] transition-colors hover:bg-slate-50/60"
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={(e) => {
                                     e.preventDefault();
@@ -262,22 +264,24 @@ export default function OSPage() {
                                     if (osId) handleMoveStatus(osId, stage.status);
                                 }}
                             >
-                                {orders
-                                    .filter(o => o.status === stage.status)
-                                    .map(os => (
-                                        <OSKanbanCard
-                                            key={os.id}
-                                            os={os}
-                                            onClick={() => router.push(`/os/${os.id}`)}
-                                            onMoveStatus={(id, status) => handleMoveStatus(id, status as OsStatus)}
-                                            onDelete={handleDeleteOS}
-                                            onEdit={() => handleEditOS(os)}
-                                        />
-                                    ))
-                                }
+                                <div className="flex flex-col gap-2">
+                                    {orders
+                                        .filter(o => o.status === stage.status)
+                                        .map(os => (
+                                            <OSKanbanCard
+                                                key={os.id}
+                                                os={os}
+                                                onClick={() => router.push(`/os/${os.id}`)}
+                                                onMoveStatus={(id, status) => handleMoveStatus(id, status as OsStatus)}
+                                                onDelete={handleDeleteOS}
+                                                onEdit={() => handleEditOS(os)}
+                                            />
+                                        ))
+                                    }
+                                </div>
                                 {orders.filter(o => o.status === stage.status).length === 0 && (
-                                    <div className="h-full flex items-center justify-center py-10 opacity-40">
-                                        <p className="text-[10px] uppercase font-black text-slate-400">Vazio</p>
+                                    <div className="h-full flex items-center justify-center py-20 opacity-20">
+                                        <p className="text-[9px] uppercase font-black text-slate-400 tracking-widest">Vazio</p>
                                     </div>
                                 )}
                             </div>

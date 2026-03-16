@@ -45,12 +45,12 @@ export function OSKanbanCard({ os, onClick, onMoveStatus, onDelete, onEdit }: OS
             }}
             onClick={onClick}
             className={cn(
-                "glass-card p-4 mb-3 cursor-grab active:cursor-grabbing hover:scale-[1.02] transition-all border-l-4",
+                "glass-card p-2.5 mb-2 cursor-grab active:cursor-grabbing hover:translate-y-[-2px] transition-all border-l-4",
                 priorityColor
             )}
         >
-            <div className="flex justify-between items-start mb-2 relative">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            <div className="flex justify-between items-start mb-1.5 relative">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-1 py-0.5 rounded">
                     #{String(os.numero).padStart(4, '0')}
                 </span>
 
@@ -58,55 +58,34 @@ export function OSKanbanCard({ os, onClick, onMoveStatus, onDelete, onEdit }: OS
                     <button className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition-colors">
                         <MoreHorizontal size={14} />
                     </button>
-                    {/* Simple CSS Dropdown */}
-                    <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-xl border border-slate-100 p-1 z-10 hidden group-hover/menu:block">
+                    <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-xl border border-slate-100 p-1 z-10 hidden group-hover/menu:block">
                         <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onEdit?.(os.id);
-                            }}
-                            className="w-full text-left px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-lg transition-colors flex items-center gap-2"
+                            onClick={(e) => { e.stopPropagation(); onEdit?.(os.id); }}
+                            className="w-full text-left px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50 rounded-lg transition-colors flex items-center gap-2"
                         >
                             <Edit3 size={12} className="opacity-50" />
                             Editar OS
                         </button>
-
                         <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (window.confirm("Deseja excluir permanentemente esta OS?")) {
-                                    onDelete?.(os.id);
-                                }
-                            }}
-                            className="w-full text-left px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2"
+                            onClick={(e) => { e.stopPropagation(); if (window.confirm("Excluir permanentemente?")) onDelete?.(os.id); }}
+                            className="w-full text-left px-3 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2"
                         >
                             <Trash2 size={12} className="opacity-50" />
-                            Excluir OS
+                            Excluir
                         </button>
-
                         <div className="h-px bg-slate-100 my-1" />
-
-                        <p className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mover para...</p>
+                        <p className="px-3 py-1 text-[9px] font-black text-slate-400 uppercase leading-none mt-1 mb-1">Mover...</p>
                         {[
                             { label: "Em Análise", value: "em_analise" },
                             { label: "Aguardando Peça", value: "aguardando_peca" },
                             { label: "Em Execução", value: "em_execucao" },
-                            { label: "Finalizar", value: "finalizada", color: "text-emerald-600 hover:bg-emerald-50" },
-                            { label: "Entregar", value: "entregue", color: "text-blue-600 hover:bg-blue-50" },
-                            { label: "Cancelar", value: "cancelada", color: "text-red-600 hover:bg-red-50" },
+                            { label: "Finalizar", value: "finalizada", color: "text-emerald-600" },
                         ].map((opt) => (
                             <button
                                 key={opt.value}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onMoveStatus?.(os.id, opt.value as any);
-                                }}
-                                className={cn(
-                                    "w-full text-left px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 rounded-lg transition-colors flex items-center gap-2",
-                                    opt.color
-                                )}
+                                onClick={(e) => { e.stopPropagation(); onMoveStatus?.(os.id, opt.value); }}
+                                className={cn("w-full text-left px-3 py-1.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50 rounded-lg transition-colors", opt.color)}
                             >
-                                <ArrowRight size={12} className="opacity-50" />
                                 {opt.label}
                             </button>
                         ))}
@@ -114,71 +93,53 @@ export function OSKanbanCard({ os, onClick, onMoveStatus, onDelete, onEdit }: OS
                 </div>
             </div>
 
-            <div onClick={onClick} className="cursor-pointer space-y-2">
-                <div className="flex items-center justify-between mb-0.5">
-                    <div>
-                        <h4 className="font-bold text-slate-800 text-sm mb-0.5 truncate leading-tight">
-                            {os.equipamento?.modelo || (os as any).modelo_equipamento || "Sem Modelo"}
-                        </h4>
-                        <p className="text-[10px] text-slate-400 truncate uppercase tracking-tight">{os.equipamento?.marca || (os as any).marca_equipamento || "Sem Marca"}</p>
-                    </div>
-                    {os.problema_relatado?.includes("Trade-in:") && (
-                        <div className="bg-brand-50 text-brand-600 px-1.5 py-0.5 rounded-lg border border-brand-100 flex items-center gap-1 shrink-0">
-                            <span className="text-[9px] font-black uppercase tracking-tighter">Trade-in</span>
-                        </div>
-                    )}
+            <div onClick={onClick} className="cursor-pointer">
+                <div className="mb-2">
+                    <h4 className="font-black text-slate-800 text-xs truncate leading-tight tracking-tight uppercase">
+                        {os.equipamento?.modelo || (os as any).modelo_equipamento || "Sem Modelo"}
+                    </h4>
+                    <p className="text-[9px] text-slate-400 truncate font-bold uppercase tracking-tighter">
+                        {os.equipamento?.marca || (os as any).marca_equipamento || "Sem Marca"}
+                    </p>
                 </div>
 
-                <div className="bg-slate-50/80 rounded-lg p-2 border border-slate-100/50">
-                    <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">
-                        <span className="font-bold text-[9px] uppercase text-slate-400 block mb-0.5">Problema:</span>
+                <div className="bg-slate-50/50 rounded-lg p-2 mb-2 border border-slate-100/50">
+                    <p className="text-[10px] text-slate-600 line-clamp-2 leading-tight font-medium">
                         {os.problema_relatado}
                     </p>
                 </div>
 
-                {os.valor_total_centavos > 0 && (
-                    <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">
-                            Orçamento
-                            {(os as any).orcamento_aprovado ? (
-                                <span className="bg-emerald-100 text-emerald-600 px-1 py-0.5 rounded text-[8px] font-bold tracking-widest" title="Aprovado">APR✓</span>
-                            ) : (
-                                <span className="bg-amber-100 text-amber-600 px-1 py-0.5 rounded text-[8px] font-bold tracking-widest" title="Pendente">PEND ⌛</span>
-                            )}
-                        </span>
-                        <span className="text-xs font-black text-brand-600">
-                            R$ {(os.valor_total_centavos / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
+                <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-600 font-bold truncate pr-2">
+                        <User size={10} className="text-slate-400 shrink-0" />
+                        <span className="truncate">{os.cliente?.nome?.split(' ')[0]}...</span>
                     </div>
-                )}
-
-                <div className="flex items-center gap-2 text-xs text-slate-600">
-                    <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                        <User size={10} className="text-slate-400" />
-                    </div>
-                    <span className="truncate font-medium">{os.cliente?.nome || "Cliente avulso"}</span>
+                    {os.valor_total_centavos > 0 && (
+                        <span className="text-[11px] font-black text-brand-600 shrink-0">
+                            R${(os.valor_total_centavos / 100).toFixed(0)}
+                        </span>
+                    )}
                 </div>
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                    <Clock size={12} className={cn(diffDays >= 3 ? "text-amber-500" : "text-slate-300")} />
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100/60">
+                <div className="flex items-center gap-1 text-[9px] font-black text-slate-400 uppercase tracking-tighter">
+                    <Clock size={10} className={cn(diffDays >= 3 ? "text-amber-500" : "text-slate-300")} />
                     <span className={cn(diffDays >= 3 && "text-amber-600")}>
-                        {diffDays === 0 ? "Hoje" : diffDays === 1 ? "1 dia" : `${diffDays} dias`}
+                        {diffDays === 0 ? "Hoje" : `${diffDays}d`}
                     </span>
                 </div>
 
                 {os.tecnico ? (
-                    <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-bold text-slate-300 uppercase shrink-0">{os.tecnico.nome.split(' ')[0]}</span>
-                        <div className="w-6 h-6 rounded-full bg-brand-500 border-2 border-white shadow-sm flex items-center justify-center text-[10px] font-black text-white uppercase shrink-0">
+                    <div className="flex items-center gap-1.5 overflow-hidden">
+                        <span className="text-[8px] font-black text-slate-300 uppercase truncate max-w-[40px]">{os.tecnico.nome.split(' ')[0]}</span>
+                        <div className="w-5 h-5 rounded-full bg-slate-200 border border-white flex items-center justify-center text-[9px] font-black text-slate-600 uppercase shrink-0">
                             {os.tecnico.nome.substring(0, 1)}
                         </div>
                     </div>
                 ) : (
-                    <div className="px-2 py-0.5 bg-amber-50 border border-amber-100 rounded-md text-[9px] text-amber-600 font-bold uppercase flex items-center gap-1">
-                        <AlertCircle size={10} />
-                        Sem técnico
+                    <div className="text-[8px] text-amber-500 font-black uppercase flex items-center gap-0.5">
+                        <AlertCircle size={8} /> Pendente
                     </div>
                 )}
             </div>

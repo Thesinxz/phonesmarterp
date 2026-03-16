@@ -42,8 +42,8 @@ export default function TecnicosPage() {
     }
 
     const filteredTecnicos = tecnicos.filter(t =>
-        t.usuario.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.usuario.email.toLowerCase().includes(searchTerm.toLowerCase())
+        (t.usuario?.nome || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (t.usuario?.email || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return (
@@ -77,7 +77,6 @@ export default function TecnicosPage() {
                         <p className="text-xl font-bold text-slate-800">{tecnicos.length}</p>
                     </div>
                 </GlassCard>
-                {/* Outros cards removidos temporariamente aguardando métricas não-fake */}
             </div>
 
             {/* Search */}
@@ -107,11 +106,11 @@ export default function TecnicosPage() {
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex items-center gap-3">
                                     <div className="w-12 h-12 rounded-2xl bg-brand-500 flex items-center justify-center text-white text-xl font-bold">
-                                        {tecnico.usuario.nome.substring(0, 1)}
+                                        {(tecnico.usuario?.nome || "U").substring(0, 1)}
                                     </div>
-                                    <div>
-                                        <h3 className="font-bold text-slate-800 leading-tight">{tecnico.usuario.nome}</h3>
-                                        <p className="text-xs text-slate-400">{tecnico.usuario.email}</p>
+                                    <div className="min-w-0">
+                                        <h3 className="font-bold text-slate-800 leading-tight truncate uppercase">{tecnico.usuario?.nome || "Sem Nome"}</h3>
+                                        <p className="text-[10px] text-slate-400 truncate">{tecnico.usuario?.email}</p>
                                     </div>
                                 </div>
                                 <button className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
@@ -120,20 +119,20 @@ export default function TecnicosPage() {
                             </div>
 
                             <div className="space-y-3 mb-6">
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-slate-400 font-semibold uppercase tracking-wider">Especialidades</span>
-                                    <span className="text-slate-700 font-medium">
-                                        {tecnico.especialidades.length > 0 ? tecnico.especialidades.join(", ") : "Geral"}
+                                <div className="flex items-center justify-between text-[10px]">
+                                    <span className="text-slate-400 font-black uppercase tracking-widest">Cargo</span>
+                                    <span className="text-slate-600 font-black uppercase bg-slate-100 px-1.5 py-0.5 rounded italic">
+                                        {tecnico.usuario?.papel || "Equipe"}
                                     </span>
                                 </div>
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-slate-400 font-semibold uppercase tracking-wider">Comissão</span>
-                                    <span className="text-brand-600 font-bold">{tecnico.comissao_pct}%</span>
+                                <div className="flex items-center justify-between text-[10px]">
+                                    <span className="text-slate-400 font-black uppercase tracking-widest">Comissão</span>
+                                    <span className="text-brand-600 font-black">{tecnico.comissao_pct || 0}%</span>
                                 </div>
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-slate-400 font-semibold uppercase tracking-wider">Status</span>
+                                <div className="flex items-center justify-between text-[10px]">
+                                    <span className="text-slate-400 font-black uppercase tracking-widest">Status</span>
                                     <span className={cn(
-                                        "flex items-center gap-1 font-bold",
+                                        "flex items-center gap-1 font-black uppercase",
                                         tecnico.ativo ? "text-emerald-600" : "text-red-500"
                                     )}>
                                         {tecnico.ativo ? (
@@ -145,13 +144,11 @@ export default function TecnicosPage() {
                                 </div>
                             </div>
 
-                            {/* Mini chart placeholder removed - awaiting real data */}
                             <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
                                 <span className="text-xs text-slate-400 font-bold uppercase tracking-widest">
                                     Meta Mensal
                                 </span>
                                 <span className="text-xs font-bold text-slate-700">
-                                    {/* Mostrar valor formatado se existir, senão R$ 0,00 */}
                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((tecnico.meta_mensal_centavos || 0) / 100)}
                                 </span>
                             </div>
