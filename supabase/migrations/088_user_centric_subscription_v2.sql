@@ -112,7 +112,15 @@ BEGIN
   )
   RETURNING id INTO v_usuario_id;
 
-  -- 3. Inserir configurações iniciais
+  -- 3. Criar a UNIDADE padrão (Matriz)
+  INSERT INTO public.units (empresa_id, name, has_repair_lab, has_parts_stock, has_sales)
+  VALUES (v_empresa_id, 'Matriz', true, true, true);
+
+  -- 4. Criar o vínculo oficial na tabela de multi-empresa
+  INSERT INTO public.usuario_vinculos_empresa (usuario_id, empresa_id, papel, auth_user_id)
+  VALUES (v_usuario_id, v_empresa_id, 'admin', p_auth_user_id);
+
+  -- 5. Inserir configurações iniciais
   IF p_configs IS NOT NULL AND p_configs <> '{}'::jsonb THEN
       FOR v_chave, v_valor IN SELECT * FROM jsonb_each(p_configs)
       LOOP

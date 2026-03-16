@@ -33,7 +33,8 @@ import {
     Copy,
     Link2,
     Loader2,
-    Layers
+    Layers,
+    Download
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -106,6 +107,7 @@ export default function ConfiguracoesPage() {
     const [sefazStatus, setSefazStatus] = useState<"checking" | "online" | "offline" | "unconfigured">("unconfigured");
     const [showSenha, setShowSenha] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
+    const importConfigRef = useRef<HTMLInputElement>(null);
 
     const [emitente, setEmitente] = useState<EmitenteConfig>({
         razao_social: "", nome_fantasia: "", cnpj: "", ie: "", crt: "1",
@@ -516,6 +518,34 @@ export default function ConfiguracoesPage() {
         } finally {
             setSyncingAll(false);
         }
+    };
+
+    const handleExportFinance = () => {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(financeiroConfig, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", `config_financeiro_${empresa?.nome || 'smartos'}.json`);
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+        toast.success("Configurações exportadas!");
+    };
+
+    const handleImportFinance = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const json = JSON.parse(event.target?.result as string);
+                setFinanceiroConfig(json);
+                toast.success("Configurações carregadas! Não esqueça de Salvar.");
+            } catch (err) {
+                toast.error("Erro ao ler o arquivo JSON.");
+            }
+        };
+        reader.readAsText(file);
     };
 
     async function handleCertUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1514,7 +1544,30 @@ export default function ConfiguracoesPage() {
                                 </GlassCard>
 
 
-                                <div className="flex justify-end">
+                                <div className="flex justify-end gap-3">
+                                    <input 
+                                        type="file" 
+                                        className="hidden" 
+                                        accept=".json" 
+                                        ref={importConfigRef} 
+                                        onChange={handleImportFinance} 
+                                    />
+                                    <button 
+                                        type="button"
+                                        onClick={() => importConfigRef.current?.click()}
+                                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
+                                    >
+                                        <Upload size={14} />
+                                        Importar JSON
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={handleExportFinance}
+                                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
+                                    >
+                                        <Download size={14} />
+                                        Exportar JSON
+                                    </button>
                                     <button onClick={() => saveConfig("financeiro", financeiroConfig)} disabled={saving} className="btn-primary">
                                         <Save size={16} />
                                         Salvar Configurações Financeiras

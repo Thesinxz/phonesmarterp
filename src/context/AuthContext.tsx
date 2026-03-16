@@ -139,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 // 2. Auto-provisão (Se o usuário não foi vinculado pelo Trigger nem reivindicou perfil)
                 if (companies.length === 0) {
-                    logger.log("[AuthContext] Nenhum vínculo encontrado, iniciando auto-provisão de uma NOVA empresa...");
+                    logger.log("[AuthContext] Nenhum vínculo de empresa encontrado. Verificando dados para auto-provisão...");
 
                     let pendingData: any = null;
                     try {
@@ -150,32 +150,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     if (!pendingData) {
                         const { data: { user: authUser } } = await supabase.auth.getUser();
                         if (authUser?.user_metadata) {
+                            logger.log("[AuthContext] Usando metadados do AuthUser para provisão:", authUser.user_metadata);
                             pendingData = {
                                 nome: authUser.user_metadata.nome || "Admin",
                                 nomeEmpresa: authUser.user_metadata.nome_empresa || "Minha Empresa",
                                 email: authUser.email,
                                 authUserId: authUser.id,
                             };
+                        } else {
+                            logger.warn("[AuthContext] Usuário sem metadados e sem localStorage. Usando defaults.");
+                            pendingData = {
+                                nome: "Admin",
+                                nomeEmpresa: "Minha Empresa",
+                                email: userEmail,
+                                authUserId: userId,
+                            };
                         }
                     }
 
                     if (pendingData) {
+                        logger.log("[AuthContext] Chamando RPC provision_new_company...", pendingData);
                         const { data: provisionData, error: provErr } = await (supabase as any).rpc('provision_new_company', {
                             p_nome_empresa: pendingData.nomeEmpresa || "Minha Empresa",
-                            p_subdominio: (pendingData.nomeEmpresa || "empresa").toLowerCase().replace(/\s+/g, '-') + "-" + Date.now().toString(36),
+                            p_subdominio: (pendingData.nomeEmpresa || "empresa").toLowerCase().replace(/[^a-z0-9]/g, '-') + "-" + Math.random().toString(36).slice(2, 6),
                             p_nome_usuario: pendingData.nome || "Admin",
-                            p_email_usuario: userEmail,
+                            p_email_usuario: userEmail || pendingData.email,
                             p_auth_user_id: userId
                         });
 
-                        if (!provErr && provisionData && provisionData.length > 0) {
+                        if (provErr) {
+                            logger.error("[AuthContext] Erro fatal na auto-provisão:", provErr);
+                            toast.error("Erro ao criar sua empresa inicial. Contate o suporte.");
+                        } else if (provisionData && provisionData.length > 0) {
+                            logger.log("[AuthContext] Auto-provisão concluída com sucesso!", provisionData[0]);
                             const { empresa_id: newEmpId, usuario_id: newUserId } = provisionData[0];
+                            
+                            // Buscar os objetos reais agora que foram criados
                             const { data: userData } = await (supabase.from("usuarios") as any).select("*").eq("id", newUserId).single();
                             const { data: empData } = await (supabase.from("empresas") as any).select("*").eq("id", newEmpId).single();
+                            
                             if (userData && empData) {
                                 setProfile(userData);
                                 setEmpresa(empData as Empresa);
-                                refreshProfile(); // Recarrega para pegar os vínculos novos
+                                // Forçar recarregamento dos vínculos
+                                const newCompanies = await getUsuarioEmpresas(userId);
+                                setUserCompanies(newCompanies);
+                                
+                                if (typeof window !== 'undefined') localStorage.setItem(ACTIVE_EMPRESA_KEY, newEmpId);
+                                try { localStorage.removeItem("smartos_pending_signup"); } catch {}
                                 return;
                             }
                         }
