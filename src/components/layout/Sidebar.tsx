@@ -21,6 +21,7 @@ import {
     Bell,
     Shield,
     Megaphone,
+    ShoppingBag,
     X
 } from "lucide-react";
 import { cn } from "@/utils/cn";
@@ -114,7 +115,18 @@ const navItems: NavItem[] = [
             { label: "Películas & Acessórios", href: "/estoque/peliculas" },
             { label: "Peças (Assistência)", href: "/estoque/pecas", feature: "estoque_pecas" },
             { label: "Gestão de IMEIs", href: "/estoque/imeis", feature: "imei" },
-            { label: "Compras / Entradas", href: "/compras" },
+        ]
+    },
+    {
+        label: "Compras",
+        href: "/compras",
+        icon: ShoppingBag,
+        permission: "estoque",
+        section: "GESTÃO",
+        children: [
+            { label: "Listagem OCs", href: "/compras" },
+            { label: "Nova Compra", href: "/compras/nova" },
+            { label: "Fornecedores", href: "/fornecedores" },
         ]
     },
     {

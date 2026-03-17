@@ -26,8 +26,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["empresas"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["empresas"]["Insert"]>;
-            };
-            usuarios: {
+            }, usuarios: {
                 Row: {
                     id: string;
                     auth_user_id: string | null;
@@ -50,8 +49,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["usuarios"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["usuarios"]["Row"]>;
-            };
-            usuario_vinculos_empresa: {
+            }, usuario_vinculos_empresa: {
                 Row: {
                     id: string;
                     usuario_id: string;
@@ -62,8 +60,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["usuario_vinculos_empresa"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["usuario_vinculos_empresa"]["Insert"]>;
-            };
-            clientes: {
+            }, clientes: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -83,8 +80,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["clientes"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["clientes"]["Insert"]>;
-            };
-            equipamentos: {
+            }, equipamentos: {
                 Row: {
                     id: string;
                     cliente_id: string;
@@ -98,8 +94,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["equipamentos"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["equipamentos"]["Insert"]>;
-            };
-            ordens_servico: {
+            }, ordens_servico: {
                 Row: {
                     id: string;
                     numero: number;
@@ -151,8 +146,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["ordens_servico"]["Row"], "id" | "numero" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["ordens_servico"]["Insert"]>;
-            };
-            os_timeline: {
+            }, os_timeline: {
                 Row: {
                     id: string;
                     os_id: string;
@@ -164,8 +158,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["os_timeline"]["Row"], "id" | "criado_em">;
                 Update: never;
-            };
-            produtos: {
+            }, produtos: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -209,8 +202,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["produtos"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["produtos"]["Insert"]>;
-            };
-            produtos_historico: {
+            }, produtos_historico: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -223,8 +215,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["produtos_historico"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["produtos_historico"]["Insert"]>;
-            };
-            vendas: {
+            }, vendas: {
                 Row: {
                     id: string;
                     numero: number;
@@ -244,8 +235,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["vendas"]["Row"], "id" | "created_at" | "numero" | "vendedor_id" | "canal_origem"> & { numero?: number; vendedor_id?: string | null; canal_origem?: string | null };
                 Update: Partial<Database["public"]["Tables"]["vendas"]["Insert"]>;
-            };
-            venda_itens: {
+            }, venda_itens: {
                 Row: {
                     id: string;
                     venda_id: string;
@@ -258,8 +248,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["venda_itens"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["venda_itens"]["Insert"]>;
-            };
-            financeiro: {
+            }, financeiro: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -274,8 +263,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["financeiro"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["financeiro"]["Insert"]>;
-            };
-            configuracoes: {
+            }, configuracoes: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -283,13 +271,27 @@ export interface Database {
                     valor: any; // JSONB
                     descricao: string | null;
                     is_secret: boolean;
-                    updated_at: string;
                     created_at: string;
+                    updated_at: string;
                 };
-                Insert: Omit<Database["public"]["Tables"]["configuracoes"]["Row"], "id" | "created_at" | "updated_at">;
-                Update: Partial<Database["public"]["Tables"]["configuracoes"]["Insert"]>;
-            };
-            tecnicos: {
+                Insert: {
+                    id?: string;
+                    empresa_id: string;
+                    chave: string;
+                    valor: any;
+                    descricao?: string | null;
+                    is_secret?: boolean;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: Partial<{
+                    empresa_id: string;
+                    chave: string;
+                    valor: any;
+                    descricao: string | null;
+                    is_secret: boolean;
+                }>;
+            }, tecnicos: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -302,8 +304,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["tecnicos"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["tecnicos"]["Insert"]>;
-            };
-            caixas: {
+            }, caixas: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -322,8 +323,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["caixas"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["caixas"]["Insert"]>;
-            };
-            caixa_movimentacoes: {
+            }, caixa_movimentacoes: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -339,8 +339,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["caixa_movimentacoes"]["Row"], "id" | "created_at">;
                 Update: never;
-            };
-            financeiro_titulos: {
+            }, financeiro_titulos: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -362,8 +361,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["financeiro_titulos"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["financeiro_titulos"]["Insert"]>;
-            };
-            xml_importacoes: {
+            }, xml_importacoes: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -388,8 +386,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["xml_importacoes"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["xml_importacoes"]["Insert"]>;
-            };
-            fornecedores: {
+            }, fornecedores: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -414,63 +411,90 @@ export interface Database {
                     ativo: boolean; created_at: string; updated_at: string;
                 }, "id" | "created_at" | "updated_at">;
                 Update: Partial<{ nome: string; cnpj: string | null; cpf: string | null; ie: string | null; im: string | null; telefone: string | null; email: string | null; contato: string | null; endereco_json: Json | null; observacoes: string | null; ativo: boolean; }>;
-            };
+            },
             compras: {
                 Row: {
                     id: string;
                     empresa_id: string;
+                    numero: number;
                     fornecedor_id: string | null;
-                    numero_nf: string | null;
-                    serie: string | null;
-                    chave_acesso: string | null;
-                    xml_importacao_id: string | null;
+                    fornecedor_nome: string | null;
                     data_compra: string;
                     data_vencimento: string | null;
-                    status: "pendente" | "concluida" | "cancelada";
-                    valor_subtotal_centavos: number;
-                    valor_frete_centavos: number;
-                    valor_desconto_centavos: number;
-                    valor_total_centavos: number;
-                    forma_pagamento: string | null;
+                    valor_total: number;
+                    status: "pendente" | "pago" | "cancelado";
+                    origem: "manual" | "xml_nfe" | "ocr_pdf" | "ocr_imagem";
+                    nota_fiscal_numero: string | null;
                     observacoes: string | null;
-                    titulo_id: string | null;
                     created_at: string;
                     updated_at: string;
                 };
-                Insert: Omit<{
-                    id: string; empresa_id: string; fornecedor_id: string | null; numero_nf: string | null;
-                    serie: string | null; chave_acesso: string | null; xml_importacao_id: string | null;
-                    data_compra: string; data_vencimento: string | null; status: "pendente" | "concluida" | "cancelada";
-                    valor_subtotal_centavos: number; valor_frete_centavos: number; valor_desconto_centavos: number;
-                    valor_total_centavos: number; forma_pagamento: string | null; observacoes: string | null;
-                    titulo_id: string | null; created_at: string; updated_at: string;
-                }, "id" | "created_at" | "updated_at">;
-                Update: Partial<{ fornecedor_id: string | null; data_compra: string; data_vencimento: string | null; status: "pendente" | "concluida" | "cancelada"; valor_total_centavos: number; forma_pagamento: string | null; observacoes: string | null; titulo_id: string | null; }>;
-            };
+                Insert: {
+                    empresa_id: string;
+                    fornecedor_id?: string | null;
+                    fornecedor_nome?: string | null;
+                    data_compra: string;
+                    data_vencimento?: string | null;
+                    valor_total: number;
+                    status: "pendente" | "pago" | "cancelado";
+                    origem: "manual" | "xml_nfe" | "ocr_pdf" | "ocr_imagem";
+                    nota_fiscal_numero?: string | null;
+                    observacoes?: string | null;
+                };
+                Update: Partial<{
+                    empresa_id: string;
+                    fornecedor_id?: string | null;
+                    fornecedor_nome?: string | null;
+                    data_compra: string;
+                    data_vencimento?: string | null;
+                    valor_total: number;
+                    status: string;
+                    origem: "manual" | "xml_nfe" | "ocr_pdf" | "ocr_imagem";
+                    nota_fiscal_numero?: string | null;
+                    observacoes?: string | null;
+                }>;
+            },
             compra_itens: {
                 Row: {
                     id: string;
-                    compra_id: string;
                     empresa_id: string;
-                    produto_id: string | null;
-                    nome_produto: string;
-                    ncm: string | null;
-                    cfop: string | null;
-                    ean: string | null;
-                    unidade: string | null;
+                    compra_id: string;
+                    catalog_item_id: string | null;
+                    nome: string;
                     quantidade: number;
-                    custo_unitario_centavos: number;
-                    total_centavos: number;
+                    custo_unitario: number;
+                    custo_total: number;
+                    preco_venda_varejo: number;
+                    preco_venda_atacado: number;
+                    item_type: "peca" | "celular" | "acessorio" | "outro";
+                    categoria: string | null;
                     created_at: string;
                 };
-                Insert: Omit<{
-                    id: string; compra_id: string; empresa_id: string; produto_id: string | null;
-                    nome_produto: string; ncm: string | null; cfop: string | null; ean: string | null;
-                    unidade: string | null; quantidade: number; custo_unitario_centavos: number;
-                    total_centavos: number; created_at: string;
-                }, "id" | "created_at">;
-                Update: Partial<{ produto_id: string | null; nome_produto: string; ncm: string | null; cfop: string | null; ean: string | null; unidade: string | null; quantidade: number; custo_unitario_centavos: number; total_centavos: number; }>;
-            };
+                Insert: {
+                    empresa_id: string;
+                    compra_id: string;
+                    catalog_item_id?: string | null;
+                    nome: string;
+                    quantidade: number;
+                    custo_unitario: number;
+                    preco_venda_varejo?: number;
+                    preco_venda_atacado?: number;
+                    item_type: "peca" | "celular" | "acessorio" | "outro";
+                    categoria?: string | null;
+                };
+                Update: Partial<{
+                    empresa_id: string;
+                    compra_id: string;
+                    catalog_item_id?: string | null;
+                    nome: string;
+                    quantidade: number;
+                    custo_unitario: number;
+                    preco_venda_varejo?: number;
+                    preco_venda_atacado?: number;
+                    item_type: "peca" | "celular" | "acessorio" | "outro";
+                    categoria?: string | null;
+                }>;
+            },
             documentos_fiscais: {
                 Row: {
                     id: string;
@@ -531,8 +555,7 @@ export interface Database {
                     dados_json?: Json | null;
                     valor_total_centavos?: number | null;
                 };
-            };
-            audit_logs: {
+            }, audit_logs: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -545,8 +568,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["audit_logs"]["Row"], "id" | "criado_em">;
                 Update: never;
-            };
-            solicitacoes: {
+            }, solicitacoes: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -565,8 +587,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["solicitacoes"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["solicitacoes"]["Insert"]>;
-            };
-            equipe_metas: {
+            }, equipe_metas: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -583,8 +604,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["equipe_metas"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["equipe_metas"]["Insert"]>;
-            };
-            equipe_metas_categorias: {
+            }, equipe_metas_categorias: {
                 Row: {
                     id: string;
                     meta_id: string;
@@ -598,8 +618,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["equipe_metas_categorias"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["equipe_metas_categorias"]["Insert"]>;
-            };
-catalog_items: {
+            }, catalog_items: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -644,8 +663,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["catalog_items"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["catalog_items"]["Insert"]>;
-            };
-                        product_types: {
+            }, product_types: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -659,8 +677,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["product_types"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["product_types"]["Insert"]>;
-            };
-            pricing_segments: {
+            }, pricing_segments: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -673,8 +690,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["pricing_segments"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["pricing_segments"]["Insert"]>;
-            };
-            brands: {
+            }, brands: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -684,8 +700,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["brands"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["brands"]["Insert"]>;
-            };
-            units: {
+            }, units: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -700,8 +715,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["units"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["units"]["Insert"]>;
-            };
-            unit_stock: {
+            }, unit_stock: {
                 Row: {
                     id: string;
                     tenant_id: string;
@@ -714,8 +728,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["unit_stock"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["unit_stock"]["Insert"]>;
-            };
-            stock_movements: {
+            }, stock_movements: {
                 Row: {
                     id: string;
                     tenant_id: string;
@@ -730,8 +743,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["stock_movements"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["stock_movements"]["Insert"]>;
-            };
-            os_unit_transfers: {
+            }, os_unit_transfers: {
                 Row: {
                     id: string;
                     tenant_id: string;
@@ -748,8 +760,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["os_unit_transfers"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["os_unit_transfers"]["Insert"]>;
-            };
-            part_compatibility: {
+            }, part_compatibility: {
                 Row: {
                     id: string;
                     tenant_id: string;
@@ -760,8 +771,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["part_compatibility"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["part_compatibility"]["Insert"]>;
-            };
-            os_parts: {
+            }, os_parts: {
                 Row: {
                     id: string;
                     tenant_id: string;
@@ -775,8 +785,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["os_parts"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["os_parts"]["Insert"]>;
-            };
-            payment_gateways: {
+            }, payment_gateways: {
                 Row: {
                     id: string;
                     empresa_id: string;
@@ -790,8 +799,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["payment_gateways"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["payment_gateways"]["Insert"]>;
-            };
-            warranty_claims: {
+            }, warranty_claims: {
                 Row: {
                     id: string;
                     tenant_id: string;
@@ -818,8 +826,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["warranty_claims"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["warranty_claims"]["Insert"]>;
-            };
-            warranty_evidences: {
+            }, warranty_evidences: {
                 Row: {
                     id: string;
                     tenant_id: string;
@@ -833,8 +840,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["warranty_evidences"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["warranty_evidences"]["Insert"]>;
-            };
-            warranty_checklist_snapshot: {
+            }, warranty_checklist_snapshot: {
                 Row: {
                     id: string;
                     tenant_id: string;
@@ -845,8 +851,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["warranty_checklist_snapshot"]["Row"], "id" | "captured_at">;
                 Update: Partial<Database["public"]["Tables"]["warranty_checklist_snapshot"]["Insert"]>;
-            };
-            device_imeis: {
+            }, device_imeis: {
                 Row: {
                     id: string;
                     tenant_id: string;
@@ -863,8 +868,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["device_imeis"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["device_imeis"]["Insert"]>;
-            };
-            imei_history: {
+            }, imei_history: {
                 Row: {
                     id: string;
                     tenant_id: string;
@@ -881,8 +885,7 @@ catalog_items: {
                 };
                 Insert: Omit<Database["public"]["Tables"]["imei_history"]["Row"], "id" | "created_at">;
                 Update: never;
-            };
-            imei_anatel_checks: {
+            }, imei_anatel_checks: {
                 Row: {
                     id: string;
                     imei: string;
