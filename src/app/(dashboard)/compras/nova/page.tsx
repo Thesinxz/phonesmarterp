@@ -130,6 +130,12 @@ export default function ComprasNovaPage() {
 
     const handleConfirmar = async () => {
         if (!profile?.empresa_id) return;
+        if (!unidadeId) {
+            toast.error("Por favor, selecione a unidade de destino no primeiro passo.");
+            setStep(1);
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
             const res = await criarCompra({
