@@ -107,45 +107,9 @@ export async function criarCompra(params: {
 
   if (compraError) throw new Error(compraError.message)
 
-  // 3. Inserir itens
-  const { error: itensError } = await (supabase as any)
-    .from('compra_itens')
-    .insert(
-      params.itens.map(item => ({
-        empresa_id: params.empresaId,
-        compra_id: compra.id,
-        nome: item.nome,
-        quantidade: item.quantidade,
-        custo_unitario: item.custoUnitario,
-        preco_venda_varejo: item.precoVarejo,
-        preco_venda_atacado: item.precoAtacado,
-        item_type: item.itemType,
-        categoria: item.categoria || null
-      }))
-    )
-
-  if (itensError) throw new Error(itensError.message)
-
-  // 4. Lançar no financeiro (Contas a Pagar)
-  if (params.dataVencimento) {
-    await (supabase as any).from('financeiro_titulos').insert({
-      empresa_id: params.empresaId,
-      tipo: 'pagar',
-      descricao: `Compra OC-${String(compra.numero).padStart(3,'0')} · ${params.fornecedorNome || 'Fornecedor avulso'}`,
-      valor_total_centavos: valorTotal,
-      valor_pago_centavos: 0,
-      data_vencimento: params.dataVencimento,
-      status: 'pendente',
-      fornecedor_id: params.fornecedorId || null,
-      origem_tipo: 'compra',
-      origem_id: compra.id,
-      categoria: 'Mercadorias para revenda'
-    })
-  }
-
-  // 5. Atualizar estoque e registrar movimentação
+  // 3. Atualizar estoque, registrar movimentação e preparar itens para salvar
   for (const item of params.itens) {
-    // 5.1 Buscar item atual no catálogo da empresa
+    // 3.1 Buscar ou Criar item no catálogo
     const { data: catalogItem } = await (supabase as any)
       .from('catalog_items')
       .select('id, stock_qty')
@@ -158,7 +122,6 @@ export async function criarCompra(params: {
 
     if (catalogItem) {
       itemId = catalogItem.id
-      // Atualizar existente
       await (supabase as any)
         .from('catalog_items')
         .update({
@@ -170,7 +133,6 @@ export async function criarCompra(params: {
         })
         .eq('id', catalogItem.id)
     } else {
-      // Criar novo no catálogo
       const { data: newItem } = await (supabase as any)
         .from('catalog_items')
         .insert({
@@ -189,7 +151,23 @@ export async function criarCompra(params: {
       itemId = newItem.id
     }
 
-    // 5.2 Registrar movimentação de estoque na unidade específica
+    // 3.2 Salvar item vinculado à compra
+    await (supabase as any)
+      .from('compra_itens')
+      .insert({
+        empresa_id: params.empresaId,
+        compra_id: compra.id,
+        catalog_item_id: itemId, // NEW FIELD
+        nome: item.nome,
+        quantidade: item.quantidade,
+        custo_unitario: item.custoUnitario,
+        preco_venda_varejo: item.precoVarejo,
+        preco_venda_atacado: item.precoAtacado,
+        item_type: item.itemType,
+        categoria: item.categoria || null
+      })
+
+    // 3.3 Registrar movimentação de estoque
     await (supabase as any).from('stock_movements').insert({
       tenant_id: params.empresaId,
       unit_id: params.unidadeId,
@@ -200,7 +178,7 @@ export async function criarCompra(params: {
       reference_id: compra.id
     })
 
-    // 5.3 Atualizar estoque da unidade (unit_stock)
+    // 3.4 Atualizar estoque da unidade (unit_stock)
     const { data: uStock } = await (supabase as any)
       .from('unit_stock')
       .select('qty')
@@ -224,6 +202,23 @@ export async function criarCompra(params: {
           qty: item.quantidade
         })
     }
+  }
+
+  // 4. Lançar no financeiro (Contas a Pagar)
+  if (params.dataVencimento) {
+    await (supabase as any).from('financeiro_titulos').insert({
+      empresa_id: params.empresaId,
+      tipo: 'pagar',
+      descricao: `Compra OC-${String(compra.numero).padStart(3,'0')} · ${params.fornecedorNome || 'Fornecedor avulso'}`,
+      valor_total_centavos: valorTotal,
+      valor_pago_centavos: 0,
+      data_vencimento: params.dataVencimento,
+      status: 'pendente',
+      fornecedor_id: params.fornecedorId || null,
+      origem_tipo: 'compra',
+      origem_id: compra.id,
+      categoria: 'Mercadorias para revenda'
+    })
   }
 
   revalidatePath('/compras')
