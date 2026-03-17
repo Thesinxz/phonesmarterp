@@ -67,7 +67,6 @@ export async function POST(req: Request) {
 
         try {
             const session = await stripe.checkout.sessions.create({
-                payment_method_types: ["card", "pix"],
                 line_items: [
                     {
                         price_data: {
@@ -85,6 +84,7 @@ export async function POST(req: Request) {
                     },
                 ],
                 mode: "subscription",
+                automatic_payment_methods: { enabled: true },
                 success_url: `${siteUrl}/dashboard?payment=success`,
                 cancel_url: `${siteUrl}/planos/checkout/${planId}?payment=cancel`,
                 metadata: {
