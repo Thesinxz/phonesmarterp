@@ -47,9 +47,22 @@ function CheckoutContent() {
     const planPrice = isAnual ? prices.yearly : prices.monthly;
 
     const handleStripeCheckout = async () => {
-        if (!empresa?.id) return;
+        if (!empresa?.id) {
+            console.error("[Checkout] Empresa ID não encontrado:", { empresa });
+            toast.error("Erro: Empresa não identificada.");
+            return;
+        }
+
+        console.log("[Checkout] Iniciando processo de pagamento:", {
+            planId,
+            isAnual,
+            empresaId: empresa.id,
+            userEmail: user?.email
+        });
+
         setLoadingStripe(true);
         try {
+            console.log("[Checkout] Chamando API /api/stripe/checkout...");
             const response = await fetch("/api/stripe/checkout", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -61,15 +74,29 @@ function CheckoutContent() {
                 }),
             });
 
+            console.log("[Checkout] Resposta recebida da API:", {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok
+            });
+
             const data = await response.json();
+            console.log("[Checkout] Dados da resposta:", data);
+
             if (data.url) {
+                console.log("[Checkout] Redirecionando para Stripe:", data.url);
                 window.location.href = data.url;
             } else {
+                console.error("[Checkout] Erro retornado pela API:", data.error || data);
                 toast.error(data.error || "Erro ao iniciar checkout.");
                 setLoadingStripe(false);
             }
-        } catch (error) {
-            console.error(error);
+        } catch (error: any) {
+            console.error("[Checkout] Erro catastrófico no fetch:", {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            });
             toast.error("Erro na conexão com o servidor de pagamentos.");
             setLoadingStripe(false);
         }
