@@ -3,13 +3,16 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
-    FileText, Code, Keyboard, 
-    ArrowRight, ArrowLeft, Plus, Trash2, 
-    Package, CheckCircle2, DollarSign, 
-    ShoppingBag, Save, FileCheck, MapPin,
-    ChevronLeft, Calculator, Tag, Loader2, Info, AlertCircle
+    Plus, Search, Calendar, FileText, Package, 
+    Trash2, CreditCard, ChevronRight, LayoutGrid, 
+    ArrowLeft, ArrowRight, History, ShoppingBag, Truck,
+    AlertCircle, Check, Info, Code, Keyboard, MapPin,
+    CheckCircle2, DollarSign, Save, FileCheck, ChevronLeft,
+    Calculator, Tag, Loader2
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { FornecedorCombobox } from "@/components/fornecedores/FornecedorCombobox";
+import { ProdutoCombobox } from "@/components/compras/ProdutoCombobox";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { formatCurrency, toCentavos } from "@/utils/formatCurrency";
@@ -36,9 +39,13 @@ export default function ComprasNovaPage() {
     const [fornecedorId, setFornecedorId] = useState("");
     const [fornecedorNome, setFornecedorNome] = useState("");
     const [dataNota, setDataNota] = useState(new Date().toISOString().split("T")[0]);
+    const today = new Date().toISOString().split("T")[0];
     const [numeroNota, setNumeroNota] = useState("");
     const [vencimento, setVencimento] = useState("");
+    const [formaPagamento, setFormaPagamento] = useState("a_combinar");
+    const [parcelas, setParcelas] = useState(1);
     const [observacoes, setObservacoes] = useState("");
+    const [fornecedorCnpj, setFornecedorCnpj] = useState("");
     
     const [tens, setTens] = useState<any[]>([]); // "itens" já está sendo usado pelo Lucide o UI as vezes, usando "tens"
     const [fornecedores, setFornecedores] = useState<any[]>([]);
@@ -52,7 +59,7 @@ export default function ComprasNovaPage() {
     useEffect(() => {
         if (!profile?.empresa_id) return;
         const load = async () => {
-            const { data: fData } = await supabase.from("fornecedores").select("id, nome").eq("empresa_id", profile.empresa_id).order("nome");
+            const { data: fData } = await (supabase as any).from("fornecedores").select("id, nome").eq("empresa_id", profile.empresa_id).order("nome");
             if (fData) setFornecedores(fData);
 
             const { data: uData } = await supabase.from("units").select("id, name").eq("empresa_id", profile.empresa_id).eq("is_active", true);
@@ -69,7 +76,10 @@ export default function ComprasNovaPage() {
             precoVarejo: 0, 
             precoAtacado: 0, 
             itemType: "peca", 
-            categoria: "" 
+            categoria: "",
+            ncm: "",
+            catalogItemId: null,
+            estoqueAtual: 0
         }]);
     };
 
@@ -111,13 +121,36 @@ export default function ComprasNovaPage() {
                    precoVarejo: 0,
                    precoAtacado: 0,
                    itemType: "peca",
-                   categoria: ""
+                   categoria: "",
+                   ncm: prod.getElementsByTagName("NCM")[0]?.textContent || "",
+                   catalogItemId: null,
+                   estoqueAtual: 0
                };
             });
 
             if (emitent) setFornecedorNome(emitent);
             if (nNF) setNumeroNota(nNF);
             if (dEmi) setDataNota(dEmi);
+
+            // Tentar identificar fornecedor pelo CNPJ no XML (Emitente)
+            const cnpjEmit = xml.querySelector('emit > CNPJ')?.textContent;
+            if (cnpjEmit && profile?.empresa_id) {
+                const cleanCnpj = cnpjEmit.replace(/\D/g, "");
+                setFornecedorCnpj(cleanCnpj);
+                const { data: forn } = await (supabase as any)
+                    .from("fornecedores")
+                    .select("id, razao_social, nome_fantasia, cnpj")
+                    .eq("empresa_id", profile.empresa_id)
+                    .eq("cnpj", cleanCnpj)
+                    .maybeSingle();
+
+                if (forn) {
+                    setFornecedorId(forn.id);
+                    setFornecedorNome(forn.nome_fantasia || forn.razao_social);
+                    toast.success(`Fornecedor "${forn.razao_social}" identificado pelo CNPJ!`);
+                }
+            }
+
             setTens(extractedItems);
             
             toast.success("XML processado com sucesso!");
@@ -145,10 +178,15 @@ export default function ComprasNovaPage() {
                 fornecedorNome: fornecedorNome || "Diverso",
                 dataCompra: dataNota,
                 dataVencimento: vencimento || undefined,
+                formaPagamento: formaPagamento,
+                parcelas: parcelas,
                 notaFiscalNumero: numeroNota || undefined,
                 observacoes: observacoes || undefined,
                 origem: inputMethod === "xml" ? "xml_nfe" : "manual",
-                itens: tens
+                itens: tens.map(it => ({
+                    ...it,
+                    catalogItemId: it.catalogItemId || undefined
+                }))
             });
             
             toast.success(`Compra OC-${String(res.numero).padStart(3, '0')} registrada!`);
@@ -172,23 +210,26 @@ export default function ComprasNovaPage() {
                 <div className="flex bg-slate-100 p-1 rounded-2xl w-fit">
                     <button 
                         onClick={() => setStep(1)} 
-                        className={cn("px-4 py-1.5 text-[10px] font-black uppercase rounded-xl transition-all", step === 1 ? "bg-white text-slate-800 shadow-sm" : "text-slate-400")}
+                        className={cn("px-4 py-1.5 text-[10px] font-black uppercase rounded-xl transition-all flex items-center gap-2", step === 1 ? "bg-white text-slate-800 shadow-sm" : "text-slate-400")}
                     >
-                        1. Entrada
+                        {tens.length > 0 ? <Check size={12} className="text-emerald-500" /> : <span className="w-3 h-3 flex items-center justify-center border border-current rounded-full text-[8px]">1</span>}
+                        Entrada
                     </button>
                     <button 
                         disabled={tens.length === 0}
                         onClick={() => setStep(2)} 
-                        className={cn("px-4 py-1.5 text-[10px] font-black uppercase rounded-xl transition-all", step === 2 ? "bg-white text-slate-800 shadow-sm" : "text-slate-400")}
+                        className={cn("px-4 py-1.5 text-[10px] font-black uppercase rounded-xl transition-all flex items-center gap-2", step === 2 ? "bg-white text-slate-800 shadow-sm" : "text-slate-400")}
                     >
-                        2. Preços
+                        {tens.length > 0 && tens.every(it => it.precoVarejo > 0) ? <Check size={12} className="text-emerald-500" /> : <span className="w-3 h-3 flex items-center justify-center border border-current rounded-full text-[8px]">2</span>}
+                        Preços
                     </button>
                     <button 
                         disabled={tens.length === 0}
                         onClick={() => setStep(3)} 
-                        className={cn("px-4 py-1.5 text-[10px] font-black uppercase rounded-xl transition-all", step === 3 ? "bg-white text-slate-800 shadow-sm" : "text-slate-400")}
+                        className={cn("px-4 py-1.5 text-[10px] font-black uppercase rounded-xl transition-all flex items-center gap-2", step === 3 ? "bg-white text-slate-800 shadow-sm" : "text-slate-400")}
                     >
-                        3. Finalizar
+                        <span className="w-3 h-3 flex items-center justify-center border border-current rounded-full text-[8px]">3</span>
+                        Finalizar
                     </button>
                 </div>
             </div>
@@ -238,22 +279,25 @@ export default function ComprasNovaPage() {
                             <GlassCard className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Fornecedor *</label>
-                                    <select 
-                                        value={fornecedorId} 
-                                        onChange={e => {
-                                            const f = fornecedores.find(it => it.id === e.target.value);
-                                            setFornecedorId(e.target.value);
-                                            if (f) setFornecedorNome(f.nome);
+                                    <FornecedorCombobox 
+                                        empresaId={profile?.empresa_id || ''}
+                                        value={fornecedorId}
+                                        onSelect={(f) => {
+                                            setFornecedorId(f?.id || '');
+                                            setFornecedorNome(f?.nome_fantasia || f?.razao_social || '');
+                                            setFornecedorCnpj(f?.cnpj || '');
                                         }}
-                                        className="select-glass h-11"
-                                    >
-                                        <option value="">Selecionar...</option>
-                                        {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
-                                    </select>
+                                    />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Data da Nota *</label>
-                                    <input type="date" value={dataNota} onChange={e => setDataNota(e.target.value)} className="input-glass h-11" />
+                                    <input 
+                                        type="date" 
+                                        value={dataNota} 
+                                        max={today}
+                                        onChange={e => setDataNota(e.target.value)} 
+                                        className="input-glass h-11" 
+                                    />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Nº da Nota</label>
@@ -273,6 +317,7 @@ export default function ComprasNovaPage() {
                                         <thead className="text-[10px] uppercase text-slate-400 font-bold bg-slate-50/50 border-b border-slate-100">
                                             <tr>
                                                 <th className="px-6 py-4">Produto</th>
+                                                <th className="px-6 py-4 w-32 text-center">NCM</th>
                                                 <th className="px-6 py-4 w-40">Tipo</th>
                                                 <th className="px-6 py-4 text-center w-24">Qtd</th>
                                                 <th className="px-6 py-4 text-right w-40">Custo Unit.</th>
@@ -283,8 +328,43 @@ export default function ComprasNovaPage() {
                                         <tbody className="divide-y divide-slate-50">
                                             {tens.map((it, i) => (
                                                 <tr key={i} className="hover:bg-slate-50/50 transition-all">
+                                                    <td className="px-6 py-3 min-w-[250px]">
+                                                        <ProdutoCombobox
+                                                            value={it.nome}
+                                                            empresaId={profile?.empresa_id || ''}
+                                                            itemType={it.itemType}
+                                                            onSelect={(produto, nome) => {
+                                                                updateItem(i, {
+                                                                    nome,
+                                                                    catalogItemId: produto?.id || null,
+                                                                    itemType: produto?.item_type || it.itemType,
+                                                                    custoUnitario: produto?.cost_price || it.custoUnitario,
+                                                                    estoqueAtual: produto?.stock_qty || 0,
+                                                                    ncm: produto?.ncm || it.ncm
+                                                                });
+                                                            }}
+                                                        />
+                                                        {it.catalogItemId && (
+                                                            <div className="flex flex-col gap-0.5 mt-1 animate-in slide-in-from-left-1">
+                                                                <div className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 uppercase">
+                                                                    <Check size={10} /> Vinculado ao catálogo
+                                                                </div>
+                                                                {it.estoqueAtual <= 0 && (
+                                                                    <div className="flex items-center gap-1 text-[9px] font-bold text-red-500 uppercase">
+                                                                        <AlertCircle size={10} /> Estoque zerado — esta compra dará entrada
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </td>
                                                     <td className="px-6 py-2">
-                                                        <input value={it.nome} onChange={e => updateItem(i, {nome: e.target.value})} placeholder="Nome do produto..." className="w-full bg-transparent border-b border-transparent focus:border-brand-500 font-bold text-slate-800 outline-none h-10" />
+                                                        <input 
+                                                            value={it.ncm} 
+                                                            maxLength={8}
+                                                            onChange={e => updateItem(i, { ncm: e.target.value.replace(/\D/g, '').slice(0, 8) })} 
+                                                            placeholder="00000000" 
+                                                            className="w-full bg-slate-50 border border-slate-100 rounded-lg h-9 px-2 font-mono text-center text-xs outline-none focus:border-brand-500 transition-all" 
+                                                        />
                                                     </td>
                                                     <td className="px-6 py-2">
                                                         <select value={it.itemType} onChange={e => updateItem(i, {itemType: e.target.value})} className="select-glass text-xs h-9">
@@ -335,6 +415,16 @@ export default function ComprasNovaPage() {
                                     </table>
                                 </div>
                             </GlassCard>
+
+                            <GlassCard className="p-4 space-y-2">
+                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Observações da Compra</label>
+                                <textarea
+                                    value={observacoes}
+                                    onChange={e => setObservacoes(e.target.value)}
+                                    placeholder="Condições especiais, referências internas ou detalhes da entrega..."
+                                    className="input-glass min-h-[80px] py-3 resize-none text-sm"
+                                />
+                            </GlassCard>
                         </div>
                     ) : (
                         <div className="space-y-6">
@@ -372,7 +462,10 @@ export default function ComprasNovaPage() {
                     <div className="flex justify-end pt-4">
                         <button 
                             disabled={tens.length === 0}
-                            onClick={() => setStep(2)} 
+                            onClick={() => {
+                                if (tens.length === 0) return;
+                                setStep(2);
+                            }} 
                             className="btn-primary h-14 px-10 shadow-brand-glow"
                         >
                             Próximo Passo: Precificação <ArrowRight className="ml-2" />
@@ -417,16 +510,27 @@ export default function ComprasNovaPage() {
                                             />
                                         </div>
                                     </div>
-                                    <div>
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Preço Atacado</label>
-                                        <div className="relative mt-1">
-                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">R$</span>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 block">Preço Atacado (US$)</label>
+                                            <div className="relative mt-1">
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">US$</span>
+                                                <input 
+                                                    type="number" 
+                                                    step="0.01" 
+                                                    value={it.precoAtacado / 100} 
+                                                    onChange={e => updateItem(idx, {precoAtacado: toCentavos(parseFloat(e.target.value))||0})}
+                                                    className="input-glass pl-12 font-black text-[#1E40AF] h-11" 
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 block">Categoria</label>
                                             <input 
-                                                type="number" 
-                                                step="0.01" 
-                                                value={it.precoAtacado / 100} 
-                                                onChange={e => updateItem(idx, {precoAtacado: toCentavos(parseFloat(e.target.value))||0})}
-                                                className="input-glass pl-10 font-black text-[#1E40AF] h-11" 
+                                                value={it.categoria || ''}
+                                                onChange={e => updateItem(idx, {categoria: e.target.value})}
+                                                placeholder="Ex: Frontal"
+                                                className="input-glass h-11 text-sm mt-1" 
                                             />
                                         </div>
                                     </div>
@@ -439,7 +543,16 @@ export default function ComprasNovaPage() {
                         <button onClick={() => setStep(1)} className="btn-ghost flex items-center gap-2">
                             <ArrowLeft size={16}/> Voltar para Entrada
                         </button>
-                        <button onClick={() => setStep(3)} className="btn-primary h-14 px-10 shadow-brand-glow">
+                        <button 
+                            onClick={() => {
+                                const semPreco = tens.filter(it => it.precoVarejo === 0);
+                                if (semPreco.length > 0) {
+                                    toast.warning(`${semPreco.length} item(ns) estão sem preço de venda definido.`);
+                                }
+                                setStep(3);
+                            }} 
+                            className="btn-primary h-14 px-10 shadow-brand-glow"
+                        >
                             Revisar e Finalizar <ArrowRight className="ml-2" />
                         </button>
                     </div>
@@ -448,66 +561,171 @@ export default function ComprasNovaPage() {
 
             {/* PASSO 3: CONFIRMAR */}
             {step === 3 && (
-                <div className="max-w-2xl mx-auto animate-in zoom-in-95 duration-500 space-y-8">
+                <div className="max-w-4xl mx-auto animate-in zoom-in-95 duration-500 space-y-8">
                     <div className="text-center space-y-2">
                         <div className="w-16 h-16 bg-slate-900 text-white rounded-[24px] flex items-center justify-center mx-auto shadow-xl"><Package size={32}/></div>
-                        <h2 className="text-3xl font-black text-slate-800 tracking-tight">Resumo Final</h2>
-                        <p className="text-slate-500 text-sm">Confirme as informações antes de registrar no ERP</p>
+                        <h2 className="text-3xl font-black text-slate-800 tracking-tight">Revisão e Pagamento</h2>
+                        <p className="text-slate-500 text-sm">Confirme os dados e as condições financeiras</p>
                     </div>
 
-                    <GlassCard className="p-0 overflow-hidden divide-y divide-slate-100">
-                        <div className="p-6 space-y-4">
-                            {[
-                                { label: "Fornecedor", value: fornecedorNome || "Diverso" },
-                                { label: "Data da Emissão", value: formatDate(dataNota) },
-                                { label: "Nota Fiscal", value: numeroNota || "Não informada" },
-                                { label: "Total da Compra", value: formatCurrency(valorTotal), bold: true },
-                            ].map(r => (
-                                <div key={r.label} className="flex justify-between items-center">
-                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{r.label}</span>
-                                    <span className={cn("text-sm", r.bold ? "font-black text-slate-900 text-base" : "font-bold text-slate-700")}>{r.value}</span>
-                                </div>
-                            ))}
-                        </div>
-                        
-                        <div className="p-6 space-y-4">
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Vencimento do Pagamento</label>
-                                <input type="date" value={vencimento} onChange={e => setVencimento(e.target.value)} className="input-glass h-12" />
-                                <p className="text-[10px] text-brand-500 font-bold flex items-center gap-1.5 mt-2">
-                                    <Info size={12}/> Um lançamento de Contas a Pagar será gerado automaticamente.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="p-6 bg-slate-50 space-y-4">
-                            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Automações que serão processadas:</h4>
-                            <div className="space-y-2">
-                                {[
-                                    `Entrada de ${tens.length} produtos no estoque real.`,
-                                    `Registro de OC (Ordem de Compra) sequencial.`,
-                                    vencimento ? `Geração de Conta a Pagar: ${formatCurrency(valorTotal)}.` : null,
-                                    `Histórico de movimentação de estoque registrado.`
-                                ].filter(Boolean).map((t, i) => (
-                                    <div key={i} className="flex gap-2 text-emerald-600 font-bold text-xs items-center">
-                                        <CheckCircle2 size={14}/> {t}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* COLUNA ESQUERDA: RESUMO */}
+                        <div className="space-y-6">
+                            <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Resumo da Compra</h3>
+                            
+                            <GlassCard className="p-6 space-y-4">
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-start">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fornecedor</span>
+                                        <div className="text-right">
+                                            <div className="text-sm font-bold text-slate-700">{fornecedorNome || "Diverso"}</div>
+                                            {fornecedorCnpj && (
+                                                <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                                    CNPJ: {fornecedorCnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                ))}
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Data da Nota</span>
+                                        <span className="text-sm font-bold text-slate-700">{formatDate(dataNota)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Número da Nota</span>
+                                        <span className="text-sm font-bold text-slate-700">{numeroNota || "—"}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Origem</span>
+                                        <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-slate-100 rounded-md text-slate-500">
+                                            {inputMethod === "xml" ? "XML NF-e" : "Manual"}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Pagamento</span>
+                                        <span className="text-sm font-bold text-slate-700 capitalize">
+                                            {parcelas}x no {formaPagamento.replace('_', ' ')}
+                                        </span>
+                                    </div>
+                                    <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
+                                        <span className="text-[10px] font-black text-slate-900 uppercase">Total Geral</span>
+                                        <span className="text-xl font-black text-brand-600">{formatCurrency(valorTotal)}</span>
+                                    </div>
+                                </div>
+                            </GlassCard>
+
+                            <GlassCard className="p-0 overflow-hidden">
+                                <div className="p-4 bg-slate-50/50 border-b border-slate-100">
+                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Itens ({tens.length})</span>
+                                </div>
+                                <div className="max-h-[300px] overflow-y-auto">
+                                    <table className="w-full text-left text-[11px]">
+                                        <tbody className="divide-y divide-slate-50">
+                                            {tens.map((it, i) => (
+                                                <tr key={i} className="hover:bg-slate-50/50 transition-all">
+                                                    <td className="px-4 py-3">
+                                                        <div className="font-bold text-slate-700 uppercase">{it.nome}</div>
+                                                        {it.ncm && <div className="text-[9px] text-slate-400 font-mono">NCM: {it.ncm}</div>}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-slate-500">
+                                                        {it.quantidade} × {formatCurrency(it.custoUnitario)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right font-bold text-slate-800">
+                                                        {formatCurrency(it.custoUnitario * it.quantidade)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </GlassCard>
+                        </div>
+
+                        {/* COLUNA DIREITA: PAGAMENTO */}
+                        <div className="space-y-6">
+                            <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Condições de Pagamento</h3>
+                            
+                            <GlassCard className="p-6 space-y-6 shadow-brand-glow/5 border-brand-100">
+                                <div className="grid grid-cols-1 gap-6">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Forma de Pagamento</label>
+                                        <select 
+                                            value={formaPagamento} 
+                                            onChange={e => setFormaPagamento(e.target.value)}
+                                            className="select-glass bg-white h-12"
+                                        >
+                                            <option value="pix">PIX</option>
+                                            <option value="boleto">Boleto</option>
+                                            <option value="transferencia">Transferência</option>
+                                            <option value="cartao">Cartão</option>
+                                            <option value="dinheiro">Dinheiro</option>
+                                            <option value="prazo">A prazo</option>
+                                            <option value="a_combinar">A combinar</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Vencimento (1ª Parc)</label>
+                                            <input 
+                                                type="date" 
+                                                value={vencimento} 
+                                                min={today}
+                                                onChange={e => setVencimento(e.target.value)} 
+                                                className="input-glass h-12" 
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Parcelas</label>
+                                            <select 
+                                                value={parcelas} 
+                                                onChange={e => setParcelas(parseInt(e.target.value))}
+                                                className="select-glass bg-white h-12"
+                                            >
+                                                {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+                                                    <option key={n} value={n}>{n}x de {formatCurrency(Math.floor(valorTotal / n))}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {vencimento ? (
+                                    <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl space-y-3 animate-in fade-in zoom-in-95">
+                                        <div className="flex items-center gap-2 text-emerald-600 font-black text-[10px] uppercase tracking-widest">
+                                            <CheckCircle2 size={14}/> Preview Financeiro
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <p className="text-xs text-slate-600 leading-relaxed">
+                                                ✓ Será gerado em <strong>Contas a Pagar</strong>:
+                                                {parcelas === 1 ? (
+                                                    <span> 1 parcela de <strong>{formatCurrency(valorTotal)}</strong> vencendo em <strong>{formatDate(vencimento)}</strong>.</span>
+                                                ) : (
+                                                    <span> <strong>{parcelas}x</strong> de aproximadamente <strong>{formatCurrency(Math.floor(valorTotal / parcelas))}</strong> — com primeira parcela em <strong>{formatDate(vencimento)}</strong>.</span>
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-start gap-3 text-slate-400 italic text-[11px]">
+                                        <Info size={14} className="mt-0.5 shrink-0" />
+                                        Sem data de vencimento definida. Nenhum título será gerado no Financeiro.
+                                    </div>
+                                )}
+                            </GlassCard>
+
+                            <div className="flex flex-col gap-3 pt-4">
+                                <button 
+                                    onClick={handleConfirmar} 
+                                    disabled={loading}
+                                    className="btn-primary h-16 text-xl shadow-brand-glow w-full"
+                                >
+                                    {loading ? <Loader2 className="animate-spin" /> : "REGISTRAR COMPRA AGORA"}
+                                </button>
+                                <button onClick={() => setStep(2)} className="h-12 text-slate-400 font-bold text-xs hover:text-slate-600 transition-all uppercase tracking-widest text-center">
+                                    Voltar e Ajustar Preços
+                                </button>
                             </div>
                         </div>
-                    </GlassCard>
-
-                    <div className="flex flex-col gap-3">
-                        <button 
-                            onClick={handleConfirmar} 
-                            disabled={loading}
-                            className="btn-primary h-16 text-xl shadow-brand-glow w-full"
-                        >
-                            {loading ? <Loader2 className="animate-spin" /> : "REGISTRAR COMPRA AGORA"}
-                        </button>
-                        <button onClick={() => setStep(2)} className="h-12 text-slate-400 font-bold text-xs hover:text-slate-600 transition-all uppercase tracking-widest">
-                            Voltar e Corrigir Preços
-                        </button>
                     </div>
                 </div>
             )}

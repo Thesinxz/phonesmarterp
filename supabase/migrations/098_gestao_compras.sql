@@ -63,12 +63,12 @@ DROP POLICY IF EXISTS "empresa_compra_itens" ON compra_itens;
 
 CREATE POLICY "empresa_compras" ON compras
   USING (empresa_id IN (
-    SELECT empresa_id FROM profiles WHERE user_id = auth.uid()
+    SELECT empresa_id FROM public.usuarios WHERE auth_user_id = auth.uid()
   ));
 
 CREATE POLICY "empresa_compra_itens" ON compra_itens
   USING (empresa_id IN (
-    SELECT empresa_id FROM profiles WHERE user_id = auth.uid()
+    SELECT empresa_id FROM public.usuarios WHERE auth_user_id = auth.uid()
   ));
 
 -- Índices

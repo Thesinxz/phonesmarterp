@@ -22,6 +22,7 @@ import {
     Shield,
     Megaphone,
     ShoppingBag,
+    Truck,
     X
 } from "lucide-react";
 import { cn } from "@/utils/cn";
@@ -143,6 +144,13 @@ const navItems: NavItem[] = [
             { label: "DRE Gerencial", href: "/financeiro/dre", feature: "relatorios_avancados" },
             { label: "Crediário", href: "/financeiro/crediario" },
         ]
+    },
+    {
+        label: "Fornecedores",
+        href: "/fornecedores",
+        icon: Truck,
+        permission: "estoque",
+        section: "GESTÃO",
     },
     {
         label: "Relatórios",

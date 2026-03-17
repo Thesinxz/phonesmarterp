@@ -386,31 +386,73 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["xml_importacoes"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["xml_importacoes"]["Insert"]>;
-            }, fornecedores: {
+            },
+            fornecedores: {
                 Row: {
                     id: string;
                     empresa_id: string;
-                    nome: string;
+                    razao_social: string;
+                    nome: string; // Backward compatibility
+                    nome_fantasia: string | null;
                     cnpj: string | null;
-                    cpf: string | null;
                     ie: string | null;
-                    im: string | null;
+                    categoria: "pecas" | "aparelhos" | "acessorios" | "servicos" | "geral";
+                    prazo_medio_pagamento: number;
                     telefone: string | null;
+                    whatsapp: string | null;
                     email: string | null;
-                    contato: string | null;
-                    endereco_json: Json | null;
+                    site: string | null;
+                    cep: string | null;
+                    logradouro: string | null;
+                    numero: string | null;
+                    complemento: string | null;
+                    bairro: string | null;
+                    cidade: string | null;
+                    estado: string | null;
+                    pais: string | null;
+                    banco_nome: string | null;
+                    banco_agencia: string | null;
+                    banco_conta: string | null;
+                    banco_tipo: "corrente" | "poupanca" | "pix" | null;
+                    pix_chave: string | null;
                     observacoes: string | null;
                     ativo: boolean;
                     created_at: string;
                     updated_at: string;
                 };
-                Insert: Omit<{
-                    id: string; empresa_id: string; nome: string; cnpj: string | null; cpf: string | null;
-                    ie: string | null; im: string | null; telefone: string | null; email: string | null;
-                    contato: string | null; endereco_json: Json | null; observacoes: string | null;
-                    ativo: boolean; created_at: string; updated_at: string;
-                }, "id" | "created_at" | "updated_at">;
-                Update: Partial<{ nome: string; cnpj: string | null; cpf: string | null; ie: string | null; im: string | null; telefone: string | null; email: string | null; contato: string | null; endereco_json: Json | null; observacoes: string | null; ativo: boolean; }>;
+                Insert: {
+                    id?: string;
+                    empresa_id: string;
+                    razao_social: string;
+                    nome?: string; // Backward compatibility
+                    nome_fantasia?: string | null;
+                    cnpj?: string | null;
+                    ie?: string | null;
+                    categoria?: "pecas" | "aparelhos" | "acessorios" | "servicos" | "geral";
+                    prazo_medio_pagamento?: number;
+                    telefone?: string | null;
+                    whatsapp?: string | null;
+                    email?: string | null;
+                    site?: string | null;
+                    cep?: string | null;
+                    logradouro?: string | null;
+                    numero?: string | null;
+                    complemento?: string | null;
+                    bairro?: string | null;
+                    cidade?: string | null;
+                    estado?: string | null;
+                    pais?: string | null;
+                    banco_nome?: string | null;
+                    banco_agencia?: string | null;
+                    banco_conta?: string | null;
+                    banco_tipo?: "corrente" | "poupanca" | "pix" | null;
+                    pix_chave?: string | null;
+                    observacoes?: string | null;
+                    ativo?: boolean;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: Partial<Database["public"]["Tables"]["fornecedores"]["Insert"]>;
             },
             compras: {
                 Row: {
@@ -926,6 +968,7 @@ export type EquipeMeta = Database["public"]["Tables"]["equipe_metas"]["Row"];
 export type EquipeMetaCategoria = Database["public"]["Tables"]["equipe_metas_categorias"]["Row"];
 export type ProductType = Database["public"]["Tables"]["product_types"]["Row"];
 export type PricingSegment = Database["public"]["Tables"]["pricing_segments"]["Row"];
+export type Unit = Database["public"]["Tables"]["units"]["Row"];
 export type Brand = Database["public"]["Tables"]["brands"]["Row"];
 export type PaymentGatewayTable = Database["public"]["Tables"]["payment_gateways"]["Row"];
 

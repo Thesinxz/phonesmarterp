@@ -11,7 +11,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { useAuth } from "@/context/AuthContext";
 import { getCompras } from "@/app/actions/compras";
 import { formatCurrency } from "@/utils/formatCurrency";
-import { formatDate } from "@/utils/formatDate";
+import { formatDate, formatDateTime } from "@/utils/formatDate";
 import { cn } from "@/utils/cn";
 import { StatusBadge, OrigemBadge } from "@/components/compras/StatusBadges";
 
@@ -50,9 +50,9 @@ export default function ComprasPage() {
         `OC-${String(c.numero).padStart(3, '0')}`.includes(search)
     );
 
-    const isVencido = (data: string | null) => {
-        if (!data) return false;
-        return new Date(data) < new Date() && status !== 'pago';
+    const isVencido = (data: string | null, status: string) => {
+        if (!data || status === 'pago') return false;
+        return new Date(data) < new Date();
     };
 
     const totalPendente = filtered
@@ -175,12 +175,18 @@ export default function ComprasPage() {
                                         <td className="px-6 py-4 font-bold text-slate-800">
                                             {compra.fornecedor_nome || "Diverso"}
                                         </td>
-                                        <td className="px-6 py-4 text-slate-500 text-xs font-medium">
-                                            {formatDate(compra.data_compra)}
+                                        <td 
+                                            className="px-6 py-4 text-slate-500 text-xs font-medium cursor-help"
+                                            title={`Registrado em: ${formatDateTime(compra.created_at)}`}
+                                        >
+                                            <div className="flex items-center gap-1.5">
+                                                {formatDate(compra.data_compra)}
+                                                <Info size={10} className="text-slate-300" />
+                                            </div>
                                         </td>
                                         <td className={cn(
                                             "px-6 py-4 text-xs font-bold",
-                                            isVencido(compra.data_vencimento) ? "text-red-500" : "text-slate-500"
+                                            isVencido(compra.data_vencimento, compra.status) ? "text-red-500" : "text-slate-500"
                                         )}>
                                             {compra.data_vencimento ? formatDate(compra.data_vencimento) : "—"}
                                         </td>

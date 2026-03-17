@@ -17,8 +17,9 @@ export async function getCompras(empresaId: string, filters?: {
     .from('compras')
     .select(`
       id, numero, fornecedor_nome, fornecedor_id, 
-      data_compra, valor_total, status, origem, 
-      nota_fiscal_numero, created_at
+      data_compra, data_vencimento, valor_total, status, origem, 
+      nota_fiscal_numero, created_at,
+      compra_itens(count)
     `)
     .eq('empresa_id', empresaId)
     .order('created_at', { ascending: false })
@@ -67,6 +68,8 @@ export async function criarCompra(params: {
   fornecedorNome?: string
   dataCompra: string
   dataVencimento?: string
+  formaPagamento?: string
+  parcelas?: number
   notaFiscalNumero?: string
   observacoes?: string
   origem: 'manual' | 'xml_nfe' | 'ocr_pdf' | 'ocr_imagem'
@@ -77,7 +80,10 @@ export async function criarCompra(params: {
     precoVarejo: number
     precoAtacado: number
     itemType: 'peca' | 'celular' | 'acessorio' | 'outro'
+    itemTypeId?: string // Alias for catalogItemId if needed, but I'll use catalogItemId
+    catalogItemId?: string
     categoria?: string
+    ncm?: string
   }>
 }) {
   const supabase = await createClient()
@@ -87,12 +93,27 @@ export async function criarCompra(params: {
     (acc, item) => acc + item.custoUnitario * item.quantidade, 0
   )
 
+  // 1.1 Tentar vincular fornecedor pelo nome se ID estiver vazio
+  let finalFornecedorId = params.fornecedorId
+  if (!finalFornecedorId && params.fornecedorNome) {
+    const { data: existing } = await (supabase as any)
+      .from('fornecedores')
+      .select('id')
+      .eq('empresa_id', params.empresaId)
+      .ilike('razao_social', params.fornecedorNome)
+      .maybeSingle()
+    
+    if (existing) {
+      finalFornecedorId = existing.id
+    }
+  }
+
   // 2. Criar registro da compra
   const { data: compra, error: compraError } = await (supabase as any)
     .from('compras')
     .insert({
       empresa_id: params.empresaId,
-      fornecedor_id: params.fornecedorId || null,
+      fornecedor_id: finalFornecedorId || null,
       fornecedor_nome: params.fornecedorNome,
       data_compra: params.dataCompra,
       data_vencimento: params.dataVencimento || null,
@@ -101,6 +122,8 @@ export async function criarCompra(params: {
       observacoes: params.observacoes || null,
       origem: params.origem,
       status: 'pendente',
+      forma_pagamento: params.formaPagamento || null,
+      parcelas: params.parcelas || 1,
     })
     .select()
     .single()
@@ -110,15 +133,26 @@ export async function criarCompra(params: {
   // 3. Atualizar estoque, registrar movimentação e preparar itens para salvar
   for (const item of params.itens) {
     // 3.1 Buscar ou Criar item no catálogo
-    const { data: catalogItem } = await (supabase as any)
-      .from('catalog_items')
-      .select('id, stock_qty')
-      .eq('empresa_id', params.empresaId)
-      .ilike('name', item.nome)
-      .eq('item_type', item.itemType)
-      .maybeSingle()
+    let catalogItem = null
+    let itemId = item.catalogItemId || ''
 
-    let itemId = ''
+    if (itemId) {
+      const { data } = await (supabase as any)
+        .from('catalog_items')
+        .select('id, stock_qty')
+        .eq('id', itemId)
+        .maybeSingle()
+      catalogItem = data
+    } else {
+      const { data } = await (supabase as any)
+        .from('catalog_items')
+        .select('id, stock_qty')
+        .eq('empresa_id', params.empresaId)
+        .ilike('name', item.nome)
+        .eq('item_type', item.itemType)
+        .maybeSingle()
+      catalogItem = data
+    }
 
     if (catalogItem) {
       itemId = catalogItem.id
@@ -129,6 +163,7 @@ export async function criarCompra(params: {
           cost_price: item.custoUnitario,
           sale_price: item.precoVarejo,
           sale_price_usd: item.precoAtacado,
+          ncm: item.ncm || null,
           updated_at: new Date().toISOString()
         })
         .eq('id', catalogItem.id)
@@ -143,7 +178,8 @@ export async function criarCompra(params: {
           cost_price: item.custoUnitario,
           sale_price: item.precoVarejo,
           sale_price_usd: item.precoAtacado,
-          categoria: item.categoria || null
+          categoria: item.categoria || null,
+          ncm: item.ncm || null
         })
         .select('id')
         .single()
@@ -164,7 +200,8 @@ export async function criarCompra(params: {
         preco_venda_varejo: item.precoVarejo,
         preco_venda_atacado: item.precoAtacado,
         item_type: item.itemType,
-        categoria: item.categoria || null
+        categoria: item.categoria || null,
+        ncm: item.ncm || null
       })
 
     // 3.3 Registrar movimentação de estoque
@@ -204,21 +241,41 @@ export async function criarCompra(params: {
     }
   }
 
-  // 4. Lançar no financeiro (Contas a Pagar)
-  if (params.dataVencimento) {
-    await (supabase as any).from('financeiro_titulos').insert({
-      empresa_id: params.empresaId,
-      tipo: 'pagar',
-      descricao: `Compra OC-${String(compra.numero).padStart(3,'0')} · ${params.fornecedorNome || 'Fornecedor avulso'}`,
-      valor_total_centavos: valorTotal,
-      valor_pago_centavos: 0,
-      data_vencimento: params.dataVencimento,
-      status: 'pendente',
-      fornecedor_id: params.fornecedorId || null,
-      origem_tipo: 'compra',
-      origem_id: compra.id,
-      categoria: 'Mercadorias para revenda'
+  // 4. Lançar no financeiro (Contas a Pagar) com suporte a parcelamento
+  if (params.dataVencimento && (params.parcelas || 1) >= 1) {
+    const totalParcelas = params.parcelas || 1
+    const valorParcela = Math.floor(valorTotal / totalParcelas)
+    const resto = valorTotal % totalParcelas
+    const baseDate = new Date(params.dataVencimento)
+
+    const titulos = Array.from({ length: totalParcelas }, (_, i) => {
+      const vencimento = new Date(baseDate)
+      vencimento.setMonth(vencimento.getMonth() + i)
+
+      // Se mudar o mês e o dia original não existir no novo mês (ex: 31 de Jan -> Fev),
+      // o JS ajusta automaticamente para o começo do próximo mês. 
+      // Para ERPs, geralmente queremos o último dia do mês ou manter o dia se possível.
+      // O comportamento padrão do JS `setMonth` é razoável aqui.
+
+      return {
+        empresa_id: params.empresaId,
+        tipo: 'pagar',
+        descricao: totalParcelas > 1
+          ? `Compra OC-${String(compra.numero).padStart(3,'0')} · ${params.fornecedorNome || 'Fornecedor avulso'} (${i + 1}/${totalParcelas})`
+          : `Compra OC-${String(compra.numero).padStart(3,'0')} · ${params.fornecedorNome || 'Fornecedor avulso'}`,
+        valor_total_centavos: i === totalParcelas - 1 ? valorParcela + resto : valorParcela,
+        valor_pago_centavos: 0,
+        data_vencimento: vencimento.toISOString().split('T')[0],
+        status: 'pendente',
+        fornecedor_id: params.fornecedorId || null,
+        origem_tipo: 'compra',
+        origem_id: compra.id,
+        forma_pagamento: params.formaPagamento || null,
+        categoria: 'Mercadorias para revenda'
+      }
     })
+
+    await (supabase as any).from('financeiro_titulos').insert(titulos)
   }
 
   revalidatePath('/compras')

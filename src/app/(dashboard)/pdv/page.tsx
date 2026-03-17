@@ -22,11 +22,11 @@ import { SaleProductSearch } from "@/components/sales/SaleProductSearch";
 import { TradeInModal } from "@/components/sales/TradeInModal";
 import { confirmTradeIn } from "@/app/actions/trade-in";
 
-interface CartItem extends CatalogItem {
+type CartItem = CatalogItem & {
     quantity: number;
     imei_id: string | null;
     imei: string | null;
-}
+};
 
 export default function PDVPage() {
     const { profile } = useAuth();

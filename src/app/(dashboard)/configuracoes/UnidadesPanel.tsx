@@ -17,9 +17,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
 import { toast } from "sonner";
 import { getUnitsWithCapabilities, updateUnitCapabilities } from "@/app/actions/units";
-import { type Database } from "@/types/database";
-
-type Unit = Database["public"]["Tables"]["units"]["Row"];
+import { type Database, type Unit } from "@/types/database";
 
 export function UnidadesPanel() {
     const [units, setUnits] = useState<Unit[]>([]);

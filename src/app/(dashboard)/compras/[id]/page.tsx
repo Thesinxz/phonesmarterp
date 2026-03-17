@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import Link from "next/image";
+import Link from "next/link";
 import { 
     ShoppingCart, ArrowLeft, Printer, 
     Tag, CheckCircle2, DollarSign, 
@@ -54,6 +54,18 @@ export default function CompraDetalhePage() {
         }
     };
 
+    const totalVendaProjetada = compra?.compra_itens?.reduce(
+      (acc: number, it: any) => acc + ((it.preco_venda_varejo || 0) * (it.quantidade || 1)),
+      0
+    ) || 0;
+    const lucroProjetado = totalVendaProjetada - (compra?.valor_total || 0);
+    const markupMedio = (compra?.valor_total || 0) > 0
+      ? (totalVendaProjetada / (compra?.valor_total || 1)).toFixed(1)
+      : '0';
+    const lucroPercentual = (compra?.valor_total || 0) > 0
+      ? ((lucroProjetado / (compra?.valor_total || 1)) * 100).toFixed(0)
+      : '0';
+
     if (loading && !compra) {
         return (
             <div className="h-96 flex items-center justify-center flex-col gap-4 text-slate-400">
@@ -87,7 +99,14 @@ export default function CompraDetalhePage() {
                             <h1 className="text-2xl font-black text-slate-800 tracking-tight">{ocNumber}</h1>
                             <StatusBadge status={compra.status} />
                         </div>
-                        <p className="text-slate-500 text-sm font-medium mt-1">{compra.fornecedor_nome} · {formatDate(compra.created_at)}</p>
+                        <div className="flex flex-col mt-1">
+                            <p className="text-slate-500 text-sm font-medium">Fornecedor: {compra.fornecedor_nome || "Diverso"}</p>
+                            <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">
+                                <span>Nota de {formatDate(compra.data_compra)}</span>
+                                <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                                <span>Registrado em {formatDate(compra.created_at)}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -133,6 +152,18 @@ export default function CompraDetalhePage() {
                 </GlassCard>
                 <GlassCard className="p-5 flex flex-col gap-3">
                     <div className="flex items-center gap-2 text-slate-400">
+                        <DollarSign size={14}/>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Pagamento</span>
+                    </div>
+                    <p className="text-sm font-black text-slate-900 capitalize">
+                        {compra.forma_pagamento?.replace('_', ' ') || 'N/A'}
+                        {compra.parcelas > 1 && (
+                            <span className="text-xs font-bold text-slate-400 ml-1">· {compra.parcelas}x</span>
+                        )}
+                    </p>
+                </GlassCard>
+                <GlassCard className="p-5 flex flex-col gap-3">
+                    <div className="flex items-center gap-2 text-slate-400">
                         <Tag size={14}/>
                         <span className="text-[10px] font-black uppercase tracking-widest">Origem</span>
                     </div>
@@ -152,6 +183,7 @@ export default function CompraDetalhePage() {
                                 <tr>
                                     <th className="px-6 py-4">Produto</th>
                                     <th className="px-6 py-4 text-center">Tipo</th>
+                                    <th className="px-6 py-4 text-center">NCM</th>
                                     <th className="px-6 py-4 text-center">Qtd</th>
                                     <th className="px-6 py-4 text-right">Custo Unit.</th>
                                     <th className="px-6 py-4 text-right">Venda Varejo</th>
@@ -164,6 +196,9 @@ export default function CompraDetalhePage() {
                                         <td className="px-6 py-4 font-bold text-slate-800">{it.nome}</td>
                                         <td className="px-6 py-4 text-center">
                                             <span className="text-[9px] uppercase font-black bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full">{it.item_type}</span>
+                                        </td>
+                                        <td className="px-6 py-4 text-center font-mono text-xs text-slate-400">
+                                            {it.ncm || '—'}
                                         </td>
                                         <td className="px-6 py-4 text-center">{it.quantidade}</td>
                                         <td className="px-6 py-4 text-right">{formatCurrency(it.custo_unitario)}</td>
@@ -191,17 +226,23 @@ export default function CompraDetalhePage() {
                             
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-50">
-                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Lucro Projetado</p>
-                                    <p className="text-lg font-black text-emerald-600 mt-1">100% +</p>
-                                </div>
-                                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-50">
-                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Markup Médio</p>
-                                    <p className="text-lg font-black text-[#1E40AF] mt-1">2.0x</p>
-                                </div>
+                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Lucro Projetado</p>
+                                <p className="text-lg font-black text-emerald-600 mt-1">
+                                    {formatCurrency(lucroProjetado)}
+                                    <span className="text-xs ml-1 font-bold">+{lucroPercentual}%</span>
+                                </p>
+                            </div>
+                            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-50">
+                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Markup Médio</p>
+                                <p className="text-lg font-black text-[#1E40AF] mt-1">{markupMedio}x</p>
+                            </div>
                             </div>
                         </div>
 
-                        <button className="btn-primary w-full h-12 flex items-center justify-center gap-2 text-[11px] uppercase font-black tracking-widest">
+                        <button 
+                            onClick={() => router.push(`/estoque/etiquetas?compra_id=${compra.id}`)}
+                            className="btn-primary w-full h-12 flex items-center justify-center gap-2 text-[11px] uppercase font-black tracking-widest"
+                        >
                             <Tag size={16}/> Gerar Etiquetas (PDF)
                         </button>
                     </GlassCard>
