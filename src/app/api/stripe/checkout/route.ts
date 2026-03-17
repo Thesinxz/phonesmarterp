@@ -84,7 +84,7 @@ export async function POST(req: Request) {
                     },
                 ],
                 mode: "subscription",
-                automatic_payment_methods: { enabled: true },
+                payment_method_types: ["card"],
                 success_url: `${siteUrl}/dashboard?payment=success`,
                 cancel_url: `${siteUrl}/planos/checkout/${planId}?payment=cancel`,
                 metadata: {
