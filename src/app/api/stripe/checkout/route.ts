@@ -43,6 +43,10 @@ export async function POST(req: Request) {
         }
 
         // 2. Criar Checkout Session no Stripe
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+        
+        console.log("[Stripe Checkout] Creating session for:", { email: email || authSession.user.email, planId, amount });
+
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card", "pix"],
             line_items: [
@@ -62,8 +66,8 @@ export async function POST(req: Request) {
                 },
             ],
             mode: "subscription",
-            success_url: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/dashboard?payment=success`,
-            cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/planos/checkout/${planId}?payment=cancel`,
+            success_url: `${siteUrl}/dashboard?payment=success`,
+            cancel_url: `${siteUrl}/planos/checkout/${planId}?payment=cancel`,
             metadata: {
                 empresa_id: empresaId,
                 user_id: authSession.user.id,
@@ -75,8 +79,11 @@ export async function POST(req: Request) {
 
         return NextResponse.json({ url: session.url });
     } catch (error: any) {
-        console.error("[Stripe Checkout Error]", error);
-        return NextResponse.json({ error: "Erro interno ao processar pagamento." }, { status: 500 });
+        console.error("[Stripe Checkout Error Full]", error);
+        return NextResponse.json({ 
+            error: "Erro interno ao processar pagamento.",
+            details: error.message 
+        }, { status: 500 });
     }
 }
 

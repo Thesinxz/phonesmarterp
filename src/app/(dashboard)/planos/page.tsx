@@ -12,6 +12,8 @@ import { useState, useEffect, Suspense } from "react";
 import { PLAN_FEATURES, PLAN_LIMITS, Feature, Plan, getPlanForFeature, PLAN_NAMES } from "@/lib/plans/features";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
+import { Loader2, Settings2 } from "lucide-react";
 
 const plans = [
     {
@@ -128,10 +130,11 @@ function formatPrice(centavos: number) {
 }
 
 function PlanosContent() {
-    const { empresa } = useAuth();
+    const { empresa, profile } = useAuth();
     const searchParams = useSearchParams();
     const currentPlan = empresa?.plano || "starter";
     const [isAnual, setIsAnual] = useState(false);
+    const [loadingPortal, setLoadingPortal] = useState(false);
 
     const upgradeFeature = searchParams.get('upgrade');
     const fromPath = searchParams.get('from');
@@ -150,6 +153,30 @@ function PlanosContent() {
             }
         }
     }, [recommendedPlanId]);
+
+    const handleOpenPortal = async () => {
+        if (!empresa?.id) return;
+        setLoadingPortal(true);
+        try {
+            const response = await fetch("/api/stripe/portal", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ empresaId: empresa.id }),
+            });
+
+            const data = await response.json();
+            if (data.url) {
+                window.location.href = data.url;
+            } else {
+                toast.error(data.error || "Erro ao carregar portal de faturamento.");
+                setLoadingPortal(false);
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("Erro ao conectar com o servidor.");
+            setLoadingPortal(false);
+        }
+    };
 
     return (
         <div className="space-y-8 page-enter pb-12">
@@ -205,6 +232,24 @@ function PlanosContent() {
                         </span>
                     )}
                 </div>
+
+                {/* Botão de Gerenciamento (Stripe Portal) */}
+                {(profile?.stripe_customer_id) && (
+                    <div className="mt-6 flex justify-center">
+                        <button
+                            onClick={handleOpenPortal}
+                            disabled={loadingPortal}
+                            className="flex items-center gap-2 px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full text-xs font-bold transition-all border border-slate-200 disabled:opacity-50"
+                        >
+                            {loadingPortal ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                                <Settings2 className="w-3.5 h-3.5" />
+                            )}
+                            Gerenciar Minha Assinatura e Notas Fiscais
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Plans Grid */}

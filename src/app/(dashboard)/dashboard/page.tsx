@@ -28,11 +28,22 @@ import { formatCurrency } from "@/utils/formatCurrency";
 import { cn } from "@/utils/cn";
 import { getLowStockParts } from "@/app/actions/parts";
 import { useAuth } from "@/context/AuthContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { toast } from "sonner";
+import { CheckCircle2 } from "lucide-react";
 
 type DashboardTab = "geral" | "os" | "financeiro" | "estoque";
 
 export default function DashboardPage() {
+    return (
+        <Suspense fallback={<div className="animate-pulse h-96 bg-slate-50 rounded-xl" />}>
+            <DashboardContent />
+        </Suspense>
+    );
+}
+
+function DashboardContent() {
     const { profile, empresa } = useAuth();
     const { 
         metrics, loading, faturamentoDia, atividades, 
@@ -40,12 +51,24 @@ export default function DashboardPage() {
     } = useDashboardMetrics();
     const [lowStockParts, setLowStockParts] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<DashboardTab>("geral");
+    const searchParams = useSearchParams();
 
     useEffect(() => {
         if (profile) {
             getLowStockParts(profile.empresa_id).then(setLowStockParts);
         }
     }, [profile]);
+
+    useEffect(() => {
+        if (searchParams.get('payment') === 'success') {
+            toast.success("Assinatura confirmada! Seu plano foi atualizado com sucesso.", {
+                icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" />,
+                duration: 6000,
+            });
+            // Limpar a URL
+            window.history.replaceState({}, '', '/dashboard');
+        }
+    }, [searchParams]);
 
     const osHojeChange = metrics.osAbertasOntem;
     const clientesNovos = (metrics.clientesAtivos || 0) - (metrics.clientesMesAnterior || 0);

@@ -7,9 +7,9 @@ import { hasFeature, Feature, Plan } from './features'
  */
 export async function requireFeature(feature: Feature): Promise<void> {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
 
-  if (!user) {
+  if (!session?.user) {
     throw new Error('Não autenticado')
   }
 
@@ -17,8 +17,8 @@ export async function requireFeature(feature: Feature): Promise<void> {
   const { data: profile } = await supabase
     .from('usuarios')
     .select('plano, trial_end')
-    .eq('auth_user_id', user.id)
-    .single() as { data: any }
+    .eq('auth_user_id', session.user.id)
+    .single() as any
 
   if (!profile) {
     throw new Error('Perfil não encontrado')
