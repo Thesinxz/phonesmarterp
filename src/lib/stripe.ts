@@ -8,5 +8,5 @@ if (!stripeKey && process.env.NODE_ENV === "production") {
 }
 
 export const stripe = new Stripe(stripeKey, {
-    apiVersion: "2025-02-24-preview" as any,
+    apiVersion: "2023-10-16",
 });

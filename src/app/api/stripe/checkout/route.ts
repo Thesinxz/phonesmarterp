@@ -26,63 +26,90 @@ export async function POST(req: Request) {
 
         const planConfig = PLAN_PRICES[planId];
         if (!planConfig) {
+            console.error("[Stripe Checkout] Plano inválido:", planId);
             return NextResponse.json({ error: "Plano inválido." }, { status: 400 });
         }
 
-        const amount = isAnual ? planConfig.yearly : planConfig.monthly;
+        // Se for anual, o valor no Stripe deve ser o total do ano (mes * 12)
+        const amount = isAnual ? planConfig.yearly * 12 : planConfig.monthly;
 
         // 1. Verificar se o usuário realmente pertence a esta empresa e tem permissão (Admin)
-        const { data: profile } = await (supabase.from("usuarios") as any)
+        console.log("[Stripe Checkout] Verificando permissões para user:", authSession.user.id);
+        const { data: profile, error: dbError } = await (supabase.from("usuarios") as any)
             .select("id, empresa_id, papel")
             .eq("auth_user_id", authSession.user.id)
             .eq("empresa_id", empresaId)
             .single();
 
+        if (dbError) {
+            console.error("[Stripe Checkout] Erro ao buscar perfil:", dbError);
+            return NextResponse.json({ 
+                error: "Erro ao verificar permissões de acesso.", 
+                details: dbError.message 
+            }, { status: 500 });
+        }
+
         if (!profile || profile.papel !== 'admin') {
+            console.warn("[Stripe Checkout] Acesso negado. Papel:", profile?.papel);
             return NextResponse.json({ error: "Apenas administradores podem gerenciar a assinatura." }, { status: 403 });
         }
 
         // 2. Criar Checkout Session no Stripe
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
         
-        console.log("[Stripe Checkout] Creating session for:", { email: email || authSession.user.email, planId, amount });
-
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ["card", "pix"],
-            line_items: [
-                {
-                    price_data: {
-                        currency: "brl",
-                        product_data: {
-                            name: `${planConfig.name} — Phone Smart ERP`,
-                            description: `Assinatura ${isAnual ? 'anual' : 'mensal'} para controle total da sua assistência técnica.`,
-                        },
-                        unit_amount: amount,
-                        recurring: {
-                            interval: isAnual ? "year" : "month",
-                        },
-                    },
-                    quantity: 1,
-                },
-            ],
-            mode: "subscription",
-            success_url: `${siteUrl}/dashboard?payment=success`,
-            cancel_url: `${siteUrl}/planos/checkout/${planId}?payment=cancel`,
-            metadata: {
-                empresa_id: empresaId,
-                user_id: authSession.user.id,
-                plan_id: planId,
-                is_anual: String(isAnual)
-            },
-            customer_email: email || authSession.user.email,
+        console.log("[Stripe Checkout] Creating session:", { 
+            email: email || authSession.user.email, 
+            planId, 
+            amount,
+            isAnual,
+            siteUrl
         });
 
-        return NextResponse.json({ url: session.url });
+        try {
+            const session = await stripe.checkout.sessions.create({
+                payment_method_types: ["card", "pix"],
+                line_items: [
+                    {
+                        price_data: {
+                            currency: "brl",
+                            product_data: {
+                                name: `${planConfig.name} — Phone Smart ERP`,
+                                description: `Assinatura ${isAnual ? 'anual' : 'mensal'} para controle total da sua assistência técnica.`,
+                            },
+                            unit_amount: amount,
+                            recurring: {
+                                interval: isAnual ? "year" : "month",
+                            },
+                        },
+                        quantity: 1,
+                    },
+                ],
+                mode: "subscription",
+                success_url: `${siteUrl}/dashboard?payment=success`,
+                cancel_url: `${siteUrl}/planos/checkout/${planId}?payment=cancel`,
+                metadata: {
+                    empresa_id: empresaId,
+                    user_id: authSession.user.id,
+                    plan_id: planId,
+                    is_anual: String(isAnual)
+                },
+                customer_email: email || authSession.user.email,
+            });
+
+            console.log("[Stripe Checkout] Session created successfully:", session.id);
+            return NextResponse.json({ url: session.url });
+        } catch (stripeError: any) {
+            console.error("[Stripe Checkout] Erro direto do Stripe:", stripeError);
+            return NextResponse.json({ 
+                error: `Erro no Stripe: ${stripeError.message}`,
+                details: stripeError 
+            }, { status: 500 });
+        }
     } catch (error: any) {
         console.error("[Stripe Checkout Error Full]", error);
         return NextResponse.json({ 
-            error: "Erro interno ao processar pagamento.",
-            details: error.message 
+            error: `Erro inesperado: ${error.message}`,
+            details: error
         }, { status: 500 });
     }
 }

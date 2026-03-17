@@ -10,8 +10,9 @@ self.addEventListener('activate', (event) => {
 
 // Cache básico para offline (opcional mas recomendado)
 self.addEventListener('fetch', (event) => {
+    const url = new URL(event.request.url);
     // Não interceptar chamadas de API ou de terceiros (Stripe, Supabase, etc)
-    if (event.request.url.includes('/api/') || !event.request.url.startsWith(self.location.origin)) {
+    if (url.pathname.includes('/api/') || url.origin !== self.location.origin) {
         return;
     }
     // Pass-through por enquanto, apenas para ativar o PWA
