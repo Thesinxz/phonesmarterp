@@ -148,3 +148,19 @@ body {
 .page-enter {
   animation: fadeIn 0.3s ease-out, slideUp 0.3s ease-out;
 }
+
+@keyframes loading-bar {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(0); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(10px); }
+  to { transform: translateY(0); }
+}

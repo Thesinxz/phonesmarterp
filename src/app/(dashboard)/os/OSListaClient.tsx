@@ -94,9 +94,9 @@ export function OSListaClient({
 
     useEffect(() => {
         // Skip first load since we have initial data
-        if (currentPage === 1 && search === "" && filterTecnico === "" && filterStart === "" && filterEnd === "") return;
+        if (currentPage === 1 && !search && !filterTecnico && !filterStart && !filterEnd) return;
         loadOS();
-    }, [currentPage, viewMode, filterTecnico, filterStart, filterEnd]);
+    }, [currentPage, filterTecnico, filterStart, filterEnd]);
 
     // Busca com debounce
     useEffect(() => {
@@ -157,7 +157,12 @@ export function OSListaClient({
             </div>
 
             {/* Filtros e Busca */}
-            <div className="flex flex-wrap items-center gap-4 bg-slate-50/50 p-4 rounded-3xl border border-slate-100">
+            <div className="flex flex-wrap items-center gap-4 bg-slate-50/50 p-4 rounded-3xl border border-slate-100 relative overflow-hidden">
+                {/* Subtle loading bar */}
+                {loading && (
+                    <div className="absolute top-0 left-0 h-1 bg-indigo-500 animate-[loading-bar_2s_infinite]" />
+                )}
+
                 <div className="flex-1 min-w-[280px] relative group">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
                     <input
@@ -216,178 +221,180 @@ export function OSListaClient({
             </div>
 
             {/* Conteúdo Principal */}
-            {loading && orders.length === 0 ? (
-                viewMode === "kanban" ? (
+            <div className={cn("transition-opacity duration-300", loading && orders.length > 0 ? "opacity-60 pointer-events-none" : "opacity-100")}>
+                {loading && orders.length === 0 ? (
+                    viewMode === "kanban" ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 pb-10">
+                            {STAGES.map((stage) => (
+                                <div key={stage.status} className="flex flex-col gap-3">
+                                    <div className="flex items-center gap-2 px-1">
+                                        <div className={cn("w-1.5 h-4 rounded-full", stage.color)} />
+                                        <div className="h-3 w-20 bg-slate-100 rounded animate-pulse" />
+                                    </div>
+                                    <div className="bg-slate-50/40 rounded-[2rem] p-2 border border-slate-100 min-h-[300px]">
+                                        <div className="space-y-2">
+                                            {[1, 2, 3].map((i) => (
+                                                <div key={i} className="bg-white rounded-2xl p-4 animate-pulse shadow-sm border border-slate-100">
+                                                    <div className="h-3 w-3/4 bg-slate-100 rounded mb-3" />
+                                                    <div className="h-2 w-1/2 bg-slate-50 rounded" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="h-96 flex items-center justify-center">
+                            <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                    )
+                ) : viewMode === "kanban" ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 pb-10">
                         {STAGES.map((stage) => (
-                            <div key={stage.status} className="flex flex-col gap-3">
-                                <div className="flex items-center gap-2 px-1">
-                                    <div className={cn("w-1.5 h-4 rounded-full", stage.color)} />
-                                    <div className="h-3 w-20 bg-slate-100 rounded animate-pulse" />
-                                </div>
-                                <div className="bg-slate-50/40 rounded-[2rem] p-2 border border-slate-100 min-h-[300px]">
-                                    <div className="space-y-2">
-                                        {[1, 2, 3].map((i) => (
-                                            <div key={i} className="bg-white rounded-2xl p-4 animate-pulse shadow-sm border border-slate-100">
-                                                <div className="h-3 w-3/4 bg-slate-100 rounded mb-3" />
-                                                <div className="h-2 w-1/2 bg-slate-50 rounded" />
-                                            </div>
-                                        ))}
+                            <div key={stage.status} className="flex flex-col gap-3 min-w-0 transition-all">
+                                <div className="flex items-center justify-between px-1">
+                                    <div className="flex items-center gap-2">
+                                        <div className={cn("w-1.5 h-4 rounded-full", stage.color)} />
+                                        <h3 className="font-black text-slate-700 text-[10px] uppercase tracking-wider">{stage.label}</h3>
+                                        <span className="px-1.5 py-0.5 bg-white text-slate-400 text-[9px] font-black rounded-lg border border-slate-100 shadow-sm">
+                                            {orders.filter(o => o.status === stage.status).length}
+                                        </span>
                                     </div>
+                                </div>
+
+                                <div
+                                    className="flex-1 bg-slate-50/40 rounded-[2rem] p-2 border border-slate-100 min-h-[300px] transition-colors hover:bg-slate-50/60"
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        const osId = e.dataTransfer.getData("text/plain");
+                                        if (osId) handleMoveStatus(osId, stage.status);
+                                    }}
+                                >
+                                    <div className="flex flex-col gap-2">
+                                        {orders
+                                            .filter(o => o.status === stage.status)
+                                            .map(os => (
+                                                <OSKanbanCard
+                                                    key={os.id}
+                                                    os={os}
+                                                    onClick={() => router.push(`/os/${os.id}`)}
+                                                    onMoveStatus={(id, status) => handleMoveStatus(id, status as OsStatus)}
+                                                    onDelete={handleDeleteOS}
+                                                    onEdit={() => handleEditOS(os)}
+                                                />
+                                            ))
+                                        }
+                                    </div>
+                                    {orders.filter(o => o.status === stage.status).length === 0 && (
+                                        <div className="h-full flex items-center justify-center py-20 opacity-20">
+                                            <p className="text-[9px] uppercase font-black text-slate-400 tracking-widest">Vazio</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}
                     </div>
                 ) : (
-                    <div className="h-96 flex items-center justify-center">
-                        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                    </div>
-                )
-            ) : viewMode === "kanban" ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 pb-10">
-                    {STAGES.map((stage) => (
-                        <div key={stage.status} className="flex flex-col gap-3 min-w-0 transition-all">
-                            <div className="flex items-center justify-between px-1">
-                                <div className="flex items-center gap-2">
-                                    <div className={cn("w-1.5 h-4 rounded-full", stage.color)} />
-                                    <h3 className="font-black text-slate-700 text-[10px] uppercase tracking-wider">{stage.label}</h3>
-                                    <span className="px-1.5 py-0.5 bg-white text-slate-400 text-[9px] font-black rounded-lg border border-slate-100 shadow-sm">
-                                        {orders.filter(o => o.status === stage.status).length}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div
-                                className="flex-1 bg-slate-50/40 rounded-[2rem] p-2 border border-slate-100 min-h-[300px] transition-colors hover:bg-slate-50/60"
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => {
-                                    e.preventDefault();
-                                    const osId = e.dataTransfer.getData("text/plain");
-                                    if (osId) handleMoveStatus(osId, stage.status);
-                                }}
-                            >
-                                <div className="flex flex-col gap-2">
-                                    {orders
-                                        .filter(o => o.status === stage.status)
-                                        .map(os => (
-                                            <OSKanbanCard
-                                                key={os.id}
-                                                os={os}
-                                                onClick={() => router.push(`/os/${os.id}`)}
-                                                onMoveStatus={(id, status) => handleMoveStatus(id, status as OsStatus)}
-                                                onDelete={handleDeleteOS}
-                                                onEdit={() => handleEditOS(os)}
-                                            />
-                                        ))
-                                    }
-                                </div>
-                                {orders.filter(o => o.status === stage.status).length === 0 && (
-                                    <div className="h-full flex items-center justify-center py-20 opacity-20">
-                                        <p className="text-[9px] uppercase font-black text-slate-400 tracking-widest">Vazio</p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            ) : (
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-xl overflow-x-auto scrollbar-thin">
-                    <table className="w-full text-left border-collapse min-w-[800px]">
-                        <thead>
-                            <tr className="bg-slate-50 border-b border-slate-100">
-                                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Número</th>
-                                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Cliente</th>
-                                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Equipamento</th>
-                                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Status</th>
-                                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Criada em</th>
-                                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Valor</th>
-                                <th className="px-6 py-4"></th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                            {orders.map(os => {
-                                const stage = STAGES.find(s => s.status === os.status);
-                                return (
-                                    <tr
-                                        key={os.id}
-                                        onClick={() => router.push(`/os/${os.id}`)}
-                                        className="hover:bg-slate-50/80 cursor-pointer transition-all group"
-                                    >
-                                        <td className="px-6 py-4">
-                                            <span className="text-xs font-bold text-slate-400 group-hover:text-indigo-600">#{String(os.numero).padStart(4, '0')}</span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-slate-700 leading-none mb-1">{os.cliente?.nome}</span>
-                                                <span className="text-[10px] text-slate-400">{os.cliente?.telefone || "Sem telefone"}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-slate-700 leading-none mb-1">{os.equipamento?.marca} {os.equipamento?.modelo}</span>
-                                                <span className="text-[10px] text-slate-400">{os.problema_relatado?.substring(0, 30)}...</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={cn("px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter", stage ? stage.color.replace('bg-', 'text-').replace('500', '700') + " " + stage.color.replace('500', '100') : "bg-slate-100 text-slate-700")}>
-                                                {stage?.label || os.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                                                <Calendar size={12} className="text-slate-300" />
-                                                {new Date(os.created_at).toLocaleDateString()}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-1 text-sm font-black text-slate-800">
-                                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">R$</span>
-                                                {(os.valor_total_centavos / 100).toFixed(2)}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleEditOS(os);
-                                                    }}
-                                                    className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100"
-                                                >
-                                                    <Edit3 size={16} />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if (window.confirm("Deseja excluir permanentemente esta OS?")) {
-                                                            handleDeleteOS(os.id);
-                                                        }
-                                                    }}
-                                                    className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                                <div className="p-2 text-slate-300 group-hover:text-indigo-500 transition-all">
-                                                    <ArrowRight size={18} />
+                    <div className="bg-white rounded-3xl border border-slate-100 shadow-xl overflow-x-auto scrollbar-thin">
+                        <table className="w-full text-left border-collapse min-w-[800px]">
+                            <thead>
+                                <tr className="bg-slate-50 border-b border-slate-100">
+                                    <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Número</th>
+                                    <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Cliente</th>
+                                    <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Equipamento</th>
+                                    <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Status</th>
+                                    <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Criada em</th>
+                                    <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-wider">Valor</th>
+                                    <th className="px-6 py-4"></th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {orders.map(os => {
+                                    const stage = STAGES.find(s => s.status === os.status);
+                                    return (
+                                        <tr
+                                            key={os.id}
+                                            onClick={() => router.push(`/os/${os.id}`)}
+                                            className="hover:bg-slate-50/80 cursor-pointer transition-all group"
+                                        >
+                                            <td className="px-6 py-4">
+                                                <span className="text-xs font-bold text-slate-400 group-hover:text-indigo-600">#{String(os.numero).padStart(4, '0')}</span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold text-slate-700 leading-none mb-1">{os.cliente?.nome}</span>
+                                                    <span className="text-[10px] text-slate-400">{os.cliente?.telefone || "Sem telefone"}</span>
                                                 </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )
-                            })}
-                        </tbody>
-                    </table>
-                    {orders.length === 0 && (
-                        <div className="py-20 text-center flex flex-col items-center justify-center bg-slate-50/20">
-                            <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4">
-                                <Search className="text-slate-200" size={32} />
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold text-slate-700 leading-none mb-1">{os.equipamento?.marca} {os.equipamento?.modelo}</span>
+                                                    <span className="text-[10px] text-slate-400">{os.problema_relatado?.substring(0, 30)}...</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={cn("px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter", stage ? stage.color.replace('bg-', 'text-').replace('500', '700') + " " + stage.color.replace('500', '100') : "bg-slate-100 text-slate-700")}>
+                                                    {stage?.label || os.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                                    <Calendar size={12} className="text-slate-300" />
+                                                    {new Date(os.created_at).toLocaleDateString()}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-1 text-sm font-black text-slate-800">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">R$</span>
+                                                    {(os.valor_total_centavos / 100).toFixed(2)}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleEditOS(os);
+                                                        }}
+                                                        className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100"
+                                                    >
+                                                        <Edit3 size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (window.confirm("Deseja excluir permanentemente esta OS?")) {
+                                                                handleDeleteOS(os.id);
+                                                            }
+                                                        }}
+                                                        className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                    <div className="p-2 text-slate-300 group-hover:text-indigo-500 transition-all">
+                                                        <ArrowRight size={18} />
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                        {orders.length === 0 && (
+                            <div className="py-20 text-center flex flex-col items-center justify-center bg-slate-50/20">
+                                <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4">
+                                    <Search className="text-slate-200" size={32} />
+                                </div>
+                                <h3 className="text-slate-800 font-bold">Nenhuma OS encontrada</h3>
+                                <p className="text-slate-400 text-sm">Tente ajustar sua busca ou filtros.</p>
                             </div>
-                            <h3 className="text-slate-800 font-bold">Nenhuma OS encontrada</h3>
-                            <p className="text-slate-400 text-sm">Tente ajustar sua busca ou filtros.</p>
-                        </div>
-                    )}
-                </div>
-            )}
+                        )}
+                    </div>
+                )}
+            </div>
 
             {/* Modal de Edição */}
             {showEditModal && selectedOS && (
