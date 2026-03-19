@@ -26,8 +26,20 @@ export function AdjustStockModal({ itemId, units, onClose, onSuccess }: AdjustSt
 
     async function handleAdjust() {
         if (!profile) return;
-        if (!form.unitId || !form.qty || !form.reason) {
-            toast.error("Preencha todos os campos");
+        if (!form.unitId) {
+            toast.error("Selecione a unidade");
+            return;
+        }
+        
+        const qtyVal = String(form.qty).trim();
+        if (!qtyVal) {
+            toast.error("Informe a quantidade");
+            return;
+        }
+
+        const qtyInt = parseInt(qtyVal);
+        if (isNaN(qtyInt) || qtyInt < 0) {
+            toast.error("Quantidade inválida");
             return;
         }
 
@@ -38,8 +50,8 @@ export function AdjustStockModal({ itemId, units, onClose, onSuccess }: AdjustSt
                 itemId,
                 form.unitId,
                 form.type,
-                parseInt(form.qty),
-                form.reason,
+                qtyInt,
+                form.reason || "Ajuste manual",
                 profile.id
             );
             toast.success("Estoque ajustado!");
@@ -63,7 +75,7 @@ export function AdjustStockModal({ itemId, units, onClose, onSuccess }: AdjustSt
                         </div>
                         <div>
                             <h2 className="text-lg font-bold text-slate-800">Ajuste de Estoque</h2>
-                            <p className="text-xs text-slate-500">Movimente o estoque entre unidades</p>
+                            <p className="text-xs text-slate-500">Adicione, remova ou defina o estoque fixo</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-lg text-slate-400">

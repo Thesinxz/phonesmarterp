@@ -15,7 +15,7 @@ function EtiquetasPrintContent() {
     const searchParams = useSearchParams();
     const [itens, setItens] = useState<(Produto & { quantity: number })[]>([]);
     const [subdominio, setSubdominio] = useState<string>("");
-    const [loading, setLoading] = useState(true);
+    const [a4Config, setA4Config] = useState<any>(null);
 
     const format = searchParams.get("f") || "40x25";
     const type = searchParams.get("t") || "barcode";
@@ -27,10 +27,30 @@ function EtiquetasPrintContent() {
         try {
             const data: PrintItem[] = JSON.parse(rawData);
             loadData(data);
+            if (format === 'a4') {
+                loadA4Config();
+            }
         } catch (e) {
             console.error("Erro ao processar dados de impressão:", e);
         }
     }, [searchParams]);
+
+    async function loadA4Config() {
+        try {
+            const supabase = createClient();
+            const { data } = await supabase
+                .from('configuracoes')
+                .select('*')
+                .eq('chave', 'etiqueta_a4')
+                .maybeSingle();
+            
+            if (data?.valor) {
+                setA4Config(data.valor);
+            }
+        } catch (e) {
+            console.error("Erro ao carregar config A4", e);
+        }
+    }
 
     async function loadData(printData: PrintItem[]) {
         try {
@@ -38,8 +58,8 @@ function EtiquetasPrintContent() {
             const ids = printData.map(d => d.id);
 
             // 1. Buscar Produtos
-            const { data: products, error: prodError } = await supabase
-                .from('produtos')
+            const { data: products, error: prodError } = await (supabase as any)
+                .from('catalog_items') // Usando catalog_items agora que as consultas são mais complexas
                 .select('*')
                 .in('id', ids);
 
@@ -58,8 +78,8 @@ function EtiquetasPrintContent() {
 
             const merged = printData.map(pd => {
                 const prod = products?.find((p: any) => p.id === pd.id);
-                return prod ? { ...(prod as any), quantity: pd.q, p: (pd as any).p } : null;
-            }).filter(Boolean) as (Produto & { quantity: number; p: number })[];
+                return prod ? { ...(prod as any), quantity: pd.q, p: pd.p } : null;
+            }).filter(Boolean) as (any & { quantity: number; p: number })[];
 
             setItens(merged);
         } catch (error) {
@@ -69,7 +89,7 @@ function EtiquetasPrintContent() {
             // Auto-trigger print
             setTimeout(() => {
                 window.print();
-            }, 1200);
+            }, 1500);
         }
     }
 
@@ -83,6 +103,79 @@ function EtiquetasPrintContent() {
     const allLabels = itens.flatMap(item =>
         Array.from({ length: item.quantity }).map(() => item)
     );
+
+    if (format === 'a4' && a4Config) {
+        return (
+            <div className="bg-white min-h-screen p-0 m-0 print:m-0">
+                <style dangerouslySetInnerHTML={{
+                    __html: `
+                    @media print {
+                        @page { size: A4; margin: 0; }
+                        body { margin: 0; padding: 0; background: white; }
+                    }
+                    .a4-container {
+                        display: grid;
+                        grid-template-columns: repeat(${a4Config.colunas}, ${a4Config.largura}cm);
+                        gap: ${parseFloat(a4Config.densidadeVertical) - parseFloat(a4Config.altura)}cm ${parseFloat(a4Config.densidadeHorizontal) - parseFloat(a4Config.largura)}cm;
+                        padding-top: ${a4Config.margemSuperior}cm;
+                        padding-left: ${a4Config.margemLateral}cm;
+                        width: 21cm;
+                        height: 29.7cm;
+                        box-sizing: border-box;
+                        background: white;
+                    }
+                    .label-item-a4 {
+                        width: ${a4Config.largura}cm;
+                        height: ${a4Config.altura}cm;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        overflow: hidden;
+                        text-align: center;
+                        box-sizing: border-box;
+                        padding: 0.1cm;
+                        border: 1px dashed #f1f5f9; /* Apenas visual, some no print ou fica bem sutil */
+                    }
+                    @media print { .label-item-a4 { border: none; } }
+                `}} />
+                <div className="a4-container">
+                    {allLabels.map((item, i) => {
+                        const identifier = item.codigo_barras || item.sku || item.imei || "S/COD";
+                        const vitrineUrl = subdominio
+                            ? `${window.location.origin}/v/${subdominio}/produto/${item.id}`
+                            : `${window.location.origin}/p/${item.id}`;
+
+                        const codeUrl = type === 'barcode'
+                            ? `https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(identifier)}&code=Code128&dpi=96`
+                            : `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(vitrineUrl)}`;
+
+                        return (
+                            <div key={i} className="label-item-a4">
+                                <div style={{ fontSize: a4Config.tamanhoFonte, fontFamily: a4Config.fonte }} className="font-bold uppercase line-clamp-2 leading-none mb-1">
+                                    {a4Config.descricaoTopo && <span className="block text-[0.6em] mb-0.5">{a4Config.descricaoTopo}</span>}
+                                    {item.name || item.nome}
+                                </div>
+                                {a4Config.exibirValor === "Sim" && (
+                                    <div style={{ fontSize: a4Config.tamanhoFonteValor === 'Grande' ? '1.5em' : '1em' }} className="font-black">
+                                        R$ {((item.p ? item.p : (item.sale_price || item.preco_venda_centavos)) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </div>
+                                )}
+                                {a4Config.exibirCodigoBarra === "Sim" && (
+                                    <div className="flex-1 w-full flex flex-col items-center justify-center min-h-0">
+                                        <img src={codeUrl} alt="Code" className="max-h-full max-w-full object-contain" />
+                                        {a4Config.exibirNumeroCodigoBarra === "Sim" && (
+                                            <span className="text-[0.6em] font-mono mt-0.5">{identifier}</span>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-white min-h-screen">
@@ -112,7 +205,7 @@ function EtiquetasPrintContent() {
                                 ${format === "40x25" ? "text-[7px]" :
                                     format === "50x30" ? "text-[9px]" : "text-2xl mb-4"}
                             `}>
-                                {item.nome}
+                                {item.name || item.nome}
                             </div>
 
                             {/* Preço */}
@@ -121,7 +214,7 @@ function EtiquetasPrintContent() {
                                     ${format === "40x25" ? "text-sm" :
                                         format === "50x30" ? "text-lg" : "text-[80px]"}
                                 `}>
-                                    R$ {((item as any).p ? (item as any).p / 100 : item.preco_venda_centavos / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    R$ {((item as any).p ? (item as any).p / 100 : (item.sale_price || item.preco_venda_centavos) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </span>
                             </div>
 

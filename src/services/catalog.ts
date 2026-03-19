@@ -28,15 +28,22 @@ export async function createCatalogItem(item: Partial<CatalogItem> & { empresa_i
 }
 
 export async function updateCatalogItem(id: string, item: Partial<CatalogItem>) {
+    console.log("[Service] Updating catalog item:", id);
     const supabase = await createClient();
     
     // Antes de atualizar, buscar o estado atual para ver se é uma precificação de trade-in
-    const { data: currentItem } = await (supabase as any)
+    const { data: currentItem, error: fetchError } = await (supabase as any)
         .from("catalog_items")
         .select("sale_price, empresa_id")
         .eq("id", id)
         .single();
 
+    if (fetchError) {
+        console.error("[Service] Error fetching current item state:", fetchError);
+        // Não jogamos erro aqui para permitir a atualização mesmo se o select falhar (por RLS ou algo assim)
+    }
+    
+    console.log("[Service] Executing update for:", id);
     const { data, error } = await (supabase as any)
         .from("catalog_items")
         .update(item)
@@ -45,40 +52,49 @@ export async function updateCatalogItem(id: string, item: Partial<CatalogItem>) 
         .single();
         
     if (error) {
-        console.error("Error updating catalog item:", error);
+        console.error("[Service] Error updating catalog item:", error);
         throw new Error(error.message);
     }
 
+    console.log("[Service] Update successful for:", id);
+
     // Lógica de precificação de trade-in:
     // Se sale_price era 0 (ou nulo) e agora é > 0, e existe um IMEI vinculando 'trade_in'
-    if ((!currentItem?.sale_price || currentItem.sale_price === 0) && item.sale_price && item.sale_price > 0) {
-        const { data: imeiRecord } = await (supabase as any)
-            .from("device_imeis")
-            .select("id, imei")
-            .eq("catalog_item_id", id)
-            .eq("status", 'trade_in')
-            .maybeSingle();
-
-        if (imeiRecord) {
-            // Transição para disponível em estoque
-            await (supabase as any)
+    if (currentItem && (!currentItem.sale_price || currentItem.sale_price === 0) && item.sale_price && item.sale_price > 0) {
+        try {
+            console.log("[Service] Checking trade-in status for item:", id);
+            const { data: imeiRecord } = await (supabase as any)
                 .from("device_imeis")
-                .update({ status: 'em_estoque', updated_at: new Date().toISOString() })
-                .eq("id", imeiRecord.id);
+                .select("id, imei")
+                .eq("catalog_item_id", id)
+                .eq("status", 'trade_in')
+                .maybeSingle();
 
-            await (supabase as any).from("imei_history").insert({
-                tenant_id: currentItem.empresa_id,
-                imei_id: imeiRecord.id,
-                imei: imeiRecord.imei,
-                event_type: 'precificado',
-                from_status: 'trade_in',
-                to_status: 'em_estoque',
-                notes: 'Aparelho de trade-in precificado e disponível para venda',
-                // Aqui não temos performedBy fácil no service, mas podemos deixar registrado o evento
-            });
+            if (imeiRecord) {
+                console.log("[Service] Found trade-in record, updating status to 'em_estoque'");
+                // Transição para disponível em estoque
+                await (supabase as any)
+                    .from("device_imeis")
+                    .update({ status: 'em_estoque', updated_at: new Date().toISOString() })
+                    .eq("id", imeiRecord.id);
+
+                await (supabase as any).from("imei_history").insert({
+                    tenant_id: currentItem.empresa_id,
+                    imei_id: imeiRecord.id,
+                    imei: imeiRecord.imei,
+                    event_type: 'precificado',
+                    from_status: 'trade_in',
+                    to_status: 'em_estoque',
+                    notes: 'Aparelho de trade-in precificado e disponível para venda',
+                });
+            }
+        } catch (tradeInErr) {
+            console.error("[Service] Trade-in logic failed (non-critical):", tradeInErr);
+            // Seguimos sem estourar erro pois o update principal funcionou
         }
     }
     
+    console.log("[Service] Revalidating path /estoque");
     revalidatePath('/estoque');
     return data as CatalogItem;
 }
@@ -86,6 +102,10 @@ export async function updateCatalogItem(id: string, item: Partial<CatalogItem>) 
 export async function deleteCatalogItem(id: string) {
     const supabase = await createClient();
     
+    // Manual cleanup of related records in case DB cascade is not set
+    await (supabase as any).from("stock_movements").delete().eq("catalog_item_id", id);
+    await (supabase as any).from("unit_stock").delete().eq("catalog_item_id", id);
+
     const { error } = await (supabase as any)
         .from("catalog_items")
         .delete()
@@ -137,16 +157,17 @@ export async function getCatalogItems(
         .from("catalog_items")
         .select(`
             *,
-            brand:brands(name)
+            brand:brands(name),
+            unit_stock(qty, unit:units(name))
         `)
         .eq("empresa_id", empresa_id)
         .order("created_at", { ascending: false });
         
     if (filters?.search) {
-        // Full text search
-        // Using ilike on multiple columns or Postgres search vector
-        const q = filters.search.trim();
-        query = query.or(`name.ilike.%${q}%,subcategory.ilike.%${q}%,compatible_models.ilike.%${q}%,imei.ilike.%${q}%,barcode.ilike.%${q}%,sku.ilike.%${q}%`);
+        const words = filters.search.trim().split(/\s+/).filter(w => w.length > 0);
+        words.forEach(word => {
+            query = query.or(`name.ilike.%${word}%,subcategory.ilike.%${word}%,compatible_models.ilike.%${word}%,imei.ilike.%${word}%,barcode.ilike.%${word}%,sku.ilike.%${word}%`);
+        });
     }
     
     if (filters?.item_type && filters.item_type !== 'todos') {
@@ -179,4 +200,20 @@ export async function getCatalogItems(
     }
     
     return filteredData;
+}
+export async function bulkUpdateCatalogItems(ids: string[], updates: Partial<CatalogItem>) {
+    const supabase = await createClient();
+    
+    const { error } = await (supabase as any)
+        .from("catalog_items")
+        .update(updates)
+        .in("id", ids);
+        
+    if (error) {
+        console.error("Error bulk updating items:", error);
+        throw new Error(error.message);
+    }
+    
+    revalidatePath('/estoque');
+    return true;
 }

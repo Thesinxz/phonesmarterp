@@ -28,6 +28,9 @@ import {
     Activity,
     Clock,
     Printer,
+    Plus,
+    Search,
+    ChevronDown,
     X
 } from "lucide-react";
 import { getProdutoById, updateProduto, deleteProduto } from "@/services/estoque";
@@ -39,6 +42,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { calculateSuggestedPriceBySegment } from "@/utils/product-pricing";
 import { cn } from "@/utils/cn";
 import { toast } from "sonner";
+import { suggestNCM } from "@/utils/ncm-lookup";
 import { useRealtimeSubscription } from "@/hooks/useRealtime";
 import { createClient } from "@/lib/supabase/client";
 import { type ProductType, type Brand, type PricingSegment, type PaymentGatewayTable, type CatalogItem } from "@/types/database";
@@ -103,10 +107,17 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
         cfop: "5102",
         origem: "0",
         cest: "",
+        // Peças
+        part_type: "",
+        quality: "",
+        part_brand: "",
+        model: "",
+        supplier: "",
         // Legado (backup)
         categoria: "",
         sale_price_usd: "0,00",
-        sale_price_usd_rate: "0,00"
+        sale_price_usd_rate: "0,00",
+        precoAtacadoBRL: "0,00",
     });
 
     const loadMovements = async (itemId: string, page: number, filters: any) => {
@@ -135,6 +146,8 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
     // Carregar produto
     const loadData = async () => {
         if (!params.id) return;
+        console.log("[Debug] Loading product data for ID:", params.id);
+        setLoading(true);
         try {
             // Tenta buscar no catálogo primeiro (novo padrão)
             const catItem = await getCatalogItem(params.id) as any;
@@ -166,6 +179,13 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                     pricing_segment_id: catItem.pricing_segment_id || "",
                     sale_price_usd: (catItem.sale_price_usd / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
                     sale_price_usd_rate: (catItem.sale_price_usd_rate || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+                    precoAtacadoBRL: ((catItem.wholesale_price_brl || 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+                    // Peças
+                    part_type: catItem.part_type || "",
+                    quality: catItem.quality || "",
+                    part_brand: catItem.part_brand || "",
+                    model: catItem.model || "",
+                    supplier: catItem.supplier || "",
                 }));
 
                 if (catItem.item_type === 'peca') {
@@ -181,6 +201,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                 // Carregar histórico inicial
                 loadMovements(catItem.id, 1, { unitId: "", type: "" });
 
+                console.log("[Debug] Loaded catalog item:", catItem.id, catItem.name);
                 setPrecoEditadoManualmente(true);
                 return;
             }
@@ -217,6 +238,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                         pricing_segment_id: (data as any).pricing_segment_id || "",
                         sale_price_usd: ((data as any).sale_price_usd / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
                         sale_price_usd_rate: ((data as any).sale_price_usd_rate || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+                        precoAtacadoBRL: (((data as any).wholesale_price_brl || 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
                     };
                 });
 
@@ -228,6 +250,8 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
             }
         } catch (err) {
             console.error("Erro ao carregar produto:", err);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -328,6 +352,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
+        console.log("[Client] handleSubmit started");
 
         if (!profile) {
             toast.error("Sua sessão pode ter expirado. Tente atualizar a página.");
@@ -336,6 +361,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
 
         setLoading(true);
         try {
+            console.log("[Client] Preparing data...");
             // Remove points (thousands separator) and replace comma with dot for proper float parsing
             const cleanCusto = form.precoCusto.replace(/\./g, '').replace(',', '.').trim();
             const cleanVenda = form.precoVenda.replace(/\./g, '').replace(',', '.').trim();
@@ -358,6 +384,9 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
             const rateVal = parseFloat(cleanRate);
             const usdCentavos = isNaN(usdVal) ? 0 : Math.round(usdVal * 100);
             const rateFinal = isNaN(rateVal) ? 0 : rateVal;
+            const cleanAtacadoBrl = form.precoAtacadoBRL.replace(/\./g, '').replace(',', '.').trim();
+            const atacadoBrlVal = parseFloat(cleanAtacadoBrl);
+            const atacadoBrlCentavos = isNaN(atacadoBrlVal) ? 0 : Math.round(atacadoBrlVal * 100);
 
             // Validar IMEI se preenchido (deve ter 15 dígitos)
             if (form.imei && !/^\d{15}$/.test(form.imei)) {
@@ -366,9 +395,10 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                 return;
             }
 
-            console.log("Salvando produto:", params.id, { nome: form.nome, imei: form.imei });
+            console.log("[Client] Saving item:", { id: params.id, itemType });
 
             if (itemType) {
+                console.log("[Client] Calling updateCatalogItem server action...");
                 // Novo padrão: catalog_items
                 await updateCatalogItem(params.id, {
                     name: form.nome,
@@ -397,8 +427,17 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                     subcategory: form.categoria || null,
                     sale_price_usd: usdCentavos,
                     sale_price_usd_rate: rateFinal,
+                    wholesale_price_brl: atacadoBrlCentavos,
+                    // Peças
+                    part_type: form.part_type || null,
+                    quality: form.quality || null,
+                    part_brand: form.part_brand || null,
+                    model: form.model || null,
+                    supplier: form.supplier || null,
                 });
+                console.log("[Client] updateCatalogItem completed");
             } else {
+                console.log("[Client] Calling updateProduto server action...");
                 // Legado: produtos
                 await updateProduto(params.id, {
                     nome: form.nome,
@@ -422,26 +461,31 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                     cfop: form.cfop,
                     origem: form.origem,
                     cest: form.cest || null,
-                    categoria: selectedType?.name || form.categoria, // Mantém compatibilidade
+                    categoria: selectedType?.name || form.categoria,
                     product_type_id: form.product_type_id || null,
                     brand_id: form.brand_id || null,
                     pricing_segment_id: form.pricing_segment_id || null,
                     sale_price_usd: usdCentavos,
                     sale_price_usd_rate: rateFinal,
+                    wholesale_price_brl: atacadoBrlCentavos,
                 } as any);
+                console.log("[Client] updateProduto completed");
             }
 
+            console.log("[Client] Success! Showing toast...");
             toast.success("Produto salvo com sucesso!");
 
+            console.log("[Client] Redirecting in 800ms...");
             setTimeout(() => {
                 router.push("/estoque");
                 router.refresh();
             }, 800);
         } catch (error: any) {
-            console.error("Erro ao salvar produto:", error);
+            console.error("[Client] Error in handleSubmit:", error);
             const msg = error.message || "Erro desconhecido";
             toast.error(`Falha ao salvar: ${msg}`);
         } finally {
+            console.log("[Client] handleSubmit finally block");
             setLoading(false);
         }
     }
@@ -496,781 +540,385 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-3 gap-6">
-                    {/* Coluna Esquerda: Cadastro + Fiscal */}
-                    <div className="col-span-2 space-y-6">
-                        <GlassCard title="Informações Gerais" icon={Package}>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-sm font-semibold text-slate-700">Nome do Produto *</label>
+            <div className="grid grid-cols-3 gap-6">
+                {/* Coluna Esquerda: Cadastro + Fiscal */}
+                <div className="col-span-2 space-y-6">
+                    <GlassCard title="Informações Gerais" icon={Package}>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="col-span-2">
+                                    <label className="text-sm font-semibold text-slate-600 block mb-1.5">Nome do Produto *</label>
                                     <input
-                                        required
+                                        type="text"
                                         name="nome"
                                         value={form.nome}
                                         onChange={handleChange}
-                                        className="input-glass mt-1.5"
-                                        placeholder="Ex: iPhone 13 Pro Max"
+                                        className="input-glass"
+                                        required
                                     />
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div>
-                                        <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                                            <Tag size={14} className="text-brand-500" />
-                                            Tipo de Produto *
-                                        </label>
+                                <div>
+                                    <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
+                                        <Tag size={14} className="text-brand-500" />
+                                        Tipo de Produto
+                                    </label>
+                                    <div className="relative">
                                         <select
                                             name="product_type_id"
                                             value={form.product_type_id}
                                             onChange={handleChange}
-                                            className="input-glass mt-1.5 appearance-none"
-                                            required
+                                            className="input-glass appearance-none bg-transparent relative z-10"
+                                            required={productTypes.length > 0 && !itemType}
                                         >
                                             <option value="">Selecione o tipo</option>
-                                            {productTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                            {productTypes.map(t => (
+                                                <option key={t.id} value={t.id}>{t.name}</option>
+                                            ))}
                                         </select>
+                                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 z-0" />
                                     </div>
-                                    <div>
-                                        <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                                            <Building2 size={14} className="text-brand-500" />
-                                            Marca
-                                        </label>
+                                </div>
+                                <div>
+                                    <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
+                                        <Smartphone size={14} className="text-brand-500" />
+                                        Marca
+                                    </label>
+                                    <div className="relative">
                                         <select
                                             name="brand_id"
                                             value={form.brand_id}
-                                            onChange={(e) => {
-                                                const bId = e.target.value;
-                                                const brand = brands.find(b => b.id === bId);
-                                                setForm(prev => ({
-                                                    ...prev,
-                                                    brand_id: bId,
-                                                    pricing_segment_id: brand?.default_pricing_segment_id || prev.pricing_segment_id
-                                                }));
-                                            }}
-                                            className="input-glass mt-1.5 appearance-none"
+                                            onChange={handleChange}
+                                            className="input-glass appearance-none bg-transparent relative z-10"
                                         >
                                             <option value="">Selecione a marca</option>
-                                            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                            {brands.map(b => (
+                                                <option key={b.id} value={b.id}>{b.name}</option>
+                                            ))}
                                         </select>
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                                            <Layers size={14} className="text-brand-500" />
-                                            Segmento (Preço) *
-                                        </label>
-                                        <select
-                                            name="pricing_segment_id"
-                                            value={form.pricing_segment_id}
-                                            onChange={handleChange}
-                                            className="input-glass mt-1.5 appearance-none"
-                                            required
-                                        >
-                                            <option value="">Selecione o segmento</option>
-                                            {pricingSegments.map(s => <option key={s.id} value={s.id}>{s.name} (+ R$ {s.default_margin / 100})</option>)}
-                                        </select>
+                                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 z-0" />
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-sm font-semibold text-slate-700">Condição / Estado</label>
+                            </div>
+                        </div>
+                    </GlassCard>
+                    
+                    <GlassCard title="Informações Fiscais" icon={FileText}>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
+                                    NCM *
+                                    <button 
+                                        type="button" 
+                                        onClick={() => {
+                                            const suggested = suggestNCM(form.nome);
+                                            if (suggested) setForm(f => ({ ...f, ncm: suggested }));
+                                        }}
+                                        className="text-[10px] text-brand-500 hover:underline"
+                                    >
+                                        Sugerir
+                                    </button>
+                                </label>
+                                <input
+                                    type="text"
+                                    name="ncm"
+                                    value={form.ncm}
+                                    onChange={handleChange}
+                                    className="input-glass"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm font-semibold text-slate-600 block mb-1.5">CFOP *</label>
+                                <input
+                                    type="text"
+                                    name="cfop"
+                                    value={form.cfop}
+                                    onChange={handleChange}
+                                    className="input-glass"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm font-semibold text-slate-600 block mb-1.5">Origem *</label>
+                                <input
+                                    type="text"
+                                    name="origem"
+                                    value={form.origem}
+                                    onChange={handleChange}
+                                    className="input-glass"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm font-semibold text-slate-600 block mb-1.5">CEST</label>
+                                <input
+                                    type="text"
+                                    name="cest"
+                                    value={form.cest}
+                                    onChange={handleChange}
+                                    className="input-glass"
+                                    placeholder="Opcional"
+                                />
+                            </div>
+                        </div>
+                    </GlassCard>
+                </div>
+
+                {/* Coluna Direita: Preços + Outros */}
+                <div className="col-span-1 space-y-6">
+                    <GlassCard title="Precificação" icon={DollarSign}>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
+                                    <Layers size={14} className="text-brand-500" />
+                                    Segmento de Preço *
+                                </label>
+                                <div className="relative">
+                                    <select
+                                        name="pricing_segment_id"
+                                        value={form.pricing_segment_id}
+                                        onChange={handleChange}
+                                        className="input-glass appearance-none bg-transparent relative z-10"
+                                        required={pricingSegments.length > 0 && !itemType}
+                                    >
+                                        <option value="">Selecione o segmento</option>
+                                        {pricingSegments.map(s => (
+                                            <option key={s.id} value={s.id}>{s.name}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 z-0" />
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-sm font-semibold text-slate-600 block mb-1.5">Preço de Custo</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">R$</span>
+                                        <input
+                                            type="text"
+                                            name="precoCusto"
+                                            value={form.precoCusto}
+                                            onChange={(e) => {
+                                                setPrecoEditadoManualmente(false);
+                                                handleChange(e);
+                                            }}
+                                            className="input-glass pl-9"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-sm font-semibold text-slate-600 block mb-1.5">Preço de Venda</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">R$</span>
+                                        <input
+                                            type="text"
+                                            name="precoVenda"
+                                            value={form.precoVenda}
+                                            onChange={(e) => {
+                                                setPrecoEditadoManualmente(true);
+                                                handleChange(e);
+                                            }}
+                                            className="input-glass pl-9"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-100">
+                                <label className="text-sm font-semibold text-indigo-600 block mb-1.5">Atacado (USD)</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">$</span>
+                                        <input
+                                            type="text"
+                                            name="sale_price_usd"
+                                            value={form.sale_price_usd}
+                                            onChange={handleChange}
+                                            className="input-glass pl-7 text-xs"
+                                            placeholder="USD"
+                                        />
+                                    </div>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-[9px]">Rate</span>
+                                        <input
+                                            type="text"
+                                            name="sale_price_usd_rate"
+                                            value={form.sale_price_usd_rate}
+                                            onChange={handleChange}
+                                            className="input-glass pl-10 text-xs"
+                                            placeholder="5.00"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="pt-2">
+                                <label className="text-sm font-semibold text-emerald-600 block mb-1.5">Atacado (BRL)</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">R$</span>
+                                    <input
+                                        type="text"
+                                        name="precoAtacadoBRL"
+                                        value={form.precoAtacadoBRL}
+                                        onChange={handleChange}
+                                        className="input-glass pl-9"
+                                        placeholder="0,00"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </GlassCard>
+
+                    <GlassCard title="Estoque por Unidade" icon={BarChart3}>
+                        <div className="space-y-3">
+                            {units.map(unit => {
+                                const stock = unitStocks.find(us => us.unit_id === unit.id);
+                                const qty = stock?.qty || 0;
+                                return (
+                                    <div key={unit.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+                                        <span className="text-xs font-bold text-slate-600">{unit.name}</span>
+                                        <span className={cn(
+                                            "px-2 py-0.5 rounded-md text-xs font-black",
+                                            qty > 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+                                        )}>
+                                            {qty} un
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                            
+                            <button
+                                type="button"
+                                onClick={() => setShowAdjustModal(true)}
+                                className="w-full py-2 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-all flex items-center justify-center gap-2 mt-2"
+                            >
+                                <Plus size={14} />
+                                Ajustar Estoque
+                            </button>
+                        </div>
+                    </GlassCard>
+                </div>
+
+                {/* Terceira Seção: Especificações */}
+                <div className="col-span-1 space-y-6">
+                    <GlassCard title="Especificações" icon={Info}>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 gap-4">
+                                <div>
+                                    <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
+                                        Condição
+                                    </label>
+                                    <div className="relative">
                                         <select
                                             name="condicao"
                                             value={form.condicao}
                                             onChange={handleChange}
-                                            className="input-glass mt-1.5 appearance-none"
+                                            className="input-glass appearance-none bg-transparent relative z-10"
                                         >
-                                            <option value="novo_lacrado">Novo (Lacrado)</option>
-                                            <option value="seminovo">Seminovo (Vitrine)</option>
-                                            <option value="usado">Usado (Com marcas)</option>
-                                            <option value="peca_reposicao">Peça de Reposição / Insumo</option>
-                                            <option value="defeito">Com Defeito / Sucata</option>
-                                            <option value="outro">Outro</option>
+                                            <option value="novo">Novo</option>
+                                            <option value="vitrine">Vitrine</option>
+                                            <option value="usado">Usado</option>
+                                            <option value="recondicionado">Recondicionado</option>
                                         </select>
+                                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 z-0" />
                                     </div>
-                                    <div className="flex items-center">
-                                        <label className="flex items-center gap-3 cursor-pointer mt-6 p-2 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 flex-1">
-                                            <div className={cn(
-                                                "w-12 h-6 rounded-full transition-colors relative flex items-center",
-                                                form.exibirVitrine ? "bg-indigo-500" : "bg-slate-300"
-                                            )}>
-                                                <div className={cn(
-                                                    "w-4 h-4 rounded-full bg-white absolute transition-all shadow-sm",
-                                                    form.exibirVitrine ? "left-7" : "left-1.5"
-                                                )} />
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-sm text-slate-700 flex items-center gap-1.5">
-                                                    {form.exibirVitrine ? <Eye size={16} className="text-indigo-500" /> : <EyeOff size={16} className="text-slate-400" />}
-                                                    Exibir na Vitrine
-                                                </p>
-                                                <p className="text-[10px] text-slate-400">Mostrar este item na loja online</p>
-                                            </div>
+                                </div>
+                                {isSmartphone && (
+                                    <div>
+                                        <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
+                                            Saúde da Bateria
                                         </label>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-sm font-semibold text-slate-700">Descrição Comercial</label>
-                                    <textarea
-                                        name="descricao"
-                                        value={form.descricao}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1.5 min-h-[100px] pt-3 resize-none"
-                                        placeholder="Descreva o produto para a vitrine e vendedores..."
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-sm font-semibold text-slate-700 font-mono">Cód. Barras / SKU Interno</label>
-                                    <div className="flex gap-2 mt-1.5">
-                                        <div className="relative flex-1">
-                                            <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                        <div className="relative">
+                                            <Battery size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                             <input
-                                                name="codigoBarras"
-                                                value={form.codigoBarras}
+                                                type="text"
+                                                name="saudeBateria"
+                                                value={form.saudeBateria}
                                                 onChange={handleChange}
-                                                className="input-glass pl-10"
-                                                placeholder="789... ou clique em Gerar SKU"
+                                                className="input-glass pl-9"
+                                                placeholder="ex: 100"
                                             />
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={gerarSKU}
-                                            className="px-4 bg-slate-100 hover:bg-indigo-50 text-indigo-600 font-bold text-xs rounded-xl transition-colors border border-slate-200 hover:border-indigo-200 flex items-center gap-2"
-                                        >
-                                            <RefreshCw size={14} />
-                                            Gerar SKU
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </GlassCard>
-
-                        <GlassCard title="Dados Fiscais (NFC-e / SPED)" icon={FileText}>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="label-sm">NCM *</label>
-                                    <input
-                                        required
-                                        name="ncm"
-                                        value={form.ncm}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1 font-mono"
-                                        placeholder="8517.12.31"
-                                    />
-                                    <p className="text-[10px] text-slate-400 mt-1">Nomenclatura Comum do Mercosul</p>
-                                </div>
-                                <div>
-                                    <label className="label-sm">CFOP *</label>
-                                    <input
-                                        required
-                                        name="cfop"
-                                        value={form.cfop}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1 font-mono"
-                                        placeholder="5102"
-                                    />
-                                    <p className="text-[10px] text-slate-400 mt-1">Cód. Fiscal de Operações</p>
-                                </div>
-                                <div>
-                                    <label className="label-sm">Origem da Mercadoria</label>
-                                    <select
-                                        name="origem"
-                                        value={form.origem}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1 appearance-none"
-                                    >
-                                        <option value="0">0 - Nacional</option>
-                                        <option value="1">1 - Estrangeira (Imp. Direta)</option>
-                                        <option value="2">2 - Estrangeira (Adq. no Me. Interno)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="label-sm">CEST (Opcional)</label>
-                                    <input
-                                        name="cest"
-                                        value={form.cest}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1 font-mono"
-                                        placeholder="Código CEST"
-                                    />
-                                </div>
-                            </div>
-                        </GlassCard>
-
-                        <GlassCard title="Financeiro" icon={DollarSign}>
-                            {/* Categoria movida para Informações Gerais */}
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="label-sm">Preço de Custo (R$)</label>
-                                    <input
-                                        name="precoCusto"
-                                        value={form.precoCusto}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1.5 font-bold text-slate-700"
-                                        placeholder="0,00"
-                                    />
-                                </div>
-                                <div>
-                                    <label className={cn(
-                                        "label-sm flex items-center gap-1.5",
-                                        precoEditadoManualmente ? "text-amber-600" : "text-brand-600"
-                                    )}>
-                                        Preço de Venda (R$)
-                                        {!precoEditadoManualmente && form.categoria && (
-                                            <span className="text-[9px] bg-brand-50 text-brand-500 px-1.5 py-0.5 rounded font-bold">AUTO</span>
-                                        )}
-                                    </label>
-                                    <input
-                                        name="precoVenda"
-                                        value={form.precoVenda}
-                                        onChange={(e) => {
-                                            handleChange(e);
-                                            setPrecoEditadoManualmente(true);
-                                        }}
-                                        className={cn(
-                                            "input-glass mt-1.5 font-bold",
-                                            precoEditadoManualmente ? "text-amber-600 bg-amber-50/20" : "text-brand-600 bg-brand-50/20"
-                                        )}
-                                        placeholder="0,00"
-                                    />
-                                    {precoEditadoManualmente && form.categoria && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setPrecoEditadoManualmente(false)}
-                                            className="text-[10px] text-brand-500 hover:underline mt-1"
-                                        >
-                                            ↩ Recalcular pela categoria
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 mt-4">
-                                <div>
-                                    <label className="label-sm flex items-center gap-1.5 text-indigo-600">
-                                        <DollarSign size={12} /> Preço Atacado (USD)
-                                    </label>
-                                    <input
-                                        name="sale_price_usd"
-                                        value={form.sale_price_usd}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1.5 font-bold text-indigo-700 bg-indigo-50/20"
-                                        placeholder="0,00"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="label-sm flex items-center gap-1.5 text-slate-500">
-                                        <RefreshCw size={12} /> Cotação Base (R$)
-                                    </label>
-                                    <input
-                                        name="sale_price_usd_rate"
-                                        value={form.sale_price_usd_rate}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1.5 font-bold text-slate-700 bg-slate-50/50"
-                                        placeholder="0,00"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Preview de preços por forma de pagamento */}
-                            {config && parseFloat(form.precoVenda.replace(',', '.')) > 0 && (
-                                <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                                        <Info size={10} /> Preços por Forma de Pagamento
-                                    </p>
-                                    {(() => {
-                                        const vendaCentavos = Math.round(parseFloat(form.precoVenda.replace(',', '.')) * 100);
-                                        const fmt = (c: number) => (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-                                        const cat = config.categorias.find(c => c.nome === form.categoria);
-                                        const effectiveGateway = (cat?.default_gateway_id && config.gateways)
-                                            ? (config.gateways.find(g => g.id === cat.default_gateway_id) || defaultGateway)
-                                            : defaultGateway;
-
-                                        if (!effectiveGateway) return null;
-
-                                        const pix = vendaCentavos; // base
-                                        const debito = effectiveGateway.taxa_debito_pct > 0
-                                            ? Math.round(vendaCentavos / (1 - effectiveGateway.taxa_debito_pct / 100))
-                                            : vendaCentavos;
-                                        const t12 = effectiveGateway.taxas_credito?.[11];
-                                        const credito12 = t12 && t12.taxa > 0
-                                            ? Math.round(vendaCentavos / (1 - t12.taxa / 100))
-                                            : vendaCentavos;
-
-                                        return (
-                                            <div className="flex items-center gap-3 text-xs">
-                                                <span className="flex items-center gap-1 text-emerald-600 font-bold">
-                                                    <Zap size={12} /> Pix: {fmt(pix)}
-                                                </span>
-                                                <span className="text-slate-300">|</span>
-                                                <span className="flex items-center gap-1 text-blue-600 font-bold">
-                                                    <CreditCard size={12} /> Débito: {fmt(debito)}
-                                                </span>
-                                                {t12 && (
-                                                    <>
-                                                        <span className="text-slate-300">|</span>
-                                                        <span className="text-indigo-600 font-bold">
-                                                            12x: {fmt(Math.round(credito12 / 12))}/mês
-                                                        </span>
-                                                    </>
-                                                )}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-                            )}
-                        </GlassCard>
-                    </div>
-
-                    {/* Coluna Direita: Específicos + Estoque */}
-                    <div className="space-y-6">
-                        <GlassCard title={isDevice ? "Especificações do Aparelho" : "Especificações Técnicas"} icon={Layers}>
-                            <div className="space-y-4">
-                                {/* Cor e Grade */}
-                                {showColorAndGrade && (
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="label-sm">Cor</label>
-                                            <input
-                                                name="cor"
-                                                value={form.cor}
-                                                onChange={handleChange}
-                                                className="input-glass mt-1"
-                                                placeholder="Ex: Space Gray"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="label-sm">Grade</label>
-                                            <select
-                                                name="grade"
-                                                value={form.grade}
-                                                onChange={handleChange}
-                                                className="input-glass mt-1 appearance-none"
-                                            >
-                                                <option value="">Nenhuma / Novo</option>
-                                                <option value="A">Grade A (Excelente)</option>
-                                                <option value="B">Grade B (Bom)</option>
-                                                <option value="C">Grade C (Marcas de uso)</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Apenas para Aparelhos (Smartphones, Tablets) */}
-                                {isDevice && (
-                                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <label className="label-sm">Armazenamento</label>
-                                                <input
-                                                    name="capacidade"
-                                                    value={form.capacidade}
-                                                    onChange={handleChange}
-                                                    className="input-glass mt-1"
-                                                    placeholder="Ex: 128GB"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="label-sm flex items-center gap-1.5"><Cpu size={12} className="text-slate-400" /> Memória RAM</label>
-                                                <input
-                                                    name="memoriaRam"
-                                                    value={form.memoriaRam}
-                                                    onChange={handleChange}
-                                                    className="input-glass mt-1"
-                                                    placeholder="Ex: 4GB"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <label className="label-sm flex items-center gap-1.5"><Battery size={12} className="text-slate-400" /> Saúde Bateria (%)</label>
-                                                <div className="relative mt-1">
-                                                    <input
-                                                        type="text"
-                                                        inputMode="numeric"
-                                                        name="saudeBateria"
-                                                        value={form.saudeBateria}
-                                                        onChange={handleChange}
-                                                        className="input-glass mt-1.5 font-bold text-center"
-                                                        placeholder="100"
-                                                    />
-                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">%</span>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label className="label-sm">IMEI (Opcional)</label>
-                                                <input
-                                                    name="imei"
-                                                    value={form.imei}
-                                                    onChange={handleChange}
-                                                    className="input-glass mt-1 font-mono text-xs"
-                                                    placeholder="15 dígitos"
-                                                    maxLength={15}
-                                                />
-                                            </div>
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">%</span>
                                         </div>
                                     </div>
                                 )}
                             </div>
-                        </GlassCard>
-
-                        <GlassCard title="Mídia (Foto do Produto)" icon={ImageIcon}>
-                            <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-slate-50 transition-colors relative group">
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                    onChange={async (e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file && profile) {
-                                            try {
-                                                setLoading(true);
-                                                const url = await uploadProdutoImage(file, profile.empresa_id);
-                                                setForm(prev => ({ ...prev, imagemUrl: url }));
-                                            } catch (error) {
-                                                console.error(error);
-                                                alert("Erro ao enviar imagem");
-                                            } finally {
-                                                setLoading(false);
-                                            }
-                                        }
-                                    }}
-                                />
-                                {form.imagemUrl ? (
-                                    <div className="w-full h-32 rounded-lg overflow-hidden relative mb-2">
-                                        <img src={form.imagemUrl} alt="Preview" className="w-full h-full object-contain" />
-                                    </div>
-                                ) : (
-                                    <>
-                                        <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center group-hover:scale-110 transition-transform mb-3">
-                                            <ImageIcon className="text-slate-400" size={24} />
-                                        </div>
-                                        <p className="font-bold text-sm text-slate-700">Adicionar Foto Principal</p>
-                                        <p className="text-[10px] text-slate-400 mt-1 max-w-[200px]">Arraste uma imagem ou clique para fazer upload.</p>
-                                    </>
-                                )}
-
-                                <input
-                                    name="imagemUrl"
-                                    value={form.imagemUrl}
-                                    onChange={(e) => setForm(prev => ({ ...prev, imagemUrl: e.target.value }))}
-                                    type="text"
-                                    placeholder="Ou cole a URL da imagem aqui"
-                                    className="input-glass mt-4 text-[10px] h-8 text-center relative z-20 hover:border-brand-300 focus:border-brand-500"
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                            </div>
-                        </GlassCard>
-
-                        <GlassCard title="Gestão de Estoque Multi-Unidade" icon={BarChart3}>
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-1 gap-3">
-                                    {units.map(unit => {
-                                        const stock = unitStocks.find(us => us.unit_id === unit.id);
-                                        const qty = stock?.qty || 0;
-                                        return (
-                                            <div key={unit.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/50">
-                                                <div className="flex items-center gap-2">
-                                                    <Building2 size={16} className="text-slate-400" />
-                                                    <div>
-                                                        <p className="text-xs font-bold text-slate-700">{unit.name}</p>
-                                                        <p className="text-[10px] text-slate-400">Estoque atual nesta unidade</p>
-                                                    </div>
-                                                </div>
-                                                <div className={cn(
-                                                    "px-3 py-1 rounded-lg font-black text-sm",
-                                                    qty > (parseInt(form.estoqueMinimo) || 1) ? "bg-emerald-50 text-emerald-600 border border-emerald-100" :
-                                                    qty > 0 ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-red-50 text-red-600 border border-red-100"
-                                                )}>
-                                                    {qty} un
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAdjustModal(true)}
-                                    className="w-full py-3 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 font-bold text-sm hover:bg-indigo-100 transition-all flex items-center justify-center gap-2"
-                                >
-                                    <RefreshCw size={18} />
-                                    Ajustar Estoque / Movimentar
-                                </button>
-
-                                <div className="pt-4 border-t border-slate-100">
-                                    <label className="text-sm font-semibold text-amber-600">Alerta de Estoque Baixo (Global)</label>
-                                    <input
-                                        type="text"
-                                        inputMode="numeric"
-                                        name="estoqueMinimo"
-                                        value={form.estoqueMinimo}
-                                        onChange={handleChange}
-                                        className="input-glass mt-1.5"
-                                        placeholder="Ex: 1"
-                                    />
-                                    <p className="text-[10px] text-slate-400 mt-1">Soma de todas as lojas menor que este valor aciona o alerta.</p>
-                                </div>
-                            </div>
-                        </GlassCard>
-
-                        <GlassCard title="Histórico de Movimentações" icon={Clock}>
-                            <div className="space-y-4">
-                                <div className="flex flex-col md:flex-row gap-2">
-                                    <select
-                                        value={movementsFilters.unitId}
-                                        onChange={(e) => handleMovementFilterChange("unitId", e.target.value)}
-                                        className="flex-1 p-2 rounded-lg border border-slate-200 text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                                    >
-                                        <option value="">Todas as Unidades</option>
-                                        {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                                    </select>
-                                    <select
-                                        value={movementsFilters.type}
-                                        onChange={(e) => handleMovementFilterChange("type", e.target.value)}
-                                        className="flex-1 p-2 rounded-lg border border-slate-200 text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                                    >
-                                        <option value="">Todos os Tipos</option>
-                                        <option value="entrada">Entrada</option>
-                                        <option value="saida_os">Saída OS</option>
-                                        <option value="saida_venda">Saída Venda</option>
-                                        <option value="ajuste">Ajuste</option>
-                                    </select>
-                                </div>
-
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-xs">
-                                        <thead>
-                                            <tr className="border-b border-slate-100 text-slate-400 uppercase font-black text-[9px] tracking-wider">
-                                                <th className="py-2">Data</th>
-                                                <th className="py-2">Tipo</th>
-                                                <th className="py-2 text-center">Qtd</th>
-                                                <th className="py-2">Unidade</th>
-                                                <th className="py-2">Referência</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-50">
-                                            {movementsLoading ? (
-                                                <tr>
-                                                    <td colSpan={5} className="py-8 text-center text-slate-400 italic">Carregando...</td>
-                                                </tr>
-                                            ) : movements.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={5} className="py-8 text-center text-slate-400 italic">Nenhuma movimentação.</td>
-                                                </tr>
-                                            ) : (
-                                                movements.map(m => (
-                                                    <tr key={m.id} className="group hover:bg-slate-50 transition-colors">
-                                                        <td className="py-3 text-slate-500">{new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-                                                        <td className="py-3">
-                                                            <span className={cn(
-                                                                "px-1.5 py-0.5 rounded font-bold uppercase text-[9px]",
-                                                                m.movement_type === 'entrada' ? "bg-emerald-50 text-emerald-600" :
-                                                                m.movement_type === 'ajuste' ? "bg-slate-100 text-slate-600" : "bg-red-50 text-red-600"
-                                                            )}>
-                                                                {m.movement_type.replace('_', ' ')}
-                                                            </span>
-                                                        </td>
-                                                        <td className={cn(
-                                                            "py-3 text-center font-black",
-                                                            m.qty > 0 && m.movement_type !== 'ajuste' ? "text-emerald-600" : 
-                                                            m.qty < 0 || (m.movement_type.includes('saida')) ? "text-red-600" : "text-slate-600"
-                                                        )}>
-                                                            {m.qty > 0 ? `+${m.qty}` : m.qty}
-                                                        </td>
-                                                        <td className="py-3 text-slate-600 font-medium">{m.units?.name}</td>
-                                                        <td className="py-3 text-slate-500">
-                                                            {m.reference_id && m.reference_id.startsWith('#') ? (
-                                                                <Link href={`/os/${m.reference_id.split(' ')[0].replace('#', '')}`} className="text-indigo-600 hover:underline font-bold">
-                                                                    {m.reference_id}
-                                                                </Link>
-                                                            ) : (
-                                                                m.notes || m.reference_id || '-'
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                ))
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                {movementsTotalPages > 1 && (
-                                    <div className="flex items-center justify-between pt-2">
-                                        <button
-                                            type="button"
-                                            disabled={movementsPage === 1}
-                                            onClick={() => setMovementsPage(p => p - 1)}
-                                            className="p-1 px-3 border border-slate-200 rounded-lg text-[10px] font-bold disabled:opacity-50"
-                                        >
-                                            Anterior
-                                        </button>
-                                        <span className="text-[10px] text-slate-400 font-bold">Página {movementsPage} de {movementsTotalPages}</span>
-                                        <button
-                                            type="button"
-                                            disabled={movementsPage === movementsTotalPages}
-                                            onClick={() => setMovementsPage(p => p + 1)}
-                                            className="p-1 px-3 border border-slate-200 rounded-lg text-[10px] font-bold disabled:opacity-50"
-                                        >
-                                            Próxima
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        </GlassCard>
-
-                        {itemType === 'peca' && (
-                            <GlassCard title="Modelos Compatíveis" icon={Smartphone}>
-                                <div className="space-y-4">
-                                    <div className="flex flex-wrap gap-2">
-                                        {compatibleModels.map((m, idx) => (
-                                            <div key={idx} className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-1 rounded-lg text-xs font-bold border border-indigo-100">
-                                                {m.deviceModelDisplay}
-                                                {isEditingModels && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setCompatibleModels(prev => prev.filter((_, i) => i !== idx))}
-                                                        className="hover:text-red-500"
-                                                    >
-                                                        <X size={12} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        ))}
-                                        {compatibleModels.length === 0 && !isEditingModels && (
-                                            <p className="text-xs text-slate-400 italic">Nenhum modelo específico cadastrado.</p>
-                                        )}
-                                    </div>
-
-                                    {isEditingModels ? (
-                                        <div className="space-y-2 pt-2 border-t border-slate-100">
-                                            <div className="relative">
-                                                <input
-                                                    value={newModelSearch}
-                                                    onChange={(e) => setNewModelSearch(e.target.value)}
-                                                    placeholder="Buscar modelo (ex: Moto E7)..."
-                                                    className="input-glass text-xs"
-                                                />
-                                                {modelSuggestions.length > 0 && (
-                                                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto">
-                                                        {modelSuggestions.map(s => (
-                                                            <button
-                                                                key={s.device_model}
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    if (!compatibleModels.some(m => m.deviceModel === s.device_model)) {
-                                                                        setCompatibleModels(prev => [...prev, { deviceModel: s.device_model, deviceModelDisplay: s.device_model_display || s.device_model }]);
-                                                                    }
-                                                                    setNewModelSearch("");
-                                                                    setModelSuggestions([]);
-                                                                }}
-                                                                className="w-full px-4 py-2 text-left text-xs hover:bg-slate-50 border-b border-slate-100 last:border-0"
-                                                            >
-                                                                {s.device_model_display || s.device_model}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={handleSaveModels}
-                                                    className="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors"
-                                                >
-                                                    Salvar Alterações
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setIsEditingModels(false)}
-                                                    className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors"
-                                                >
-                                                    Cancelar
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsEditingModels(true)}
-                                            className="w-full py-2 border border-dashed border-indigo-200 text-indigo-500 rounded-xl text-xs font-bold hover:bg-indigo-50 transition-colors"
-                                        >
-                                            Editar Modelos Compatíveis
-                                        </button>
-                                    )}
-                                </div>
-                            </GlassCard>
-                        )}
-
-                        <div className="pt-4">
-                            <button
-                                disabled={loading}
-                                className="btn-primary w-full h-12 flex items-center justify-center gap-2"
-                            >
-                                {loading ? (
-                                    <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                ) : (
-                                    <Save size={18} />
-                                )}
-                                Salvar Produto
-                            </button>
-                            <Link href="/estoque" className="btn-secondary w-full h-12 mt-3 flex items-center justify-center">CANCELAR</Link>
                         </div>
-                    </div>
+                    </GlassCard>
                 </div>
+            </div>
+
+            {/* Footer com Botão Flutuante ou Fixo */}
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <button
+                    type="submit"
+                    disabled={loading}
+                    className="h-14 px-10 rounded-2xl bg-brand-500 text-white font-black text-lg shadow-[0_20px_50px_rgba(59,130,246,0.3)] hover:shadow-[0_20px_50px_rgba(59,130,246,0.5)] hover:-translate-y-1 active:translate-y-0 transition-all flex items-center gap-3 disabled:opacity-50 group"
+                >
+                    {loading ? (
+                        <>
+                            <RefreshCw className="w-6 h-6 animate-spin" />
+                            Salvando...
+                        </>
+                    ) : (
+                        <>
+                            <Save className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                            Salvar Produto
+                        </>
+                    )}
+                </button>
+            </div>
             </form>
-
-            {/* Timeline do Aparelho */}
-            {isDevice && form.imei && historico.length > 0 && (
-                <div className="mt-12 mb-8 glass-card">
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
-                            <Activity className="text-indigo-500" size={24} />
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-slate-800">Timeline de Vida do Aparelho</h2>
-                            <p className="text-sm text-slate-500">Histórico completo de eventos atrelados ao IMEI {form.imei}</p>
-                        </div>
-                    </div>
-
-                    <div className="relative border-l-2 border-indigo-100 ml-5 space-y-8 pb-4 mt-8">
-                        {historico.map((evento, idx) => (
-                            <div key={evento.id} className="relative pl-8 animate-in slide-in-from-bottom-2 fade-in duration-500" style={{ animationDelay: `${idx * 100}ms` }}>
-                                <div className="absolute -left-[11px] top-1 w-5 h-5 rounded-full bg-white border-4 border-indigo-500 shadow-[0_0_0_4px_white] shadow-indigo-100" />
-
-                                <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 hover:border-indigo-100">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-                                                {evento.tipo_evento.replace('_', ' ')}
-                                            </span>
-                                            {evento.usuario_nome && (
-                                                <span className="text-xs font-bold text-slate-400 bg-white px-2 py-0.5 rounded-md border border-slate-200">
-                                                    👤 {evento.usuario_nome}
+            {/* Histórico/Timeline */}
+            {form.imei && (
+                <GlassCard title="Histórico do Item" icon={Activity}>
+                    <div className="space-y-6">
+                        <p className="text-sm text-slate-500">Histórico completo de eventos atrelados ao IMEI {form.imei}</p>
+                        
+                        {historico.length === 0 ? (
+                            <div className="text-center py-8 text-slate-400 italic text-sm">
+                                Nenhum evento registrado para este IMEI.
+                            </div>
+                        ) : (
+                            <div className="relative space-y-8 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
+                                {historico.map((evento) => (
+                                    <div key={evento.id} className="relative flex items-start gap-6 group">
+                                        <div className="absolute left-0 mt-1.5 w-10 h-10 rounded-full border-4 border-white bg-slate-100 flex items-center justify-center shadow-sm z-10 group-hover:scale-110 transition-transform">
+                                            <div className="w-2 h-2 rounded-full bg-slate-400" />
+                                        </div>
+                                        
+                                        <div className="flex-1 pt-1 ml-4">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                                    {evento.usuario_nome && (
+                                                        <>
+                                                            👤 {evento.usuario_nome}
+                                                            <span className="text-slate-200">•</span>
+                                                        </>
+                                                    )}
+                                                    <Clock size={12} />
+                                                    {new Date(evento.created_at).toLocaleString('pt-BR')}
                                                 </span>
+                                            </div>
+                                            <h4 className="text-sm font-bold text-slate-700 leading-snug">
+                                                {evento.descricao}
+                                            </h4>
+                                            {evento.referencia_id && (
+                                                <p className="text-[10px] text-brand-500 font-mono mt-1">
+                                                    Ref: {evento.referencia_id.substring(0, 8)}...
+                                                </p>
                                             )}
                                         </div>
-                                        <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
-                                            <Clock size={12} />
-                                            {new Date(evento.created_at).toLocaleString('pt-BR')}
-                                        </span>
                                     </div>
-                                    <p className="text-slate-700 font-medium">
-                                        {evento.descricao}
-                                    </p>
-                                    {evento.referencia_id && (
-                                        <div className="mt-3 text-xs bg-white inline-block px-3 py-1.5 rounded-lg border border-slate-200 font-mono text-slate-500">
-                                            Ref: {evento.referencia_id.substring(0, 8)}...
-                                        </div>
-                                    )}
-                                </div>
+                                ))}
                             </div>
-                        ))}
+                        )}
                     </div>
-                </div>
+                </GlassCard>
             )}
 
+            {/* Modals */}
             {showAdjustModal && (
                 <AdjustStockModal 
                     itemId={params.id} 

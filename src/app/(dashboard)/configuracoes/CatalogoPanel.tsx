@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { cn } from "@/utils/cn";
-import type { PricingSegment, Brand } from "@/types/database";
+import type { PricingSegment, Brand, ProductType } from "@/types/database";
 import { ModelAliasesPanel } from "./ModelAliasesPanel";
 
 export function CatalogoPanel() {
@@ -16,9 +16,10 @@ export function CatalogoPanel() {
 
     const [segments, setSegments] = useState<PricingSegment[]>([]);
     const [brands, setBrands] = useState<Brand[]>([]);
+    const [productTypes, setProductTypes] = useState<ProductType[]>([]);
 
     const [loading, setLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<'segmentos' | 'marcas' | 'apelidos'>('segmentos');
+    const [activeTab, setActiveTab] = useState<'segmentos' | 'marcas' | 'tipos' | 'apelidos'>('segmentos');
 
     // Módulos
     useEffect(() => {
@@ -31,13 +32,15 @@ export function CatalogoPanel() {
         if (!profile?.empresa_id) return;
         setLoading(true);
         try {
-            const [bRes, sRes] = await Promise.all([
+            const [bRes, sRes, tRes] = await Promise.all([
                 supabase.from('brands').select('*').eq('empresa_id', profile.empresa_id).order('name'),
-                supabase.from('pricing_segments').select('*').eq('empresa_id', profile.empresa_id).order('name')
+                supabase.from('pricing_segments').select('*').eq('empresa_id', profile.empresa_id).order('name'),
+                supabase.from('product_types').select('*').eq('empresa_id', profile.empresa_id).order('name')
             ]);
             
             if (bRes.data) setBrands(bRes.data);
             if (sRes.data) setSegments(sRes.data);
+            if (tRes.data) setProductTypes(tRes.data);
         } catch (e) {
             console.error("Erro loadData:", e);
             toast.error("Erro ao carregar catálogo");
@@ -52,6 +55,10 @@ export function CatalogoPanel() {
 
     const [newBrandName, setNewBrandName] = useState("");
     const [newBrandSegment, setNewBrandSegment] = useState("");
+
+    const [newTypeName, setNewTypeName] = useState("");
+    const [showDeviceSpecs, setShowDeviceSpecs] = useState(false);
+    const [showImei, setShowImei] = useState(false);
 
     async function handleAddSegment(e: React.FormEvent) {
         e.preventDefault();
@@ -117,6 +124,42 @@ export function CatalogoPanel() {
         }
     }
 
+    async function handleAddType(e: React.FormEvent) {
+        e.preventDefault();
+        if (!profile?.empresa_id) return;
+        try {
+            const slug = newTypeName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
+            const { error } = await supabase.from('product_types').insert({
+                empresa_id: profile.empresa_id,
+                name: newTypeName,
+                slug,
+                show_device_specs: showDeviceSpecs,
+                show_imei: showImei,
+                show_grade: showDeviceSpecs,
+                show_battery_health: showDeviceSpecs
+            });
+            if (error) throw error;
+            toast.success("Tipo de produto adicionado.");
+            setNewTypeName("");
+            setShowDeviceSpecs(false);
+            setShowImei(false);
+            loadData();
+        } catch (e: any) {
+            toast.error(e.message || "Erro");
+        }
+    }
+
+    async function handleDeleteType(id: string) {
+        if (typeof window !== "undefined" && !window.confirm("Remover tipo de produto?")) return;
+        try {
+            await supabase.from('product_types').delete().eq('id', id);
+            toast.success("Removido com sucesso");
+            loadData();
+        } catch (e: any) {
+            toast.error("Erro ao remover");
+        }
+    }
+
     const formatBRL = (cents: number) => {
         if (isNaN(cents)) return "0,00";
         return (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
@@ -136,6 +179,12 @@ export function CatalogoPanel() {
                     className={cn("px-4 py-2 font-bold text-sm rounded-xl transition-all", activeTab === 'marcas' ? "bg-brand-500 text-white shadow-brand-glow" : "bg-white text-slate-500")}
                 >
                     Marcas
+                </button>
+                <button
+                    onClick={() => setActiveTab('tipos')}
+                    className={cn("px-4 py-2 font-bold text-sm rounded-xl transition-all", activeTab === 'tipos' ? "bg-brand-500 text-white shadow-brand-glow" : "bg-white text-slate-500")}
+                >
+                    Tipos de Produto (Categorias)
                 </button>
                 <button
                     onClick={() => setActiveTab('apelidos')}
@@ -219,6 +268,52 @@ export function CatalogoPanel() {
                                         </div>
                                     ))}
                                     {brands.length === 0 && <p className="text-sm text-slate-500 italic">Nenhuma marca cadastrada.</p>}
+                                </div>
+                            </GlassCard>
+                        </div>
+                    )}
+                    {activeTab === 'tipos' && (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <GlassCard title="Tipos de Produto" icon={Layers}>
+                                <p className="text-xs text-slate-500 mb-6">Defina as categorias principais (Ex: Smartphone, Tablet, Peça). Isso controla quais campos (IMEI, Bateria) aparecem na edição.</p>
+                                
+                                <form onSubmit={handleAddType} className="space-y-4 mb-6 pb-6 border-b border-slate-100">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Nome da Categoria</label>
+                                        <input required value={newTypeName} onChange={e => setNewTypeName(e.target.value)} placeholder="Ex: Smartphone" className="input-glass mt-1 w-full" />
+                                    </div>
+                                    <div className="flex gap-6">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input type="checkbox" checked={showImei} onChange={e => setShowImei(e.target.checked)} className="rounded border-slate-300 text-brand-500 focus:ring-brand-500" />
+                                            <span className="text-xs font-bold text-slate-700">Controlar IMEI</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input type="checkbox" checked={showDeviceSpecs} onChange={e => setShowDeviceSpecs(e.target.checked)} className="rounded border-slate-300 text-brand-500 focus:ring-brand-500" />
+                                            <span className="text-xs font-bold text-slate-700">Specs de Celular (Saúde, Grade, etc)</span>
+                                        </label>
+                                    </div>
+                                    <button className="btn-primary w-full py-2">
+                                        <Plus size={16} className="mr-2" />
+                                        Adicionar Categoria
+                                    </button>
+                                </form>
+
+                                <div className="space-y-3">
+                                    {productTypes.map(type => (
+                                        <div key={type.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl group">
+                                            <div>
+                                                <p className="font-bold text-slate-800 text-sm">{type.name}</p>
+                                                <div className="flex gap-2 mt-1">
+                                                    {type.show_imei && <span className="text-[8px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full font-black uppercase">IMEI</span>}
+                                                    {type.show_device_specs && <span className="text-[8px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-full font-black uppercase">SPECS</span>}
+                                                </div>
+                                            </div>
+                                            <button onClick={() => handleDeleteType(type.id)} className="p-2 text-red-300 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {productTypes.length === 0 && <p className="text-sm text-slate-500 italic">Nenhum tipo cadastrado.</p>}
                                 </div>
                             </GlassCard>
                         </div>

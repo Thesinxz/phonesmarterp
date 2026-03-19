@@ -199,6 +199,7 @@ export interface Database {
                     brand_id: string | null;
                     sale_price_usd: number;
                     sale_price_usd_rate: number;
+                    wholesale_price_brl: number;
                 };
                 Insert: Omit<Database["public"]["Tables"]["produtos"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["produtos"]["Insert"]>;
@@ -702,6 +703,7 @@ export interface Database {
                     updated_at: string;
                     sale_price_usd: number;
                     sale_price_usd_rate: number;
+                    wholesale_price_brl: number;
                 };
                 Insert: Omit<Database["public"]["Tables"]["catalog_items"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["catalog_items"]["Insert"]>;

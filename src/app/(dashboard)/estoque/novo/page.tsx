@@ -13,6 +13,8 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { suggestNCM } from "@/utils/ncm-lookup";
+import { Search } from "lucide-react";
 import { Brand, PricingSegment, type CatalogItem } from "@/types/database";
 import { getExistingDeviceModels, createCatalogItemWithStock } from "@/app/actions/parts";
 import { IMEIScanner } from "@/components/inventory/IMEIScanner";
@@ -50,6 +52,9 @@ export default function NovoCatalogItemPage() {
         origin_code: "0",
         cest: "",
         image_url: "",
+        sale_price_wholesale_brl: "0,00",
+        sale_price_usd: "0,00",
+        sale_price_usd_rate: "0,00",
         
         // Celulares
         brand_id: "",
@@ -204,10 +209,15 @@ export default function NovoCatalogItemPage() {
             const stock_alert_qty = parseInt(form.stock_alert_qty, 10) || 1;
 
             const finalUnitStocks: Record<string, number> = {};
-            if (units.length > 1) {
-                units.forEach(u => {
-                    finalUnitStocks[u.id] = parseInt(unitStocks[u.id] || "0", 10) || 0;
-                });
+            if (units.length > 0) {
+                if (units.length > 1) {
+                    units.forEach(u => {
+                        finalUnitStocks[u.id] = parseInt(unitStocks[u.id] || "0", 10) || 0;
+                    });
+                } else {
+                    // Se só tem uma unidade, usa ela diretamente com o stock_qty do form
+                    finalUnitStocks[units[0].id] = parseInt(form.stock_qty, 10) || 0;
+                }
             } else if (profile.unit_id) {
                 finalUnitStocks[profile.unit_id] = parseInt(form.stock_qty, 10) || 0;
             }
@@ -247,12 +257,12 @@ export default function NovoCatalogItemPage() {
                 accessory_type: itemType === 'acessorio' ? form.accessory_type : null,
                 compatible_models: itemType === 'acessorio' ? form.compatible_models : null,
 
-                // Peças
-                part_type: itemType === 'peca' ? form.part_type : null,
-                quality: itemType === 'peca' ? form.quality : null,
                 part_brand: itemType === 'peca' ? form.part_brand : null,
                 supplier: itemType === 'peca' ? form.supplier : null,
-                model: itemType === 'peca' ? form.model : null
+                model: itemType === 'peca' ? form.model : null,
+                sale_price_usd: Math.round(parseFloat(form.sale_price_usd.replace(',', '.')) * 100) || 0,
+                sale_price_usd_rate: parseFloat(form.sale_price_usd_rate.replace(',', '.')) || 0,
+                wholesale_price_brl: Math.round(parseFloat(form.sale_price_wholesale_brl.replace(',', '.')) * 100) || 0,
             };
 
             const newItem = await createCatalogItemWithStock({
@@ -502,7 +512,7 @@ export default function NovoCatalogItemPage() {
                                     </div>
                                     <div className="col-span-2">
                                         <label className="text-xs font-black text-slate-400 uppercase">Fornecedor</label>
-                                        <input name="supplier" value={form.supplier} onChange={handleChange} className="input-glass mt-1 w-full" placeholder="Ex: Ali, Distribuidora XYZ" />
+                                        <input name="supplier" value={form.supplier} onChange={handleChange} className="input-glass mt-1 w-full" placeholder="Ex: Distribuidora XYZ" />
                                     </div>
                                 </div>
                             )}
@@ -579,7 +589,24 @@ export default function NovoCatalogItemPage() {
                     <GlassCard title="Classificação Fiscal (NFC-e / NF-e)" icon={FileText}>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="col-span-2">
-                                <label className="text-xs font-black text-slate-400 uppercase">NCM *</label>
+                                <label className="text-xs font-black text-slate-400 uppercase flex items-center justify-between">
+                                    NCM *
+                                    <button 
+                                        type="button" 
+                                        onClick={() => {
+                                            const suggestion = suggestNCM(form.name);
+                                            if (suggestion) {
+                                                setForm(prev => ({ ...prev, ncm: suggestion }));
+                                                toast.success(`NCM sugerido: ${suggestion}`);
+                                            } else {
+                                                toast.info("Não encontramos uma sugestão para este nome.");
+                                            }
+                                        }}
+                                        className="text-[10px] text-brand-600 hover:underline flex items-center gap-1"
+                                    >
+                                        <Search size={10} /> Sugerir
+                                    </button>
+                                </label>
                                 <input name="ncm" required value={form.ncm} onChange={handleChange} className="input-glass mt-1 w-full font-mono font-bold" />
                             </div>
                             <div>
@@ -604,7 +631,7 @@ export default function NovoCatalogItemPage() {
 
                 {/* Coluna Lateral (Direita) */}
                 <div className="space-y-6">
-                    <GlassCard title="Preços" icon={DollarSign} className="bg-emerald-50/10">
+                    <GlassCard title="Preços e Atacado" icon={DollarSign} className="bg-brand-50/10 border-brand-100">
                         <div className="space-y-4">
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 uppercase">Preço de Custo (R$)</label>
@@ -612,10 +639,26 @@ export default function NovoCatalogItemPage() {
                             </div>
                             <div>
                                 <label className="text-[10px] font-black text-emerald-600 uppercase flex justify-between">
-                                    <span>Preço Venda (R$)</span>
+                                    <span>Preço Varejo (R$)</span>
                                     {precoEditado && <span className="text-amber-500 lowercase">(manual)</span>}
                                 </label>
                                 <input name="sale_price" value={form.sale_price} onChange={handleChange} className="input-glass mt-1 w-full text-right text-2xl font-black font-mono text-emerald-600 border-emerald-200 bg-white" />
+                            </div>
+                            <div className="pt-2 border-t border-slate-100 space-y-3">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] font-black text-indigo-600 uppercase">Atacado (USD)</label>
+                                        <input name="sale_price_usd" value={form.sale_price_usd} onChange={handleChange} className="input-glass mt-1 w-full text-right font-bold text-indigo-600" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-brand-600 uppercase">Atacado (R$)</label>
+                                        <input name="sale_price_wholesale_brl" value={form.sale_price_wholesale_brl} onChange={handleChange} className="input-glass mt-1 w-full text-right font-bold text-brand-600" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase">Cotação Base USD</label>
+                                    <input name="sale_price_usd_rate" value={form.sale_price_usd_rate} onChange={handleChange} className="input-glass mt-1 w-full text-right text-sm text-slate-500" />
+                                </div>
                             </div>
                         </div>
                     </GlassCard>

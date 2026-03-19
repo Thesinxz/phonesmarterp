@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smartos-v1';
+const CACHE_NAME = 'smartos-v2';
 
 self.addEventListener('install', (event) => {
     self.skipWaiting();
@@ -11,12 +11,19 @@ self.addEventListener('activate', (event) => {
 // Cache básico para offline (opcional mas recomendado)
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
-    // Não interceptar chamadas de API ou de terceiros (Stripe, Supabase, etc)
-    if (url.pathname.includes('/api/') || url.origin !== self.location.origin) {
+    // Não interceptar chamadas de API, de terceiros ou métodos POST/PUT/DELETE
+    if (
+        event.request.method !== 'GET' ||
+        url.pathname.includes('/api/') || 
+        url.origin !== self.location.origin
+    ) {
         return;
     }
     // Pass-through por enquanto, apenas para ativar o PWA
+    // Desativamos o respondWith global pois está interferindo em Server Actions e no dev mode do Next.js
+    /*
     event.respondWith(fetch(event.request));
+    */
 });
 
 // Push notification listener

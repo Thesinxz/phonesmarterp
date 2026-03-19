@@ -46,7 +46,7 @@ function EtiquetasContent() {
     const [searching, setSearching] = useState(false);
 
     // Configurações Globais
-    const [format, setFormat] = useState<"40x25" | "50x30" | "100x150">("40x25");
+    const [format, setFormat] = useState<"40x25" | "50x30" | "100x150" | "a4">("40x25");
     const [type, setType] = useState<"barcode" | "qrcode">("barcode");
 
     useEffect(() => {
@@ -273,7 +273,8 @@ function EtiquetasContent() {
                                     {[
                                         { id: "40x25", label: "40x25mm (Padrão)", desc: "Joias / Cabos / Peças" },
                                         { id: "50x30", label: "50x30mm (Médio)", desc: "Caixas / Acessórios" },
-                                        { id: "100x150", label: "100x150mm (Grande)", desc: "Envio / Identificação" }
+                                        { id: "100x150", label: "100x150mm (Grande)", desc: "Envio / Identificação" },
+                                        { id: "a4", label: "Folha A4 (Grade)", desc: "Configurável (Pimaco, etc)" }
                                     ].map(opt => (
                                         <button
                                             key={opt.id}

@@ -15,7 +15,7 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-const migrationPath = path.join(process.cwd(), 'supabase/migrations/094_comprehensive_cascade_delete.sql')
+const migrationPath = path.join(process.cwd(), 'supabase/migrations/095_fix_stock_and_usuarios_rls.sql')
 const sql = fs.readFileSync(migrationPath, 'utf8')
 
 async function runMigration() {

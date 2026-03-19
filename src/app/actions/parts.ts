@@ -532,11 +532,20 @@ export async function adjustUnitStock(
       qty: newQty,
       tenant_id: tenantId,
       updated_at: new Date().toISOString()
-    })
+    }, { onConflict: 'unit_id,catalog_item_id' })
     
   if (stockError) throw stockError
   
   // 3. Registrar movimento
+  console.log("[Debug] Inserting stock movement:", {
+    catalog_item_id: catalogItemId,
+    unit_id: unitId,
+    movement_type: type === 'saida' ? 'saida_os' : type,
+    qty,
+    created_by: userId,
+    tenant_id: tenantId
+  });
+  
   const { error: moveError } = await (supabase.from('stock_movements') as any)
     .insert({
       catalog_item_id: catalogItemId,
@@ -548,7 +557,10 @@ export async function adjustUnitStock(
       tenant_id: tenantId
     })
     
-  if (moveError) throw moveError
+  if (moveError) {
+    console.error("[Debug] Stock movement error:", moveError);
+    throw moveError
+  }
   
   // 4. Atualizar total no catalog_items
   const { data: allStocks } = await (supabase.from('unit_stock') as any)
@@ -627,7 +639,7 @@ export async function getPartMovements(
   const to = from + limit - 1
   
   let query = (supabase.from('stock_movements') as any)
-    .select('*, units(name), usuarios:created_by(nome)', { count: 'exact' })
+    .select('*, units(name)', { count: 'exact' })
     .eq('catalog_item_id', catalogItemId)
     .order('created_at', { ascending: false })
     .range(from, to)
@@ -638,7 +650,25 @@ export async function getPartMovements(
   const { data, count, error } = await query
   if (error) throw error
   
-  return { data, count, totalPages: count ? Math.ceil(count / limit) : 0 }
+  // Enriquecer com nomes dos usuários (fechado manualmente para evitar problemas de join/RLS complexos)
+  const userIds = Array.from(new Set((data || []).map((d: any) => d.created_by).filter(Boolean)));
+  let enrichedData = data;
+  
+  if (userIds.length > 0) {
+    const { data: userData } = await supabase
+      .from('usuarios')
+      .select('auth_user_id, nome')
+      .in('auth_user_id', userIds);
+      
+    enrichedData = data.map((d: any) => ({
+      ...d,
+      usuarios: userData?.find(u => u.auth_user_id === d.created_by) || { nome: 'Sistema' }
+    }));
+  } else {
+    enrichedData = (data || []).map((d: any) => ({ ...d, usuarios: { nome: 'Sistema' } }));
+  }
+  
+  return { data: enrichedData, count, totalPages: count ? Math.ceil(count / limit) : 0 }
 }
 
 export async function getLowStockParts(tenantId: string) {

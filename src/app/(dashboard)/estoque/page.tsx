@@ -2,19 +2,21 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Search, Filter, Package, AlertTriangle, Box, DollarSign, Edit, Trash2, Smartphone, Headphones, Wrench, ChevronDown, Download, FileText } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { Plus, Search, Filter, Package, AlertTriangle, Box, DollarSign, Edit, Trash2, Smartphone, Headphones, Wrench, ChevronDown, Download, FileText, Printer } from "lucide-react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { CatalogItem } from "@/types/database";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
-import { getCatalogItems, deleteCatalogItem } from "@/services/catalog";
 import { createClient } from "@/lib/supabase/client";
 import { searchPartsByModel, type PartSearchResult } from "@/app/actions/parts";
+import { bulkUpdateCatalogItems, deleteCatalogItem, getCatalogItems } from "@/services/catalog";
+import { Settings, CheckSquare } from "lucide-react";
 
 export default function EstoquePage() {
     const { profile } = useAuth();
+    const router = useRouter();
     const searchParams = useSearchParams();
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -31,6 +33,26 @@ export default function EstoquePage() {
     const [selectedUnitId, setSelectedUnitId] = useState("todos");
     const [isModelSearch, setIsModelSearch] = useState(false);
     const [partResults, setPartResults] = useState<PartSearchResult[]>([]);
+    const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+    const [isUpdatingBulk, setIsUpdatingBulk] = useState(false);
+    const [showBulkModal, setShowBulkModal] = useState(false);
+    const [productTypes, setProductTypes] = useState<any[]>([]);
+    const [pricingSegments, setPricingSegments] = useState<any[]>([]);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+    const toggleSelectItem = (id: string) => {
+        setSelectedIds(prev => 
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedIds.length === items.length && items.length > 0) {
+            setSelectedIds([]);
+        } else {
+            setSelectedIds(items.map(item => item.id));
+        }
+    };
 
     useEffect(() => {
         const filter = searchParams.get('filter');
@@ -46,16 +68,20 @@ export default function EstoquePage() {
 
     useEffect(() => {
         if (!profile?.empresa_id) return;
-        const fetchBrandsAndUnits = async () => {
+        const fetchMetadata = async () => {
             const supabase = createClient();
-            const [bRes, uRes] = await Promise.all([
+            const [bRes, uRes, tRes, sRes] = await Promise.all([
                 supabase.from("brands").select("id, name").eq("empresa_id", profile.empresa_id).order("name"),
-                supabase.from("units").select("id, name").eq("empresa_id", profile.empresa_id).eq("is_active", true)
+                supabase.from("units").select("id, name").eq("empresa_id", profile.empresa_id).eq("is_active", true),
+                supabase.from("product_types").select("id, name, slug").order("name"),
+                supabase.from("pricing_segments").select("id, name").eq("empresa_id", profile.empresa_id).order("name")
             ]);
             if (bRes.data) setBrands(bRes.data as any);
             if (uRes.data) setUnits(uRes.data as any);
+            if (tRes.data) setProductTypes(tRes.data as any);
+            if (sRes.data) setPricingSegments(sRes.data as any);
         }
-        fetchBrandsAndUnits();
+        fetchMetadata();
     }, [profile?.empresa_id]);
 
     const MODEL_TRIGGERS = [
@@ -76,14 +102,13 @@ export default function EstoquePage() {
         setPartResults([]);
 
         try {
+            console.log("[Debug] Loading catalogue for tenant:", profile.empresa_id);
             const searchType = detectSearchType(debouncedSearch);
 
             if (searchType === 'model' && (activeTab === 'peca' || activeTab === 'todos') && debouncedSearch.length > 2) {
                 setIsModelSearch(true);
                 const results = await searchPartsByModel(profile.empresa_id, debouncedSearch);
                 setPartResults(results);
-                // Para manter compatibilidade com o resto da UI, vamos "mentir" um pouco no items
-                // Mas o ideal é tratar separadamente no render
             }
 
             const data = await getCatalogItems(profile.empresa_id, {
@@ -92,9 +117,10 @@ export default function EstoquePage() {
                 brand_id: brandFilter || undefined,
                 stock_status: stockFilter !== 'todos' ? stockFilter : undefined
             });
+            
+            console.log("[Debug] Loaded items:", data.length);
             setItems(data);
             
-            // Buscar estoques por unidade para os itens retornados
             if (data.length > 0) {
                 const supabase = createClient();
                 const { data: stocks } = await supabase
@@ -104,7 +130,7 @@ export default function EstoquePage() {
                 if (stocks) setUnitStocks(stocks);
             }
         } catch (error) {
-            console.error(error);
+            console.error("[Debug] Error loading catalogue:", error);
             toast.error("Erro ao carregar estoque.");
         } finally {
             setLoading(false);
@@ -113,6 +139,7 @@ export default function EstoquePage() {
 
     useEffect(() => {
         loadData();
+        setSelectedIds([]); // Limpa seleção ao mudar filtros
     }, [profile?.empresa_id, debouncedSearch, activeTab, brandFilter, stockFilter]);
 
     const handleDelete = async (id: string) => {
@@ -120,11 +147,32 @@ export default function EstoquePage() {
         try {
             await deleteCatalogItem(id);
             toast.success("Item excluído!");
+            setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
             loadData();
         } catch (error: any) {
             toast.error(error.message || "Erro ao excluir");
         }
     };
+
+    const handleBulkDelete = async () => {
+        if (selectedIds.length === 0) return;
+        if (!confirm(`Excluir ${selectedIds.length} itens permanentemente?`)) return;
+        
+        setIsDeletingBulk(true);
+        try {
+            // Executa as exclusões em paralelo
+            await Promise.all(selectedIds.map(id => deleteCatalogItem(id)));
+            toast.success(`${selectedIds.length} itens excluídos com sucesso!`);
+            setSelectedIds([]);
+            loadData();
+        } catch (error: any) {
+            toast.error("Erro ao excluir alguns itens.");
+            console.error(error);
+        } finally {
+            setIsDeletingBulk(false);
+        }
+    };
+
 
     const totalItemsCount = useMemo(() => {
         if (selectedUnitId === 'todos') return (items as any[]).reduce((acc, it) => acc + (it.stock_qty || 0), 0);
@@ -138,6 +186,14 @@ export default function EstoquePage() {
         return items.reduce((acc, it) => {
             const us = unitStocks.find(s => s.unit_id === selectedUnitId && s.catalog_item_id === it.id);
             return acc + ((it.sale_price || 0) * (us?.qty || 0));
+        }, 0);
+    }, [items, unitStocks, selectedUnitId]);
+
+    const totalCostValue = useMemo(() => {
+        if (selectedUnitId === 'todos') return items.reduce((acc, it) => acc + ((it.cost_price || 0) * (it.stock_qty || 0)), 0);
+        return items.reduce((acc, it) => {
+            const us = unitStocks.find(s => s.unit_id === selectedUnitId && s.catalog_item_id === it.id);
+            return acc + ((it.cost_price || 0) * (us?.qty || 0));
         }, 0);
     }, [items, unitStocks, selectedUnitId]);
 
@@ -210,7 +266,20 @@ export default function EstoquePage() {
                     </h1>
                     <p className="text-slate-500 text-sm mt-0.5">Catálogo unificado de produtos e peças</p>
                 </div>
-                <div className="flex gap-2 w-full sm:w-auto">
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                    {selectedIds.length > 0 && (
+                        <button 
+                            onClick={handleBulkDelete}
+                            disabled={isDeletingBulk}
+                            className="bg-red-50 h-10 px-4 rounded-xl border border-red-200 text-red-600 flex items-center justify-center gap-2 text-sm font-bold hover:bg-red-100 transition-all w-full sm:w-auto animate-in zoom-in-95"
+                        >
+                            {isDeletingBulk ? "Excluindo..." : (
+                                <>
+                                    <Trash2 size={18} /> Excluir ({selectedIds.length})
+                                </>
+                            )}
+                        </button>
+                    )}
                     <button 
                         onClick={() => exportToCSV()}
                         className="bg-white h-10 px-4 rounded-xl border border-slate-200 text-slate-600 flex items-center justify-center gap-2 text-sm font-bold hover:bg-slate-50 transition-all w-full sm:w-auto"
@@ -230,11 +299,11 @@ export default function EstoquePage() {
             </div>
 
             {/* Cards de Resumo */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 w-full">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 w-full">
                 <GlassCard className="p-3 sm:p-4 bg-brand-50/20">
                     <div className="flex items-center gap-1.5 mb-2 text-brand-600">
                         <Package size={14} className="shrink-0" />
-                        <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider truncate">Total Estoque</p>
+                        <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider truncate">Total Itens</p>
                     </div>
                     <p className="text-xl sm:text-2xl font-black text-brand-900 truncate">{totalItemsCount}</p>
                 </GlassCard>
@@ -251,6 +320,15 @@ export default function EstoquePage() {
                         <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider truncate">Sem Estoque</p>
                     </div>
                     <p className="text-xl sm:text-2xl font-black text-red-900 truncate">{outOfStockCount}</p>
+                </GlassCard>
+                <GlassCard className="p-3 sm:p-4 bg-slate-50/20">
+                    <div className="flex items-center gap-1.5 mb-2 text-slate-600">
+                        <DollarSign size={14} className="shrink-0" />
+                        <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider truncate">Valor (Custo)</p>
+                    </div>
+                    <p className="text-lg sm:text-xl font-black text-slate-900 truncate">
+                        {loading ? "..." : (totalCostValue / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </p>
                 </GlassCard>
                 <GlassCard className="p-3 sm:p-4 bg-emerald-50/20">
                     <div className="flex items-center gap-1.5 mb-2 text-emerald-600">
@@ -357,8 +435,17 @@ export default function EstoquePage() {
                         <div className="p-8 text-center text-slate-400 font-medium">Nenhum item encontrado.</div>
                     ) : (
                         items.map(item => (
-                            <div key={item.id} className="bg-white/80 p-4 border border-slate-100 rounded-2xl flex items-center justify-between shadow-sm">
+                            <div key={item.id} className={cn(
+                                "bg-white/80 p-4 border rounded-2xl flex items-center justify-between shadow-sm transition-all",
+                                selectedIds.includes(item.id) ? "border-brand-300 bg-brand-50/30" : "border-slate-100"
+                            )}>
                                 <div className="flex items-center gap-3 overflow-hidden">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={selectedIds.includes(item.id)}
+                                        onChange={() => toggleSelectItem(item.id)}
+                                        className="w-5 h-5 rounded-lg border-slate-300 text-brand-600 focus:ring-brand-500"
+                                    />
                                     <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
                                         {getTypeIcon(item.item_type)}
                                     </div>
@@ -414,6 +501,14 @@ export default function EstoquePage() {
                         <table className="w-full text-left text-sm">
                             <thead className="bg-slate-50/50">
                                 <tr className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 whitespace-nowrap">
+                                    <th className="px-6 py-4 w-10">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={items.length > 0 && selectedIds.length === items.length}
+                                            onChange={toggleSelectAll}
+                                            className="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                                        />
+                                    </th>
                                     <th className="px-6 py-4">{(activeTab === 'todos' || activeTab === 'celular') ? 'Produto / Nome' : activeTab === 'peca' ? 'Peça' : 'Produto'}</th>
                                     {(activeTab === 'todos' || activeTab === 'celular' || activeTab === 'peca') && <th className="px-6 py-4">Tipo</th>}
                                     {(activeTab === 'todos' || activeTab === 'celular') && <th className="px-6 py-4">Marca</th>}
@@ -434,7 +529,18 @@ export default function EstoquePage() {
                                     <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-400 font-medium">Nenhum item encontrado.</td></tr>
                                 ) : (
                                     items.map(item => (
-                                        <tr key={item.id} className="hover:bg-slate-50/50 group">
+                                        <tr key={item.id} className={cn(
+                                            "hover:bg-slate-50/50 group transition-colors",
+                                            selectedIds.includes(item.id) && "bg-brand-50/20"
+                                        )}>
+                                            <td className="px-6 py-3">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={selectedIds.includes(item.id)}
+                                                    onChange={() => toggleSelectItem(item.id)}
+                                                    className="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                                                />
+                                            </td>
                                             <td className="px-6 py-3">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
@@ -571,6 +677,177 @@ export default function EstoquePage() {
                         </table>
                     </div>
                 </GlassCard>
+            </div>
+            {/* Barra Flutuante de Ações em Massa */}
+            {selectedIds.length > 0 && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-8 duration-300">
+                    <div className="bg-slate-900 text-white rounded-2xl shadow-2xl px-6 py-4 flex items-center gap-6 border border-slate-700/50 backdrop-blur-md">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Selecionados</span>
+                            <span className="text-sm font-black text-white">{selectedIds.length} {selectedIds.length === 1 ? 'item' : 'itens'}</span>
+                        </div>
+                        
+                        <div className="h-8 w-px bg-slate-700/50" />
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setShowBulkModal(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-xs font-bold transition-all text-white"
+                            >
+                                <Settings size={16} /> Configurar
+                            </button>
+                            
+                            <button
+                                onClick={() => router.push(`/estoque/etiquetas?ids=${selectedIds.join(',')}`)}
+                                className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-xl text-xs font-bold transition-all text-white"
+                            >
+                                <Printer size={16} /> Etiquetas
+                            </button>
+
+                            <button
+                                onClick={() => handleBulkDelete()}
+                                disabled={isDeletingBulk}
+                                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 rounded-xl text-xs font-bold transition-all disabled:opacity-50 text-white"
+                            >
+                                {isDeletingBulk ? 'Excluindo...' : (
+                                    <>
+                                        <Trash2 size={16} /> Excluir
+                                    </>
+                                )}
+                            </button>
+                            
+                            <button
+                                onClick={() => setSelectedIds([])}
+                                className="px-4 py-2 hover:bg-slate-800 rounded-xl text-xs font-bold text-slate-400 transition-all"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showBulkModal && (
+                <BulkUpdateModal
+                    selectedIds={selectedIds}
+                    brands={brands}
+                    pricingSegments={pricingSegments}
+                    onClose={() => setShowBulkModal(false)}
+                    onSuccess={() => {
+                        setShowBulkModal(false);
+                        setSelectedIds([]);
+                        loadData();
+                    }}
+                />
+            )}
+        </div>
+    );
+}
+
+function BulkUpdateModal({ selectedIds, brands, pricingSegments, onClose, onSuccess }: any) {
+    const [loading, setLoading] = useState(false);
+    const [form, setForm] = useState({
+        item_type: "",
+        brand_id: "",
+        pricing_segment_id: ""
+    });
+
+    async function handleUpdate() {
+        if (selectedIds.length === 0) return;
+        if (!form.item_type && !form.brand_id && !form.pricing_segment_id) {
+            toast.error("Selecione pelo menos um campo para atualizar");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const updates: any = {};
+            if (form.item_type) updates.item_type = form.item_type;
+            if (form.brand_id) updates.brand_id = form.brand_id;
+            if (form.pricing_segment_id) updates.pricing_segment_id = form.pricing_segment_id;
+
+            await bulkUpdateCatalogItems(selectedIds, updates);
+            toast.success("Atualização em massa concluída!");
+            onSuccess();
+        } catch (error) {
+            console.error(error);
+            toast.error("Erro na atualização em massa");
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+                <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center shadow-inner">
+                            <Settings size={24} />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-black text-slate-800 tracking-tight">Configuração em Massa</h2>
+                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">{selectedIds.length} itens selecionados</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-8 space-y-6">
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Tipo de Produto</label>
+                        <select 
+                            value={form.item_type}
+                            onChange={(e) => setForm(p => ({ ...p, item_type: e.target.value }))}
+                            className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all appearance-none cursor-pointer"
+                        >
+                            <option value="">Não alterar</option>
+                            <option value="celular">Smartphone / Celular</option>
+                            <option value="acessorio">Acessório</option>
+                            <option value="peca">Peça Reposição</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Marca</label>
+                        <select 
+                            value={form.brand_id}
+                            onChange={(e) => setForm(p => ({ ...p, brand_id: e.target.value }))}
+                            className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all appearance-none cursor-pointer"
+                        >
+                            <option value="">Não alterar</option>
+                            {brands.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Segmento de Preço</label>
+                        <select 
+                            value={form.pricing_segment_id}
+                            onChange={(e) => setForm(p => ({ ...p, pricing_segment_id: e.target.value }))}
+                            className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all appearance-none cursor-pointer"
+                        >
+                            <option value="">Não alterar</option>
+                            {pricingSegments.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                    </div>
+                </div>
+
+                <div className="px-8 py-6 bg-slate-50 border-t border-slate-100 flex gap-4">
+                    <button onClick={onClose} className="flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-500 hover:bg-slate-200 transition-all">
+                        Cancelar
+                    </button>
+                    <button 
+                        onClick={handleUpdate}
+                        disabled={loading}
+                        className="flex-[1.5] py-4 rounded-2xl bg-slate-900 text-white font-black text-xs uppercase tracking-widest hover:bg-slate-800 shadow-xl shadow-slate-900/20 transition-all disabled:opacity-50"
+                    >
+                        {loading ? "Processando..." : (
+                            <div className="flex items-center justify-center gap-2">
+                                <CheckSquare size={16} /> Aplicar Alterações
+                            </div>
+                        )}
+                    </button>
+                </div>
             </div>
         </div>
     );

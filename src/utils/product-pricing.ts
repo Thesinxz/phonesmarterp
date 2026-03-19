@@ -97,7 +97,15 @@ export function calculateProductPrices(
 
     // Parcelas: acréscimo da taxa de crédito para cada parcela
     const taxasCredito = effectiveGateway.taxas_credito ?? [];
-    const numParcelas = Math.min(maxParcelas, taxasCredito.length);
+    
+    // Regra de Negócio: Peças permitem apenas até 8x
+    let effectiveMaxParcelas = maxParcelas;
+    const isPeca = categoriaNome?.toLowerCase().includes("pec") || false;
+    if (isPeca) {
+        effectiveMaxParcelas = Math.min(maxParcelas, 8);
+    }
+
+    const numParcelas = Math.min(effectiveMaxParcelas, taxasCredito.length);
     const parcelas: ParcelaCalc[] = [];
 
     for (let i = 0; i < numParcelas; i++) {
