@@ -662,7 +662,7 @@ export async function getPartMovements(
       
     enrichedData = data.map((d: any) => ({
       ...d,
-      usuarios: userData?.find(u => u.auth_user_id === d.created_by) || { nome: 'Sistema' }
+      usuarios: userData?.find((u: any) => u.auth_user_id === d.created_by) || { nome: 'Sistema' }
     }));
   } else {
     enrichedData = (data || []).map((d: any) => ({ ...d, usuarios: { nome: 'Sistema' } }));

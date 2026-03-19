@@ -16,6 +16,7 @@ function EtiquetasPrintContent() {
     const [itens, setItens] = useState<(Produto & { quantity: number })[]>([]);
     const [subdominio, setSubdominio] = useState<string>("");
     const [a4Config, setA4Config] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
 
     const format = searchParams.get("f") || "40x25";
     const type = searchParams.get("t") || "barcode";
@@ -44,8 +45,8 @@ function EtiquetasPrintContent() {
                 .eq('chave', 'etiqueta_a4')
                 .maybeSingle();
             
-            if (data?.valor) {
-                setA4Config(data.valor);
+            if ((data as any)?.valor) {
+                setA4Config((data as any).valor);
             }
         } catch (e) {
             console.error("Erro ao carregar config A4", e);
@@ -154,11 +155,11 @@ function EtiquetasPrintContent() {
                             <div key={i} className="label-item-a4">
                                 <div style={{ fontSize: a4Config.tamanhoFonte, fontFamily: a4Config.fonte }} className="font-bold uppercase line-clamp-2 leading-none mb-1">
                                     {a4Config.descricaoTopo && <span className="block text-[0.6em] mb-0.5">{a4Config.descricaoTopo}</span>}
-                                    {item.name || item.nome}
+                                    {(item as any).name || (item as any).nome}
                                 </div>
                                 {a4Config.exibirValor === "Sim" && (
                                     <div style={{ fontSize: a4Config.tamanhoFonteValor === 'Grande' ? '1.5em' : '1em' }} className="font-black">
-                                        R$ {((item.p ? item.p : (item.sale_price || item.preco_venda_centavos)) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        R$ {(((item as any).p ? (item as any).p : ((item as any).sale_price || (item as any).preco_venda_centavos)) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </div>
                                 )}
                                 {a4Config.exibirCodigoBarra === "Sim" && (
@@ -205,7 +206,7 @@ function EtiquetasPrintContent() {
                                 ${format === "40x25" ? "text-[7px]" :
                                     format === "50x30" ? "text-[9px]" : "text-2xl mb-4"}
                             `}>
-                                {item.name || item.nome}
+                                {(item as any).name || (item as any).nome}
                             </div>
 
                             {/* Preço */}
@@ -214,7 +215,7 @@ function EtiquetasPrintContent() {
                                     ${format === "40x25" ? "text-sm" :
                                         format === "50x30" ? "text-lg" : "text-[80px]"}
                                 `}>
-                                    R$ {((item as any).p ? (item as any).p / 100 : (item.sale_price || item.preco_venda_centavos) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    R$ {((item as any).p ? (item as any).p / 100 : ((item as any).sale_price || (item as any).preco_venda_centavos) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </span>
                             </div>
 
