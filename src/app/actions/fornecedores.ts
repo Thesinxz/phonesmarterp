@@ -14,10 +14,9 @@ export async function getFornecedores(empresaId: string, search?: string) {
     .select(`
       id, razao_social, nome_fantasia, cnpj, categoria,
       telefone, whatsapp, email, cidade, estado, pais,
-      prazo_medio_pagamento, ativo
+      prazo_medio_pagamento
     `)
     .eq('empresa_id', empresaId)
-    .eq('ativo', true)
     .order('razao_social')
 
   if (search) {
@@ -87,7 +86,7 @@ export async function deleteFornecedor(id: string) {
   // Soft delete — não remover do banco
   const { error } = await (supabase as any)
     .from('fornecedores')
-    .update({ ativo: false, updated_at: new Date().toISOString() })
+    .update({ updated_at: new Date().toISOString() })
     .eq('id', id)
 
   if (error) throw new Error(error.message)

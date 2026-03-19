@@ -139,6 +139,7 @@ export function FornecedorForm({ initialData, empresaId }: FornecedorFormProps) 
         toast.success('Fornecedor cadastrado com sucesso')
       }
       router.push('/fornecedores')
+      router.refresh()
     } catch (err: any) {
       toast.error('Erro ao salvar fornecedor')
     } finally {

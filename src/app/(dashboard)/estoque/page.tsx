@@ -517,7 +517,7 @@ export default function EstoquePage() {
                                     {activeTab === 'peca' && <th className="px-6 py-4">Qualidade</th>}
                                     <th className="px-6 py-4 text-right">Custo</th>
                                     <th className="px-6 py-4 text-right">Venda</th>
-                                    <th className="px-6 py-4 text-right">Atacado (US$)</th>
+                                    <th className="px-6 py-4 text-right">Atacado (R$)</th>
                                     <th className="px-6 py-4 text-center">Estoque</th>
                                     <th className="px-6 py-4 text-right">Ações</th>
                                 </tr>
@@ -600,8 +600,12 @@ export default function EstoquePage() {
                                                     : <span className="text-[10px] text-amber-500 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 uppercase tracking-tighter whitespace-nowrap">Aguardando Precificação</span>
                                                 }
                                             </td>
-                                            <td className="px-6 py-3 text-right">
-                                                {(item as any).sale_price_usd > 0 ? (
+                                            <td className="px-6 py-3 text-right whitespace-nowrap">
+                                                {((item as any).wholesale_price_brl > 0) ? (
+                                                     <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100/50">
+                                                        R$ {((item as any).wholesale_price_brl / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                     </span>
+                                                ) : (item as any).sale_price_usd > 0 ? (
                                                     <div className="flex flex-col items-end">
                                                         <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100/50">
                                                             $ {((item as any).sale_price_usd / 100).toFixed(2)}

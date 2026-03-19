@@ -287,6 +287,7 @@ export default function NovoCatalogItemPage() {
 
             toast.success("Item salvo com sucesso!");
             router.push("/estoque");
+            router.refresh();
         } catch (err: any) {
             console.error(err);
             toast.error(err.message || "Erro ao salvar o item");
@@ -647,7 +648,7 @@ export default function NovoCatalogItemPage() {
                             <div className="pt-2 border-t border-slate-100 space-y-3">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="text-[10px] font-black text-indigo-600 uppercase">Atacado (USD)</label>
+                                        <label className="text-[10px] font-black text-indigo-600 uppercase">Atacado (US$)</label>
                                         <input name="sale_price_usd" value={form.sale_price_usd} onChange={handleChange} className="input-glass mt-1 w-full text-right font-bold text-indigo-600" />
                                     </div>
                                     <div>

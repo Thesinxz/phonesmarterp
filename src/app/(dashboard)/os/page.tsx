@@ -25,7 +25,7 @@ import { OSKanbanCard } from "@/components/os/OSKanbanCard";
 import { EditOSModal } from "@/components/os/EditOSModal";
 import { notifyOSStatusChange } from "@/actions/notifications";
 import { useAuth } from "@/context/AuthContext";
-import { useRealtimeSubscription } from "@/hooks/useRealtime";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
 import { toast } from "sonner";
 import { cn } from "@/utils/cn";
@@ -92,13 +92,8 @@ export default function OSPage() {
         setTecnicos(data || []);
     }
 
-    useRealtimeSubscription({
-        table: "ordens_servico",
-        filter: profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined,
-        callback: () => {
-            loadOS(true);
-        }
-    });
+    // Escutar mudanças em tempo real
+    useRealtimeTable('ordens_servico', profile?.empresa_id || '', () => loadOS(true));
 
     const loadOS = async (background = false) => {
         if (!background) setLoading(true);

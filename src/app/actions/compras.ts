@@ -80,10 +80,11 @@ export async function criarCompra(params: {
     precoVarejo: number
     precoAtacado: number
     itemType: 'peca' | 'celular' | 'acessorio' | 'outro'
-    itemTypeId?: string // Alias for catalogItemId if needed, but I'll use catalogItemId
+    itemTypeId?: string
     catalogItemId?: string
     categoria?: string
     ncm?: string
+    wholesalePriceBrl?: number
   }>
 }) {
   const supabase = await createClient()
@@ -162,7 +163,8 @@ export async function criarCompra(params: {
           stock_qty: (catalogItem.stock_qty || 0) + item.quantidade,
           cost_price: item.custoUnitario,
           sale_price: item.precoVarejo,
-          sale_price_usd: item.precoAtacado,
+          sale_price_usd: item.precoAtacado && item.precoAtacado < 1000 ? item.precoAtacado : 0,
+          wholesale_price_brl: item.wholesalePriceBrl || item.precoAtacado || null,
           ncm: item.ncm || null,
           updated_at: new Date().toISOString()
         })
@@ -177,9 +179,9 @@ export async function criarCompra(params: {
           stock_qty: item.quantidade,
           cost_price: item.custoUnitario,
           sale_price: item.precoVarejo,
-          sale_price_usd: item.precoAtacado,
-          categoria: item.categoria || null,
-          ncm: item.ncm || null
+          sale_price_usd: item.precoAtacado && item.precoAtacado < 1000 ? item.precoAtacado : 0, // Only save as USD if it looks like a USD price (simple heuristic or just 0 if BRL era)
+          wholesale_price_brl: item.wholesalePriceBrl || item.precoAtacado || null,
+          ncm: item.ncm || null,
         })
         .select('id')
         .single()

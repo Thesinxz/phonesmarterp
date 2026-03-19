@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
-import { useRealtimeSubscription } from "@/hooks/useRealtime";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
 interface AuditLog {
     id: string;
@@ -398,12 +398,13 @@ export function useDashboardMetrics() {
         }
     };
 
-    const filter = profile?.empresa_id ? `empresa_id=eq.${profile.empresa_id}` : undefined;
+    const empresaId = profile?.empresa_id || '';
+    const onchange = () => fetchMetrics(true);
 
-    useRealtimeSubscription({ table: "ordens_servico", filter, callback: () => fetchMetrics(true) });
-    useRealtimeSubscription({ table: "clientes", filter, callback: () => fetchMetrics(true) });
-    useRealtimeSubscription({ table: "financeiro", filter, callback: () => fetchMetrics(true) });
-    useRealtimeSubscription({ table: "vendas", filter, callback: () => fetchMetrics(true) });
+    useRealtimeTable('ordens_servico', empresaId, onchange);
+    useRealtimeTable('clientes', empresaId, onchange);
+    useRealtimeTable('financeiro', empresaId, onchange);
+    useRealtimeTable('vendas', empresaId, onchange);
 
     useEffect(() => {
         if (!profile?.empresa_id) return;

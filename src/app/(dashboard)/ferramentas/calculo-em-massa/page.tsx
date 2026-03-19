@@ -688,7 +688,7 @@ export default function CalculoEmMassa() {
                         brand_id: null,
                         sale_price_usd: currencyType === 'USD' ? Math.round(baseCost * 1.15 * 100) : 0,
                         sale_price_usd_rate: currencyType === 'USD' ? dollarRate : 0,
-                        wholesale_price_brl: custoCentavos // Novo campo obrigatório
+                        wholesale_price_brl: Math.round(baseCost * 1.15 * dollar * 100)
                     };
                 });
 

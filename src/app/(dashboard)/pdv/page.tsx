@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, User, Package, CheckCircle2, Printer, History, Percent, Clock, Lock, DollarSign, LogOut, FileCode2, Receipt, Smartphone, RefreshCw, Keyboard } from "lucide-react";
 import { finalizarVenda } from "@/services/vendas";
 import { getCatalogItems } from "@/services/catalog";
@@ -29,6 +30,7 @@ type CartItem = CatalogItem & {
 };
 
 export default function PDVPage() {
+    const router = useRouter();
     const { profile } = useAuth();
     const { defaultGateway } = useFinanceConfig();
     const [products, setProducts] = useState<CatalogItem[]>([]);
@@ -379,6 +381,7 @@ export default function PDVPage() {
                 return; // para não limpar o carrinho ainda
             } else {
                 setCreatedVenda({ id: venda.id, numero: venda.numero });
+                router.refresh();
             }
 
             setCart([]);

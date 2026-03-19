@@ -726,7 +726,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                             </div>
 
                             <div className="pt-2 border-t border-slate-100">
-                                <label className="text-sm font-semibold text-indigo-600 block mb-1.5">Atacado (USD)</label>
+                                <label className="text-sm font-semibold text-indigo-600 block mb-1.5">Atacado (US$)</label>
                                 <div className="grid grid-cols-2 gap-2">
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">$</span>
@@ -754,7 +754,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                             </div>
 
                             <div className="pt-2">
-                                <label className="text-sm font-semibold text-emerald-600 block mb-1.5">Atacado (BRL)</label>
+                                <label className="text-sm font-semibold text-emerald-600 block mb-1.5">Atacado (R$)</label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">R$</span>
                                     <input

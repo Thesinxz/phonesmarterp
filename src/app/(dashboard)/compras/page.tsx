@@ -14,6 +14,7 @@ import { formatCurrency } from "@/utils/formatCurrency";
 import { formatDate, formatDateTime } from "@/utils/formatDate";
 import { cn } from "@/utils/cn";
 import { StatusBadge, OrigemBadge } from "@/components/compras/StatusBadges";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
 export default function ComprasPage() {
     const { profile } = useAuth();
@@ -42,6 +43,9 @@ export default function ComprasPage() {
     }, [profile?.empresa_id, filterStatus, dataInicio, dataFim]);
 
     useEffect(() => { loadData(); }, [loadData]);
+
+    // Escutar mudanças em tempo real
+    useRealtimeTable('compras', profile?.empresa_id || '', loadData);
 
     const filtered = compras.filter(c =>
         !search || 

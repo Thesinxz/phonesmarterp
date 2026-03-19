@@ -198,6 +198,7 @@ export function OSWizard() {
             toast.success("Ordem de Serviço aberta com sucesso!");
             localStorage.removeItem("smartos_nova_os_wizard");
             router.push(`/os/${os.id}`);
+            router.refresh();
         } catch (error: any) {
             const errorDetail = error?.code
                 ? `[${error.code}] ${error.message}${error.hint ? ' | Dica: ' + error.hint : ''}`

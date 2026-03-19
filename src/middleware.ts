@@ -154,8 +154,8 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url);
     }
 
-    // Redirecionar usuários autenticados para longe de login/cadastro
-    if (user && (pathname === "/login" || pathname === "/cadastro")) {
+    // Redirecionar usuários autenticados para longe de landing page, login ou cadastro
+    if (user && (pathname === "/" || pathname === "/login" || pathname === "/cadastro")) {
         const url = request.nextUrl.clone();
         url.pathname = "/dashboard";
         return NextResponse.redirect(url);

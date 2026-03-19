@@ -40,6 +40,9 @@ export async function createCatalogItemMinimo(params: {
   stock_qty: number
 }) {
   const supabase = await createClient()
+  
+  console.log('[createCatalogItemMinimo] params:', params)
+  
   const { data, error } = await (supabase as any)
     .from('catalog_items')
     .insert({
@@ -49,12 +52,15 @@ export async function createCatalogItemMinimo(params: {
       stock_qty: params.stock_qty,
       cost_price: 0,
       sale_price: 0,
-      status: 'active'
+      sale_price_usd: 0,
     })
-    .select()
+    .select('id, name, item_type, stock_qty, cost_price, sale_price, sale_price_usd, ncm')
     .single()
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    console.error('[createCatalogItemMinimo] erro:', error)
+    throw new Error(error.message)
+  }
   
   revalidatePath('/estoque')
   return data

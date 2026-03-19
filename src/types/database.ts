@@ -469,6 +469,8 @@ export interface Database {
                     origem: "manual" | "xml_nfe" | "ocr_pdf" | "ocr_imagem";
                     nota_fiscal_numero: string | null;
                     observacoes: string | null;
+                    forma_pagamento: string | null;
+                    parcelas: number | null;
                     created_at: string;
                     updated_at: string;
                 };
@@ -483,6 +485,8 @@ export interface Database {
                     origem: "manual" | "xml_nfe" | "ocr_pdf" | "ocr_imagem";
                     nota_fiscal_numero?: string | null;
                     observacoes?: string | null;
+                    forma_pagamento?: string | null;
+                    parcelas?: number;
                 };
                 Update: Partial<{
                     empresa_id: string;
@@ -495,6 +499,8 @@ export interface Database {
                     origem: "manual" | "xml_nfe" | "ocr_pdf" | "ocr_imagem";
                     nota_fiscal_numero?: string | null;
                     observacoes?: string | null;
+                    forma_pagamento?: string | null;
+                    parcelas?: number;
                 }>;
             },
             compra_itens: {

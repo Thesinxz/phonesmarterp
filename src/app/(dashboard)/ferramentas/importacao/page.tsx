@@ -496,7 +496,8 @@ export default function ImportacaoPage() {
                         descricao: "Importado via Calculadora Pro",
                         exibir_vitrine: true,
                         sale_price_usd: usdValues.vendaUsd,
-                        sale_price_usd_rate: params.dolarCompra
+                        sale_price_usd_rate: params.dolarCompra,
+                        wholesale_price_brl: Math.round(usdValues.vendaUsd * params.dolarCompra)
                     });
                 });
                 
@@ -1460,9 +1461,9 @@ export default function ImportacaoPage() {
                                                     >
                                                         {/* Atacado US$ — BUG FIX: divide by 100 */}
                                                         <div>
-                                                            <div className="text-[9px] font-medium text-slate-400 uppercase tracking-wider mb-1">Atacado (US$)</div>
+                                                            <div className="text-[9px] font-medium text-slate-400 uppercase tracking-wider mb-1">Atacado (R$)</div>
                                                             <div className="flex items-center gap-1.5">
-                                                                <span className={cn("text-[10px] font-bold", item.precoVendaUsdCustom ? "text-amber-600" : "text-slate-500")}>$</span>
+                                                                <span className={cn("text-[10px] font-bold", item.precoVendaUsdCustom ? "text-amber-600" : "text-slate-500")}>R$</span>
                                                                 <input 
                                                                     type="number" 
                                                                     step="0.01"
@@ -1475,24 +1476,25 @@ export default function ImportacaoPage() {
                                                                             : "bg-white text-slate-700 border border-slate-200"
                                                                     )}
                                                                     style={{ borderWidth: '0.5px' }}
-                                                                    value={vendaUsdDisplay > 0 ? vendaUsdDisplay.toFixed(2) : ''}
+                                                                    value={vendaUsdEmBrl > 0 ? vendaUsdEmBrl.toFixed(2) : ''}
                                                                     onChange={e => {
-                                                                        const val = parseFloat(e.target.value) || 0;
+                                                                        const valBrl = parseFloat(e.target.value) || 0;
+                                                                        const valUsd = valBrl / params.dolarCompra;
                                                                         const newItems = [...items];
-                                                                        newItems[i].precoVendaUsdCustom = val > 0 ? val : undefined;
+                                                                        newItems[i].precoVendaUsdCustom = valUsd > 0 ? valUsd : undefined;
                                                                         setItems(newItems);
                                                                     }}
                                                                 />
                                                                 <CopyButton 
-                                                                    value={vendaUsdDisplay > 0 
-                                                                        ? `${item.label} — $ ${vendaUsdDisplay.toFixed(2)}` 
+                                                                    value={vendaUsdEmBrl > 0 
+                                                                        ? `${item.label} — R$ ${vendaUsdEmBrl.toFixed(2)}` 
                                                                         : ''} 
-                                                                    label="Preço Atacado (USD)" 
+                                                                    label="Preço Atacado (R$)" 
                                                                 />
                                                             </div>
                                                             {vendaUsdDisplay > 0 && (
                                                                 <div className={cn("text-[10px] mt-0.5", margemUsdPct >= 0 ? "text-emerald-700" : "text-red-600")}>
-                                                                    = R$ {vendaUsdEmBrl.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                    = US$ {vendaUsdDisplay.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                                     {' '}· Lucro: {margemUsdPct.toFixed(1)}%
                                                                 </div>
                                                             )}
