@@ -1,226 +1,37 @@
-"use client";
+import { createClient } from "@/lib/supabase/server";
+import { ComprasListaClient } from "./ComprasListaClient";
 
-import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
-import { 
-    ShoppingCart, Search, Eye, Plus, 
-    TrendingUp, Calculator, Package, 
-    ArrowRight, Loader2, Info
-} from "lucide-react";
-import { GlassCard } from "@/components/ui/GlassCard";
-import { useAuth } from "@/context/AuthContext";
-import { getCompras } from "@/app/actions/compras";
-import { formatCurrency } from "@/utils/formatCurrency";
-import { formatDate, formatDateTime } from "@/utils/formatDate";
-import { cn } from "@/utils/cn";
-import { StatusBadge, OrigemBadge } from "@/components/compras/StatusBadges";
-import { useRealtimeTable } from "@/hooks/useRealtimeTable";
+export default async function ComprasPage() {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) return null;
 
-export default function ComprasPage() {
-    const { profile } = useAuth();
-    const [compras, setCompras] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState("");
-    const [filterStatus, setFilterStatus] = useState("Todos os status");
-    const [dataInicio, setDataInicio] = useState("");
-    const [dataFim, setDataFim] = useState("");
+    const { data: profile } = await (supabase as any)
+        .from("usuarios")
+        .select("empresa_id")
+        .eq("auth_user_id", user.id)
+        .single();
 
-    const loadData = useCallback(async () => {
-        if (!profile?.empresa_id) return;
-        setLoading(true);
-        try {
-            const data = await getCompras(profile.empresa_id, {
-                status: filterStatus === "Todos os status" ? undefined : filterStatus,
-                dataInicio: dataInicio || undefined,
-                dataFim: dataFim || undefined
-            });
-            setCompras(data || []);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoading(false);
-        }
-    }, [profile?.empresa_id, filterStatus, dataInicio, dataFim]);
+    if (!profile?.empresa_id) return null;
 
-    useEffect(() => { loadData(); }, [loadData]);
-
-    // Escutar mudanças em tempo real
-    useRealtimeTable('compras', profile?.empresa_id || '', loadData);
-
-    const filtered = compras.filter(c =>
-        !search || 
-        c.fornecedor_nome?.toLowerCase().includes(search.toLowerCase()) || 
-        c.nota_fiscal_numero?.includes(search) ||
-        `OC-${String(c.numero).padStart(3, '0')}`.includes(search)
-    );
-
-    const isVencido = (data: string | null, status: string) => {
-        if (!data || status === 'pago') return false;
-        return new Date(data) < new Date();
-    };
-
-    const totalPendente = filtered
-        .filter(c => c.status === 'pendente')
-        .reduce((s, c) => s + (c.valor_total || 0), 0);
-        
-    const totalPago = filtered
-        .filter(c => c.status === 'pago')
-        .reduce((s, c) => s + (c.valor_total || 0), 0);
+    // Buscar dados iniciais no servidor para performance instantânea (TTFB baixo)
+    const { data: compras } = await (supabase as any)
+        .from("compras")
+        .select(`
+            id, numero, fornecedor_id, fornecedor_nome, 
+            data_compra, data_vencimento, valor_total, 
+            status, origem, nota_fiscal_numero, created_at,
+            compra_itens(count)
+        `)
+        .eq("empresa_id", profile.empresa_id)
+        .order("created_at", { ascending: false })
+        .limit(50);
 
     return (
-        <div className="space-y-6 page-enter pb-12">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-black text-slate-800 flex items-center gap-3">
-                        <ShoppingCart className="text-brand-500" /> Gestão de Compras
-                    </h1>
-                    <p className="text-slate-500 text-sm mt-1">Controle de entradas, estoque e financeiro</p>
-                </div>
-                <Link href="/compras/nova" className="btn-primary h-12 px-6 flex items-center gap-2 shadow-brand-glow">
-                    <Plus size={20} /> Nova Compra
-                </Link>
-            </div>
-
-            {/* KPIs Rápidos */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                 {[
-                    { label: "Total Pendente", value: totalPendente, color: "text-amber-600", bg: "bg-amber-50" },
-                    { label: "Total Pago", value: totalPago, color: "text-emerald-600", bg: "bg-emerald-50" },
-                    { label: "Ordens Realizadas", value: filtered.length, color: "text-slate-700", bg: "bg-slate-50", fmt: false },
-                ].map(k => (
-                    <GlassCard key={k.label} className={cn("p-5 border-none", k.bg)}>
-                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{k.label}</p>
-                        <p className={cn("text-2xl font-black mt-2", k.color)}>
-                            {k.fmt === false ? k.value : formatCurrency(k.value as number)}
-                        </p>
-                    </GlassCard>
-                ))}
-            </div>
-
-            {/* Filtros */}
-            <GlassCard className="p-4 flex flex-col md:flex-row gap-4 items-center">
-                <div className="relative flex-1">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        placeholder="Buscar OC, fornecedor ou nota fiscal..."
-                        className="input-glass pl-11 h-11"
-                    />
-                </div>
-                <div className="flex gap-2 w-full md:w-auto">
-                    <select 
-                        value={filterStatus}
-                        onChange={e => setFilterStatus(e.target.value)}
-                        className="select-glass text-xs font-bold h-11 w-40"
-                    >
-                        <option>Todos os status</option>
-                        <option value="pendente">Pendente</option>
-                        <option value="pago">Pago</option>
-                        <option value="cancelado">Cancelado</option>
-                    </select>
-                    <input 
-                        type="date" 
-                        value={dataInicio} 
-                        onChange={e => setDataInicio(e.target.value)}
-                        className="input-glass text-xs h-11 w-32" 
-                    />
-                    <input 
-                        type="date" 
-                        value={dataFim} 
-                        onChange={e => setDataFim(e.target.value)}
-                        className="input-glass text-xs h-11 w-32" 
-                    />
-                </div>
-            </GlassCard>
-
-            <GlassCard className="p-0 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="text-[10px] uppercase text-slate-400 font-bold bg-slate-50/50 border-b border-slate-100">
-                            <tr>
-                                <th className="px-6 py-4">Nº / Ordem</th>
-                                <th className="px-6 py-4">Fornecedor</th>
-                                <th className="px-6 py-4">Data Compra</th>
-                                <th className="px-6 py-4">Vencimento</th>
-                                <th className="px-6 py-4">Itens</th>
-                                <th className="px-6 py-4 text-right">Valor Total</th>
-                                <th className="px-6 py-4 text-center">Status</th>
-                                <th className="px-6 py-4 text-center">Origem</th>
-                                <th className="px-6 py-4 text-center">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={9} className="px-6 py-12 text-center text-slate-400">
-                                        <Loader2 className="animate-spin text-brand-500 mx-auto" />
-                                        <p className="mt-2 font-bold uppercase text-[10px]">Lendo base de dados...</p>
-                                    </td>
-                                </tr>
-                            ) : filtered.length === 0 ? (
-                                <tr>
-                                    <td colSpan={9} className="px-6 py-20 text-center text-slate-400">
-                                        <ShoppingCart size={40} className="mx-auto mb-4 opacity-10" />
-                                        <p className="font-bold text-slate-700">Nenhuma compra encontrada</p>
-                                        <Link href="/compras/nova" className="text-brand-500 text-xs font-bold hover:underline mt-2 inline-block">
-                                            Criar primeira compra →
-                                        </Link>
-                                    </td>
-                                </tr>
-                            ) : (
-                                filtered.map(compra => (
-                                    <tr key={compra.id} className="hover:bg-slate-50/50 transition-colors group">
-                                        <td className="px-6 py-4">
-                                            <span className="font-black text-[#1E40AF] tracking-tight">
-                                                OC-{String(compra.numero).padStart(3, '0')}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 font-bold text-slate-800">
-                                            {compra.fornecedor_nome || "Diverso"}
-                                        </td>
-                                        <td 
-                                            className="px-6 py-4 text-slate-500 text-xs font-medium cursor-help"
-                                            title={`Registrado em: ${formatDateTime(compra.created_at)}`}
-                                        >
-                                            <div className="flex items-center gap-1.5">
-                                                {formatDate(compra.data_compra)}
-                                                <Info size={10} className="text-slate-300" />
-                                            </div>
-                                        </td>
-                                        <td className={cn(
-                                            "px-6 py-4 text-xs font-bold",
-                                            isVencido(compra.data_vencimento, compra.status) ? "text-red-500" : "text-slate-500"
-                                        )}>
-                                            {compra.data_vencimento ? formatDate(compra.data_vencimento) : "—"}
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-400 text-xs font-bold">
-                                            {compra.compra_itens?.[0]?.count || 0} ITENS
-                                        </td>
-                                        <td className="px-6 py-4 text-right font-black text-slate-800">
-                                            {formatCurrency(compra.valor_total)}
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <StatusBadge status={compra.status} />
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <OrigemBadge origem={compra.origem} />
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <Link 
-                                                href={`/compras/${compra.id}`} 
-                                                className="p-2 text-brand-500 hover:bg-brand-50 rounded-xl transition-all inline-block"
-                                            >
-                                                <Eye size={16} />
-                                            </Link>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </GlassCard>
-        </div>
+        <ComprasListaClient 
+            comprasIniciais={compras || []} 
+            empresaId={profile.empresa_id} 
+        />
     );
 }
