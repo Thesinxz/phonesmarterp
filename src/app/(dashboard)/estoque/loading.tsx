@@ -1,21 +1,21 @@
 export default function EstoqueLoading() {
   return (
-    <div className="space-y-6 animate-pulse pb-10">
+    <div className="space-y-6 animate-pulse pb-12">
       <div className="flex justify-between items-center">
-        <div className="h-8 w-48 bg-slate-100 rounded" />
+        <div className="h-8 w-32 bg-slate-100 rounded" />
         <div className="h-12 w-32 bg-slate-100 rounded-2xl" />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[1,2,3,4].map(i => <div key={i} className="h-24 bg-slate-100 rounded-2xl" />)}
+      <div className="flex gap-3">
+        <div className="h-11 flex-1 bg-slate-100 rounded-xl" />
+        <div className="h-11 w-36 bg-slate-100 rounded-xl" />
+        <div className="h-11 w-36 bg-slate-100 rounded-xl" />
       </div>
-      <div className="h-14 bg-slate-50 rounded-2xl" />
-      <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
-        <div className="h-12 bg-slate-50 border-b border-slate-100" />
-        {[1,2,3,4,5,6].map(i => (
-          <div key={i} className="flex items-center gap-4 px-6 py-4 border-b border-slate-50">
-            <div className="h-4 w-12 bg-slate-100 rounded" />
-            <div className="h-4 w-64 bg-slate-100 rounded" />
-            <div className="h-4 w-20 bg-slate-100 rounded ml-auto" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {[1,2,3,4,5,6,7,8].map(i => (
+          <div key={i} className="bg-white rounded-2xl border border-slate-100 p-4 space-y-3">
+            <div className="h-24 bg-slate-100 rounded-xl" />
+            <div className="h-4 w-3/4 bg-slate-100 rounded" />
+            <div className="h-3 w-1/2 bg-slate-100 rounded" />
           </div>
         ))}
       </div>

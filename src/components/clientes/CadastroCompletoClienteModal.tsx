@@ -4,6 +4,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { createCliente } from "@/services/clientes";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import { type Cliente } from "@/types/database";
 
 interface CadastroCompletoClienteModalProps {
@@ -13,6 +14,7 @@ interface CadastroCompletoClienteModalProps {
 }
 
 export function CadastroCompletoClienteModal({ onClose, onSuccess, initialName = "" }: CadastroCompletoClienteModalProps) {
+    const router = useRouter();
     const { profile } = useAuth();
     const [loading, setLoading] = useState(false);
     const [fetchingApi, setFetchingApi] = useState(false);
@@ -166,6 +168,7 @@ export function CadastroCompletoClienteModal({ onClose, onSuccess, initialName =
             console.log("[DEBUG] Sucesso createCliente:", novoCliente);
 
             toast.success("Cliente cadastrado com sucesso!");
+            router.refresh();
             onSuccess(novoCliente);
         } catch (error: any) {
             console.error("[DEBUG] Erro no try/catch ao cadastrar cliente:", error);

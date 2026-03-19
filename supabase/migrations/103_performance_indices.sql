@@ -1,54 +1,59 @@
--- Performance Optimization Indices
--- Target: Speed up common listing and filtering queries
-
--- 1. Ordens de Serviço (Tabela principal)
+-- OS
 CREATE INDEX IF NOT EXISTS idx_os_empresa_status
-  ON public.ordens_servico(empresa_id, status);
+  ON ordens_servico(empresa_id, status);
 CREATE INDEX IF NOT EXISTS idx_os_empresa_created
-  ON public.ordens_servico(empresa_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_os_empresa_numero
-  ON public.ordens_servico(empresa_id, numero DESC);
+  ON ordens_servico(empresa_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_os_data_prevista
+  ON ordens_servico(empresa_id, data_prevista)
+  WHERE status NOT IN ('finalizada', 'entregue', 'cancelada');
 
--- 2. Compras
+-- Compras
 CREATE INDEX IF NOT EXISTS idx_compras_empresa_created
-  ON public.compras(empresa_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_compras_empresa_status
-  ON public.compras(empresa_id, status);
+  ON compras(empresa_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_compras_status
+  ON compras(empresa_id, status);
 
--- 3. Catálogo / Itens do Estoque
+-- Catálogo
 CREATE INDEX IF NOT EXISTS idx_catalog_empresa_type
-  ON public.catalog_items(empresa_id, item_type);
-CREATE INDEX IF NOT EXISTS idx_catalog_empresa_name
-  ON public.catalog_items(empresa_id, name);
-CREATE INDEX IF NOT EXISTS idx_catalog_stock
-  ON public.catalog_items(empresa_id, stock_qty);
+  ON catalog_items(empresa_id, item_type);
+CREATE INDEX IF NOT EXISTS idx_catalog_stock_alert
+  ON catalog_items(empresa_id, stock_qty)
+  WHERE stock_qty <= 2;
 
--- 4. Clientes
-CREATE INDEX IF NOT EXISTS idx_clientes_empresa_nome
-  ON public.clientes(empresa_id, nome);
+-- Clientes
+CREATE INDEX IF NOT EXISTS idx_clientes_empresa_created
+  ON clientes(empresa_id, created_at DESC);
 
--- 5. Financeiro (Títulos)
-CREATE INDEX IF NOT EXISTS idx_titulos_empresa_tipo_status
-  ON public.financeiro_titulos(empresa_id, tipo, status);
-CREATE INDEX IF NOT EXISTS idx_titulos_vencimento
-  ON public.financeiro_titulos(empresa_id, data_vencimento);
+-- Financeiro
+CREATE INDEX IF NOT EXISTS idx_financeiro_empresa_tipo
+  ON financeiro(empresa_id, tipo, pago);
+CREATE INDEX IF NOT EXISTS idx_financeiro_vencimento
+  ON financeiro(empresa_id, vencimento)
+  WHERE pago = false;
+CREATE INDEX IF NOT EXISTS idx_titulos_empresa_tipo
+  ON financeiro_titulos(empresa_id, tipo, status);
 
--- 6. Vendas
+-- Vendas
 CREATE INDEX IF NOT EXISTS idx_vendas_empresa_created
-  ON public.vendas(empresa_id, created_at DESC);
+  ON vendas(empresa_id, created_at DESC);
 
--- 7. Estoque por Unidade
-CREATE INDEX IF NOT EXISTS idx_unit_stock_unit_item
-  ON public.unit_stock(unit_id, catalog_item_id);
-CREATE INDEX IF NOT EXISTS idx_unit_stock_tenant
-  ON public.unit_stock(tenant_id);
+-- Audit logs
+CREATE INDEX IF NOT EXISTS idx_audit_empresa_created
+  ON audit_logs(empresa_id, criado_em DESC);
 
--- 8. Movimentações de Caixa (Geralmente carregadas no PDV/Financeiro)
-CREATE INDEX IF NOT EXISTS idx_caixa_mov_caixa_id
-  ON public.caixa_movimentacoes(caixa_id);
+-- Fornecedores
+CREATE INDEX IF NOT EXISTS idx_fornecedores_empresa
+  ON fornecedores(empresa_id);
 
--- Verificar o que foi criado:
--- SELECT indexname, tablename
--- FROM pg_indexes
+-- Garantias
+CREATE INDEX IF NOT EXISTS idx_warranty_empresa_status
+  ON warranty_claims(empresa_id, status);
+
+-- Documentos fiscais
+CREATE INDEX IF NOT EXISTS idx_docs_fiscais_empresa_tipo
+  ON documentos_fiscais(empresa_id, tipo);
+
+-- Verificar criação:
+-- SELECT indexname, tablename FROM pg_indexes
 -- WHERE schemaname = 'public' AND indexname LIKE 'idx_%'
 -- ORDER BY tablename;

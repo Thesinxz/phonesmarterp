@@ -9,9 +9,7 @@ export default function DashboardLoading() {
         <div className="h-8 w-48 bg-slate-100 rounded-lg" />
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-        {[1,2,3,4,5].map(i => (
-          <div key={i} className="h-20 bg-slate-100 rounded-xl" />
-        ))}
+        {[1,2,3,4,5].map(i => <div key={i} className="h-20 bg-slate-100 rounded-xl" />)}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
         <div className="lg:col-span-2 h-64 bg-slate-100 rounded-xl" />

@@ -15,6 +15,7 @@ import { cn } from "@/utils/cn";
 import { toast } from "sonner";
 import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
 import { FeatureGate } from "@/components/plans/FeatureGate";
+import { useRouter } from "next/navigation";
 
 interface Props {
     initialTitulos: any[];
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function ReceberListaClient({ initialTitulos, initialResumo, empresaId }: Props) {
+    const router = useRouter();
     const [titulos, setTitulos] = useState<any[]>(initialTitulos);
     const [resumo, setResumo] = useState<any>(initialResumo);
     const [loading, setLoading] = useState(false);
@@ -81,6 +83,7 @@ export function ReceberListaClient({ initialTitulos, initialResumo, empresaId }:
         try {
             await darBaixaTitulo(id, valorTotal);
             toast.success("Título recebido com sucesso!");
+            router.refresh();
             loadData();
             setActionMenuOpen(null);
         } catch (error: any) {
@@ -94,6 +97,7 @@ export function ReceberListaClient({ initialTitulos, initialResumo, empresaId }:
         try {
             await deleteTitulo(id);
             toast.success("Título removido com sucesso!");
+            router.refresh();
             loadData();
             setActionMenuOpen(null);
         } catch (error: any) {

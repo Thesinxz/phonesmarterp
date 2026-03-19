@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { parseNfeXml } from "@/services/xml_parser";
 import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
 import { FeatureGate } from "@/components/plans/FeatureGate";
+import { useRouter } from "next/navigation";
 
 interface Props {
     initialTitulos: any[];
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export function PagarListaClient({ initialTitulos, initialResumo, empresaId }: Props) {
+    const router = useRouter();
     const [titulos, setTitulos] = useState<any[]>(initialTitulos);
     const [resumo, setResumo] = useState<any>(initialResumo);
     const [loading, setLoading] = useState(false);
@@ -119,6 +121,7 @@ export function PagarListaClient({ initialTitulos, initialResumo, empresaId }: P
         try {
             await darBaixaTitulo(id, valorTotal);
             toast.success("Despesa paga com sucesso!");
+            router.refresh();
             loadData();
             setActionMenuOpen(null);
         } catch (error: any) {
@@ -132,6 +135,7 @@ export function PagarListaClient({ initialTitulos, initialResumo, empresaId }: P
         try {
             await deleteTitulo(id);
             toast.success("Conta a pagar excluída com sucesso.");
+            router.refresh();
             setActionMenuOpen(null);
             loadData();
         } catch (error: any) {

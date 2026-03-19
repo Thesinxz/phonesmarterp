@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
     Search, ShoppingCart, Trash2, Plus, Minus, User, Package,
     CheckCircle2, CreditCard, Banknote, History,
@@ -23,6 +24,7 @@ interface CartItem extends Produto {
 
 export default function NovoPedidoPage() {
     const { profile } = useAuth();
+    const router = useRouter();
     const [step, setStep] = useState(1);
 
     // Products & Cart
@@ -176,6 +178,7 @@ export default function NovoPedidoPage() {
 
             setCreatedVenda({ id: venda.id, numero: venda.numero });
             setStep(4);
+            router.refresh();
         } catch (error: any) {
             alert("Erro ao salvar pedido: " + error.message);
         } finally {
