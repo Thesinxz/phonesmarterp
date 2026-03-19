@@ -216,10 +216,33 @@ export function OSListaClient({
             </div>
 
             {/* Conteúdo Principal */}
-            {loading ? (
-                <div className="h-96 flex items-center justify-center">
-                    <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                </div>
+            {loading && orders.length === 0 ? (
+                viewMode === "kanban" ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 pb-10">
+                        {STAGES.map((stage) => (
+                            <div key={stage.status} className="flex flex-col gap-3">
+                                <div className="flex items-center gap-2 px-1">
+                                    <div className={cn("w-1.5 h-4 rounded-full", stage.color)} />
+                                    <div className="h-3 w-20 bg-slate-100 rounded animate-pulse" />
+                                </div>
+                                <div className="bg-slate-50/40 rounded-[2rem] p-2 border border-slate-100 min-h-[300px]">
+                                    <div className="space-y-2">
+                                        {[1, 2, 3].map((i) => (
+                                            <div key={i} className="bg-white rounded-2xl p-4 animate-pulse shadow-sm border border-slate-100">
+                                                <div className="h-3 w-3/4 bg-slate-100 rounded mb-3" />
+                                                <div className="h-2 w-1/2 bg-slate-50 rounded" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="h-96 flex items-center justify-center">
+                        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                )
             ) : viewMode === "kanban" ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 pb-10">
                     {STAGES.map((stage) => (
