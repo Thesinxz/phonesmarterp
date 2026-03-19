@@ -24,12 +24,13 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     const channel = supabase
       .channel(`app-realtime-${id}`)
 
-      // Configurações
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'configuracoes'
-      }, () => router.refresh())
+      }, () => {
+        logger.log("[Realtime] configuracoes alterada");
+        router.refresh();
+      })
 
-      // Ordens de Serviço
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'ordens_servico',
         filter: `empresa_id=eq.${id}`
@@ -38,7 +39,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         router.refresh();
       })
 
-      // Compras
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'os_parts',
+        filter: `empresa_id=eq.${id}`
+      }, () => router.refresh())
+
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'compras',
         filter: `empresa_id=eq.${id}`
@@ -47,7 +52,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         router.refresh();
       })
 
-      // Estoque / Catálogo
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'compra_itens',
+        filter: `empresa_id=eq.${id}`
+      }, () => router.refresh())
+
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'catalog_items',
         filter: `empresa_id=eq.${id}`
@@ -56,7 +65,16 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         router.refresh();
       })
 
-      // Clientes
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'unit_stock',
+        filter: `tenant_id=eq.${id}`
+      }, () => router.refresh())
+
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'stock_movements',
+        filter: `tenant_id=eq.${id}`
+      }, () => router.refresh())
+
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'clientes',
         filter: `empresa_id=eq.${id}`
@@ -65,16 +83,14 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         router.refresh();
       })
 
-      // Financeiro
       .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'financeiro',
+        event: '*', schema: 'public', table: 'financeiro_titulos',
         filter: `empresa_id=eq.${id}`
       }, (p) => {
-        logger.log("[Realtime] financeiro:", p.eventType);
+        logger.log("[Realtime] financeiro_titulos:", p.eventType);
         router.refresh();
       })
 
-      // Vendas
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'vendas',
         filter: `empresa_id=eq.${id}`
@@ -83,7 +99,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         router.refresh();
       })
 
-      // Fornecedores
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'venda_itens',
+        filter: `empresa_id=eq.${id}`
+      }, () => router.refresh())
+
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'fornecedores',
         filter: `empresa_id=eq.${id}`
@@ -92,21 +112,16 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         router.refresh();
       })
 
-      // Garantias
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'warranty_claims',
-        filter: `tenant_id=eq.${id}`
-      }, (p) => {
-        logger.log("[Realtime] warranty_claims:", p.eventType);
-        router.refresh();
-      })
+        filter: `empresa_id=eq.${id}`
+      }, () => router.refresh())
 
-      // Notificações
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'notifications',
         filter: `empresa_id=eq.${id}`
       }, (p) => {
-        logger.log("[Realtime] notifications:", p.eventType);
+        logger.log("[Realtime] nova notificação");
         router.refresh();
       })
 
@@ -115,7 +130,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           logger.log("[RealtimeProvider] Canal conectado:", `app-realtime-${id}`);
         }
         if (status === 'CHANNEL_ERROR') {
-          logger.error("[RealtimeProvider] Erro no canal realtime — verificar SQL de publicação.");
+          logger.error("[RealtimeProvider] Erro no canal — verificar SQL ALTER PUBLICATION no Supabase.");
         }
       });
 

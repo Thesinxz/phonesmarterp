@@ -912,6 +912,7 @@ export default function PDVPage() {
                     onClose={() => setShowCrediarioModal(null)}
                     onCreated={() => {
                         setShowCrediarioModal(null);
+                        router.refresh();
                         setStep(4);
                     }}
                 />

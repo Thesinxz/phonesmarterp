@@ -142,6 +142,7 @@ export default function NovaNFePage() {
             if (error) throw error;
 
             toast.success(acao === "emitir" ? "NF-e enviada para processamento!" : "Rascunho salvo com sucesso!");
+            router.refresh();
             router.push("/fiscal");
 
         } catch (error) {

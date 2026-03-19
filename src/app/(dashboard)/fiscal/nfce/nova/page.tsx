@@ -75,6 +75,7 @@ export default function NovaNFCePage() {
             if (error) throw error;
 
             toast.success(acao === "emitir" ? "NFC-e enviada para processamento!" : "Rascunho salvo com sucesso!");
+            router.refresh();
             router.push("/fiscal");
 
         } catch (error) {

@@ -90,6 +90,7 @@ export default function NovaNFSePage() {
             if (error) throw error;
 
             toast.success("NFS-e enviada para processamento na Prefeitura!");
+            router.refresh();
             router.push("/fiscal");
 
         } catch (error) {

@@ -143,6 +143,7 @@ export default function BalancoEstoquePage() {
                 toast.info("Nenhuma divergência de estoque encontrada.");
             }
 
+            router.refresh();
             router.push("/estoque");
         } catch (error) {
             console.error(error);

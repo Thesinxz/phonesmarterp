@@ -118,6 +118,7 @@ function GarantiaNovaContent() {
                 toast.success("Garantia registrada (não coberta).");
             }
 
+            router.refresh();
             router.push(`/os/${osId}`);
         } catch (error) {
             console.error(error);
