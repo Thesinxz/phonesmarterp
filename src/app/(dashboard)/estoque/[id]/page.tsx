@@ -52,6 +52,7 @@ import { AdjustStockModal } from "@/components/estoque/AdjustStockModal";
 import { MovimentacaoModal } from "@/components/estoque/MovimentacaoModal";
 import { PartTypeSelector } from "@/components/estoque/PartTypeSelector";
 import { QualitySelector } from "@/components/estoque/QualitySelector";
+import { StockBadge } from "@/components/estoque/StockBadge";
 
 export default function DetalheProdutoPage({ params }: { params: { id: string } }) {
     const router = useRouter();
@@ -859,12 +860,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                 return (
                                     <div key={unit.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
                                         <span className="text-xs font-bold text-slate-600">{unit.name}</span>
-                                        <span className={cn(
-                                            "px-2 py-0.5 rounded-md text-xs font-black",
-                                            qty > 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
-                                        )}>
-                                            {qty} un
-                                        </span>
+                                        <StockBadge qty={qty} alertQty={parseInt(form.estoqueMinimo) || 1} />
                                     </div>
                                 );
                             })}

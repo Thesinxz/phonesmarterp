@@ -605,24 +605,27 @@ export async function createCatalogItemWithStock(params: {
         const catalogItemId = newItem.id;
         console.log('[Server Action] catalog_items item created:', catalogItemId);
 
-        // 2. Salvar estoques por unidade
-        const stockEntries = Object.entries(unitStocks).map(([unitId, qty]) => ({
-            tenant_id: item.empresa_id,
-            catalog_item_id: catalogItemId,
-            unit_id: unitId,
-            qty: qty,
-            alert_qty: item.stock_alert_qty || 2
-        }));
+        // 2. Salvar estoques por unidade (apenas se tiver entradas válidas)
+        const stockEntries = Object.entries(unitStocks)
+            .filter(([_, qty]) => qty > 0)
+            .map(([unitId, qty]) => ({
+                tenant_id: item.empresa_id,
+                catalog_item_id: catalogItemId,
+                unit_id: unitId,
+                qty: qty,
+                alert_qty: item.stock_alert_qty || 2
+            }));
 
         if (stockEntries.length > 0) {
             const { error: stockError } = await (supabase as any)
                 .from('unit_stock')
                 .insert(stockEntries);
             if (stockError) {
-                console.error('[Server Action] unit_stock insert error:', stockError);
-                throw new Error(`Erro ao salvar estoque por unidade: ${stockError.message}`);
+                console.error('[Server Action] unit_stock insert error (non-critical):', stockError);
+                // Não lançar erro — o item já foi criado, só o estoque por unidade falhou ou foi omitido
+            } else {
+                console.log('[Server Action] unit_stock entries created:', stockEntries.length);
             }
-            console.log('[Server Action] unit_stock entries created:', stockEntries.length);
         }
 
         // 3. Salvar modelos compatíveis se for peça

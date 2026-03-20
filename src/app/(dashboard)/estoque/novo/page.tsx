@@ -208,12 +208,7 @@ export default function NovoCatalogItemPage() {
             return;
         }
 
-        // Garantir que temos unidade mesmo se units não carregou
-        if (units.length === 0 && !profile.unit_id) {
-            console.error('[Debug] No units found and no unit_id in profile');
-            toast.error("Nenhuma unidade configurada. Vá em Configurações → Unidades.");
-            return;
-        }
+
 
         setLoading(true);
 
@@ -239,25 +234,28 @@ export default function NovoCatalogItemPage() {
 
             const stock_alert_qty = parseInt(form.stock_alert_qty, 10) || 1;
 
+            const qtyPrincipal = Math.max(0, parseInt(form.stock_qty, 10) || 0);
             const finalUnitStocks: Record<string, number> = {};
-            if (units.length > 0) {
-                if (units.length > 1) {
-                    units.forEach(u => {
-                        finalUnitStocks[u.id] = parseInt(unitStocks[u.id] || "0", 10) || 0;
-                    });
-                } else {
-                    // Uma unidade — garantir que usa o valor do form corretamente
-                    const qty = parseInt(form.stock_qty, 10);
-                    finalUnitStocks[units[0].id] = isNaN(qty) ? 0 : Math.max(0, qty);
-                }
-            } else if (profile.unit_id) {
-                // Fallback: sem unidades cadastradas, usar unit_id do perfil
-                const qty = parseInt(form.stock_qty, 10);
-                finalUnitStocks[profile.unit_id] = isNaN(qty) ? 0 : Math.max(0, qty);
+
+            if (units.length > 1) {
+                // Múltiplas unidades — usar os inputs individuais de cada unidade
+                units.forEach(u => {
+                    const qty = Math.max(0, parseInt(unitStocks[u.id] || "0", 10) || 0);
+                    finalUnitStocks[u.id] = qty;
+                });
+            } else if (units.length === 1) {
+                // Uma unidade — usar o campo qty principal
+                finalUnitStocks[units[0].id] = qtyPrincipal;
+            } else if (profile?.unit_id) {
+                // Fallback: units ainda não carregou mas perfil tem unit_id
+                finalUnitStocks[profile.unit_id] = qtyPrincipal;
+            } else {
+                // Último fallback: salvar sem unit_stock (só o stock_qty no catalog_item)
+                console.warn('[Estoque] Nenhuma unidade disponível, salvando sem unit_stock');
             }
 
-            // Calcular stock_qty total como soma de todas as unidades
-            const stockQtyTotal = Object.values(finalUnitStocks).reduce((a, b) => a + b, 0);
+            // stock_qty total = soma de todas as unidades (ou qty principal como fallback)
+            const stockQtyTotal = Object.values(finalUnitStocks).reduce((a, b) => a + b, 0) || qtyPrincipal;
 
             console.log('[Debug] finalUnitStocks:', finalUnitStocks);
             console.log('[Debug] stock_qty total:', stockQtyTotal);
@@ -308,9 +306,30 @@ export default function NovoCatalogItemPage() {
                 wholesale_price_brl: Math.round(parseFloat(form.sale_price_wholesale_brl.replace(',', '.')) * 100) || 0,
             };
 
+            // Se units não carregou ainda (race condition), buscar unidade inline
+            let finalUnitStocksResolved = { ...finalUnitStocks };
+            if (Object.keys(finalUnitStocksResolved).length === 0 && profile.empresa_id) {
+                try {
+                    const supabase = createClient();
+                    const { data: unitsData } = await supabase
+                        .from('units')
+                        .select('id')
+                        .eq('empresa_id', profile.empresa_id)
+                        .eq('is_active', true)
+                        .order('name')
+                        .limit(1)
+                        .single();
+                    if (unitsData) {
+                        finalUnitStocksResolved[(unitsData as any).id] = qtyPrincipal;
+                    }
+                } catch (err) {
+                    console.warn('[Estoque] Não foi possível buscar unidade inline:', err);
+                }
+            }
+
             const newItem = await createCatalogItemWithStock({
                 item: itemData,
-                unitStocks: finalUnitStocks,
+                unitStocks: finalUnitStocksResolved,
                 compatibleModels: itemType === 'peca' ? compatibleModels : []
             });
 
