@@ -10,7 +10,7 @@ import { cn } from "@/utils/cn";
 import type { PricingSegment, Brand, ProductType } from "@/types/database";
 import { ModelAliasesPanel } from "./ModelAliasesPanel";
 
-export function CatalogoPanel() {
+export function CatalogoPanel({ initialTab }: { initialTab?: 'segmentos' | 'marcas' | 'tipos' | 'apelidos' }) {
     const { profile } = useAuth();
     const supabase = createClient() as any;
 
@@ -19,7 +19,14 @@ export function CatalogoPanel() {
     const [productTypes, setProductTypes] = useState<ProductType[]>([]);
 
     const [loading, setLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<'segmentos' | 'marcas' | 'tipos' | 'apelidos'>('segmentos');
+    const [activeTab, setActiveTab] = useState<'segmentos' | 'marcas' | 'tipos' | 'apelidos'>(initialTab || 'segmentos');
+
+    // Sincronizar activeTab se o prop mudar
+    useEffect(() => {
+        if (initialTab) {
+            setActiveTab(initialTab);
+        }
+    }, [initialTab]);
 
     // Módulos
     useEffect(() => {
@@ -167,32 +174,34 @@ export function CatalogoPanel() {
 
     return (
         <div className="space-y-6 animate-in fade-in zoom-in-95">
-            <div className="flex gap-4">
-                <button
-                    onClick={() => setActiveTab('segmentos')}
-                    className={cn("px-4 py-2 font-bold text-sm rounded-xl transition-all", activeTab === 'segmentos' ? "bg-brand-500 text-white shadow-brand-glow" : "bg-white text-slate-500")}
-                >
-                    Segmentos (Metas de Lucro)
-                </button>
-                <button
-                    onClick={() => setActiveTab('marcas')}
-                    className={cn("px-4 py-2 font-bold text-sm rounded-xl transition-all", activeTab === 'marcas' ? "bg-brand-500 text-white shadow-brand-glow" : "bg-white text-slate-500")}
-                >
-                    Marcas
-                </button>
-                <button
-                    onClick={() => setActiveTab('tipos')}
-                    className={cn("px-4 py-2 font-bold text-sm rounded-xl transition-all", activeTab === 'tipos' ? "bg-brand-500 text-white shadow-brand-glow" : "bg-white text-slate-500")}
-                >
-                    Tipos de Produto (Categorias)
-                </button>
-                <button
-                    onClick={() => setActiveTab('apelidos')}
-                    className={cn("px-4 py-2 font-bold text-sm rounded-xl transition-all", activeTab === 'apelidos' ? "bg-brand-500 text-white shadow-brand-glow" : "bg-white text-slate-500")}
-                >
-                    Equivalência de Modelos
-                </button>
-            </div>
+            {!initialTab && (
+                <div className="flex gap-4">
+                    <button
+                        onClick={() => setActiveTab('segmentos')}
+                        className={cn("px-4 py-2 font-bold text-sm rounded-xl transition-all", activeTab === 'segmentos' ? "bg-brand-500 text-white shadow-brand-glow" : "bg-white text-slate-500")}
+                    >
+                        Segmentos (Metas de Lucro)
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('marcas')}
+                        className={cn("px-4 py-2 font-bold text-sm rounded-xl transition-all", activeTab === 'marcas' ? "bg-brand-500 text-white shadow-brand-glow" : "bg-white text-slate-500")}
+                    >
+                        Marcas
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('tipos')}
+                        className={cn("px-4 py-2 font-bold text-sm rounded-xl transition-all", activeTab === 'tipos' ? "bg-brand-500 text-white shadow-brand-glow" : "bg-white text-slate-500")}
+                    >
+                        Tipos de Produto (Categorias)
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('apelidos')}
+                        className={cn("px-4 py-2 font-bold text-sm rounded-xl transition-all", activeTab === 'apelidos' ? "bg-brand-500 text-white shadow-brand-glow" : "bg-white text-slate-500")}
+                    >
+                        Equivalência de Modelos
+                    </button>
+                </div>
+            )}
 
             {loading ? (
                 <div className="text-slate-400 p-8 text-center animate-pulse font-bold">Carregando dados...</div>

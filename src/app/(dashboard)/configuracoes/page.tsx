@@ -34,7 +34,9 @@ import {
     Link2,
     Loader2,
     Layers,
-    Download
+    Download,
+    Tag,
+    Package
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -49,7 +51,7 @@ import { CatalogoPanel } from "./CatalogoPanel";
 import { UnidadesPanel } from "./UnidadesPanel";
 import { LayoutGrid } from "lucide-react";
 
-type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "unidades" | "catalogo" | "ai_config" | "vitrine" | "etiquetas" | "auditoria" | "contador" | "crediario" | "termos_os";
+type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "unidades" | "segmentos" | "marcas" | "tipos" | "apelidos" | "ai_config" | "vitrine" | "etiquetas" | "auditoria" | "contador" | "crediario" | "termos_os";
 
 import { type WhatsappConfig, type FinanceiroConfig } from "@/types/configuracoes";
 import { getFiscalConfig, upsertFiscalConfig, ConfiguracaoFiscal } from "@/services/fiscal";
@@ -582,7 +584,10 @@ export default function ConfiguracoesPage() {
         { id: "whatsapp", label: "WhatsApp", icon: MessageSquare, desc: "Notificações automáticas" },
         { id: "unidades", label: "Unidades", icon: LayoutGrid, desc: "Capacidades das Lojas" },
         { id: "financeiro", label: "Margens & Taxas", icon: DollarSign, desc: "Calculadoras e Lucro" },
-        { id: "catalogo", label: "Catálogo", icon: Layers, desc: "Marcas e Segmentos" },
+        { id: "segmentos", label: "Segmentos", icon: Layers, desc: "Lucro por categoria" },
+        { id: "marcas", label: "Marcas", icon: Tag, desc: "Fabricantes" },
+        { id: "tipos", label: "Tipos de Item", icon: Package, desc: "Celulares, Peças, etc" },
+        { id: "apelidos", label: "Apelidos", icon: RefreshCw, desc: "Equivalência de Modelos" },
         { id: "ai_config", label: "IA e OCR", icon: Sparkles, desc: "Gemini 2.5 Flash" },
         { id: "vitrine", label: "Vitrine Online", icon: ShoppingBag, desc: "Catálogo público + TV" },
         { id: "crediario", label: "Crediário & Efíbank", icon: CreditCard, desc: "Fiado e Boletos" },
@@ -657,6 +662,20 @@ export default function ConfiguracoesPage() {
                         {/* ── UNIDADES ── */}
                         {activeTab === "unidades" && (
                             <UnidadesPanel />
+                        )}
+
+                        {/* ── CATALOGO SECTIONS ── */}
+                        {activeTab === "segmentos" && (
+                            <CatalogoPanel initialTab="segmentos" />
+                        )}
+                        {activeTab === "marcas" && (
+                            <CatalogoPanel initialTab="marcas" />
+                        )}
+                        {activeTab === "tipos" && (
+                            <CatalogoPanel initialTab="tipos" />
+                        )}
+                        {activeTab === "apelidos" && (
+                            <CatalogoPanel initialTab="apelidos" />
                         )}
 
                         {/* ── EMPRESA ── */}
@@ -1128,9 +1147,7 @@ export default function ConfiguracoesPage() {
                         )}
 
                         {/* ── FINANCEIRO ── */}
-                        {activeTab === "catalogo" && (
-                            <CatalogoPanel />
-                        )}
+
 
                         {activeTab === "financeiro" && (
                             <div className="space-y-6">

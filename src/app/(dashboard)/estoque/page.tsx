@@ -17,13 +17,15 @@ export default async function EstoquePage() {
     if (!profile?.empresa_id) return null;
 
     // Buscar metadados e itens iniciais em paralelo
-    const [bRes, uRes, tRes, sRes, items] = await Promise.all([
+    const [bRes, uRes, tRes, sRes, catalogResult] = await Promise.all([
         supabase.from("brands").select("id, name").eq("empresa_id", profile.empresa_id).order("name"),
         supabase.from("units").select("id, name").eq("empresa_id", profile.empresa_id).eq("is_active", true),
         supabase.from("product_types").select("id, name, slug").order("name"),
         supabase.from("pricing_segments").select("id, name").eq("empresa_id", profile.empresa_id).order("name"),
         getCatalogItems(profile.empresa_id)
     ]);
+
+    const items = catalogResult.items || [];
 
     // Buscar estoques por unidade da carga inicial
     let unitStocks: any[] = [];

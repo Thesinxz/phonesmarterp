@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, History, ArrowUpRight, ArrowDownLeft, RefreshCcw, User, Calendar, Tag } from "lucide-react";
 import { getProdutoHistorico } from "@/services/historico_produto";
+import { getPartMovements } from "@/app/actions/parts";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { formatDate } from "@/utils/formatDate";
 import { cn } from "@/utils/cn";
@@ -23,10 +24,31 @@ export function MovimentacaoModal({ produtoId, onClose }: MovimentacaoModalProps
     async function loadHistorico() {
         setLoading(true);
         try {
-            const data = await getProdutoHistorico(produtoId);
-            setHistorico(data);
-        } catch (error) {
-            console.error("Erro ao carregar histórico:", error);
+            // Tentar buscar via getPartMovements (catalog_items)
+            const { data: movData } = await getPartMovements(produtoId, 1, 50, {});
+            if (movData && movData.length > 0) {
+                // Mapear para o formato esperado pelo template
+                setHistorico(movData.map((m: any) => ({
+                    id: m.id,
+                    tipo_evento: m.type || m.tipo_evento || 'ajuste',
+                    descricao: m.reason || m.descricao || m.type || 'Movimentação',
+                    created_at: m.created_at,
+                    usuario_nome: m.user?.name || m.usuario_nome || '',
+                    referencia_id: m.reference_id || m.referencia_id || null,
+                })));
+            } else {
+                // Fallback para legado
+                const data = await getProdutoHistorico(produtoId);
+                setHistorico(data);
+            }
+        } catch {
+            // Fallback para legado em caso de erro
+            try {
+                const data = await getProdutoHistorico(produtoId);
+                setHistorico(data);
+            } catch (error) {
+                console.error("Erro ao carregar histórico:", error);
+            }
         } finally {
             setLoading(false);
         }

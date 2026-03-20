@@ -18,6 +18,8 @@ import { Search } from "lucide-react";
 import { Brand, PricingSegment, type CatalogItem } from "@/types/database";
 import { getExistingDeviceModels, createCatalogItemWithStock } from "@/app/actions/parts";
 import { IMEIScanner } from "@/components/inventory/IMEIScanner";
+import { PartTypeSelector } from "@/components/estoque/PartTypeSelector";
+import { QualitySelector } from "@/components/estoque/QualitySelector";
 import { registerIMEI } from "@/app/actions/imei";
 
 type ItemType = 'celular' | 'acessorio' | 'peca' | null;
@@ -197,11 +199,40 @@ export default function NovoCatalogItemPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        console.log('[Debug] handleSubmit started. itemType:', itemType);
+        
+        if (!profile?.empresa_id) {
+            console.error('[Debug] profile.empresa_id missing:', profile);
+            toast.error("Empresa não identificada. Recarregue a página.");
+            return;
+        }
+
+        // Garantir que temos unidade mesmo se units não carregou
+        if (units.length === 0 && !profile.unit_id) {
+            console.error('[Debug] No units found and no unit_id in profile');
+            toast.error("Nenhuma unidade configurada. Vá em Configurações → Unidades.");
+            return;
+        }
+
         setLoading(true);
 
         try {
-            if (!profile?.empresa_id) throw new Error("Empresa não identificada");
             if (!itemType) throw new Error("Selecione o tipo de item");
+
+            // Se for peça e o nome for vazio, tentar gerar um nome básico
+            if (itemType === 'peca' && !form.name.trim() && form.part_type) {
+                const typeLabel = ['tela', 'bateria', 'conector', 'camera', 'tampa', 'vidro'].includes(form.part_type) 
+                    ? form.part_type.charAt(0).toUpperCase() + form.part_type.slice(1) 
+                    : 'Componente';
+                const qualityLabel = form.quality ? ` - ${form.quality.toUpperCase()}` : '';
+                const brandLabel = form.part_brand ? ` p/ ${form.part_brand}` : '';
+                const generatedName = `${typeLabel}${brandLabel}${qualityLabel}`;
+                setForm(prev => ({ ...prev, name: generatedName }));
+                form.name = generatedName; // update local ref for immediate use
+            }
+
+            if (!form.name.trim()) throw new Error("Nome do produto é obrigatório");
 
             const cost_price = parseInt(form.cost_price.replace(/\D/g, ''), 10);
             const sale_price = parseInt(form.sale_price.replace(/\D/g, ''), 10);
@@ -215,12 +246,21 @@ export default function NovoCatalogItemPage() {
                         finalUnitStocks[u.id] = parseInt(unitStocks[u.id] || "0", 10) || 0;
                     });
                 } else {
-                    // Se só tem uma unidade, usa ela diretamente com o stock_qty do form
-                    finalUnitStocks[units[0].id] = parseInt(form.stock_qty, 10) || 0;
+                    // Uma unidade — garantir que usa o valor do form corretamente
+                    const qty = parseInt(form.stock_qty, 10);
+                    finalUnitStocks[units[0].id] = isNaN(qty) ? 0 : Math.max(0, qty);
                 }
             } else if (profile.unit_id) {
-                finalUnitStocks[profile.unit_id] = parseInt(form.stock_qty, 10) || 0;
+                // Fallback: sem unidades cadastradas, usar unit_id do perfil
+                const qty = parseInt(form.stock_qty, 10);
+                finalUnitStocks[profile.unit_id] = isNaN(qty) ? 0 : Math.max(0, qty);
             }
+
+            // Calcular stock_qty total como soma de todas as unidades
+            const stockQtyTotal = Object.values(finalUnitStocks).reduce((a, b) => a + b, 0);
+
+            console.log('[Debug] finalUnitStocks:', finalUnitStocks);
+            console.log('[Debug] stock_qty total:', stockQtyTotal);
 
             const itemData = {
                 empresa_id: profile.empresa_id,
@@ -228,7 +268,7 @@ export default function NovoCatalogItemPage() {
                 name: form.name,
                 cost_price: isNaN(cost_price) ? 0 : cost_price,
                 sale_price: isNaN(sale_price) ? 0 : sale_price,
-                stock_qty: Object.values(finalUnitStocks).reduce((a, b) => a + b, 0),
+                stock_qty: stockQtyTotal,
                 stock_alert_qty: stock_alert_qty,
                 show_in_storefront: form.show_in_storefront,
                 description: form.description || null,
@@ -257,6 +297,9 @@ export default function NovoCatalogItemPage() {
                 accessory_type: itemType === 'acessorio' ? form.accessory_type : null,
                 compatible_models: itemType === 'acessorio' ? form.compatible_models : null,
 
+                // Peças
+                part_type: itemType === 'peca' ? form.part_type : null,
+                quality: itemType === 'peca' ? form.quality : null,
                 part_brand: itemType === 'peca' ? form.part_brand : null,
                 supplier: itemType === 'peca' ? form.supplier : null,
                 model: itemType === 'peca' ? form.model : null,
@@ -375,7 +418,32 @@ export default function NovoCatalogItemPage() {
                             {itemType === 'celular' && (
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-xs font-black text-slate-400 uppercase">Marca</label>
+                                        <label className="text-xs font-black text-slate-400 uppercase flex items-center justify-between">
+                                            <span>Marca</span>
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    const nome = window.prompt("Nome da nova marca:");
+                                                    if (!nome?.trim() || !profile?.empresa_id) return;
+                                                    const supabase = createClient();
+                                                    const { data, error } = await (supabase as any)
+                                                        .from('brands')
+                                                        .insert({ name: nome.trim(), empresa_id: profile.empresa_id })
+                                                        .select()
+                                                        .single();
+                                                    if (error) {
+                                                        toast.error("Erro ao criar marca");
+                                                        return;
+                                                    }
+                                                    setBrands(prev => [...prev, data as any]);
+                                                    setForm(prev => ({ ...prev, brand_id: data.id }));
+                                                    toast.success(`Marca "${nome.trim()}" criada!`);
+                                                }}
+                                                className="text-[10px] text-brand-500 hover:underline font-bold normal-case"
+                                            >
+                                                + Nova marca
+                                            </button>
+                                        </label>
                                         <select name="brand_id" value={form.brand_id} onChange={handleChange} className="input-glass mt-1 w-full font-bold">
                                             <option value="">Selecione...</option>
                                             {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -431,32 +499,17 @@ export default function NovoCatalogItemPage() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="col-span-2">
                                         <label className="text-xs font-black text-slate-400 uppercase block mb-2">Tipo de Peça</label>
-                                        <div className="flex flex-wrap gap-2">
-                                            {[ 
-                                                {v:'tela', l:'Tela/Frontal'}, {v:'bateria', l:'Bateria'}, {v:'conector', l:'Conector'}, 
-                                                {v:'camera', l:'Câmera'}, {v:'tampa_traseira', l:'Tampa'}, {v:'outro', l:'Outro'} 
-                                            ].map(t => (
-                                                 <button key={t.v} type="button" onClick={() => setForm(p => ({...p, part_type: t.v}))}
-                                                    className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all border-2",
-                                                        form.part_type === t.v ? "border-amber-500 bg-amber-50 text-amber-700" : "border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200"
-                                                    )}>
-                                                    {t.l}
-                                                </button>
-                                            ))}
-                                        </div>
+                                        <PartTypeSelector
+                                            value={form.part_type}
+                                            onChange={(v) => setForm(p => ({ ...p, part_type: v }))}
+                                        />
                                     </div>
                                     <div className="col-span-2">
                                         <label className="text-xs font-black text-slate-400 uppercase block mb-2">Qualidade</label>
-                                        <div className="flex flex-wrap gap-2">
-                                            {['original', 'oem', 'paralela', 'china'].map(t => (
-                                                 <button key={t} type="button" onClick={() => setForm(p => ({...p, quality: t}))}
-                                                    className={cn("px-4 py-2 rounded-xl text-xs font-bold capitalize transition-all border-2",
-                                                        form.quality === t ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200"
-                                                    )}>
-                                                    {t}
-                                                </button>
-                                            ))}
-                                        </div>
+                                        <QualitySelector
+                                            value={form.quality}
+                                            onChange={(v) => setForm(p => ({ ...p, quality: v }))}
+                                        />
                                     </div>
                                     <div>
                                         <label className="text-xs font-black text-slate-400 uppercase">Marca (Aparelho)</label>

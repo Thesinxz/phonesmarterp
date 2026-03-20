@@ -50,6 +50,8 @@ import { getCatalogItem, updateCatalogItem } from "@/services/catalog";
 import { getPartCompatibleModels, savePartCompatibleModels, getExistingDeviceModels, getPartMovements } from "@/app/actions/parts";
 import { AdjustStockModal } from "@/components/estoque/AdjustStockModal";
 import { MovimentacaoModal } from "@/components/estoque/MovimentacaoModal";
+import { PartTypeSelector } from "@/components/estoque/PartTypeSelector";
+import { QualitySelector } from "@/components/estoque/QualitySelector";
 
 export default function DetalheProdutoPage({ params }: { params: { id: string } }) {
     const router = useRouter();
@@ -168,7 +170,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                     precoCusto: (catItem.cost_price / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
                     precoVenda: (catItem.sale_price / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
                     estoqueQtd: String(catItem.stock_qty),
-                    estoqueMinimo: String(catItem.stock_alert_qty || 1),
+                    estoqueMinimo: String(catItem.stock_alert_qty ?? 0),
                     codigoBarras: catItem.barcode || catItem.sku || "",
                     descricao: catItem.description || "",
                     ncm: catItem.ncm || "85171231",
@@ -474,12 +476,8 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
 
             console.log("[Client] Success! Showing toast...");
             toast.success("Produto salvo com sucesso!");
-
-            console.log("[Client] Redirecting in 800ms...");
-            setTimeout(() => {
-                router.push("/estoque");
-                router.refresh();
-            }, 800);
+            router.refresh();
+            router.push("/estoque");
         } catch (error: any) {
             console.error("[Client] Error in handleSubmit:", error);
             const msg = error.message || "Erro desconhecido";
@@ -579,9 +577,34 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
-                                        <Smartphone size={14} className="text-brand-500" />
-                                        Marca
+                                    <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center justify-between">
+                                        <span className="flex items-center gap-1.5">
+                                            <Smartphone size={14} className="text-brand-500" />
+                                            Marca
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                const nome = window.prompt("Nome da nova marca:");
+                                                if (!nome?.trim() || !profile?.empresa_id) return;
+                                                const supabase = createClient();
+                                                const { data, error } = await (supabase as any)
+                                                    .from('brands')
+                                                    .insert({ name: nome.trim(), empresa_id: profile.empresa_id })
+                                                    .select()
+                                                    .single();
+                                                if (error) {
+                                                    toast.error("Erro ao criar marca");
+                                                    return;
+                                                }
+                                                setBrands(prev => [...prev, data as any]);
+                                                setForm(prev => ({ ...prev, brand_id: data.id }));
+                                                toast.success(`Marca "${nome.trim()}" criada!`);
+                                            }}
+                                            className="text-[10px] text-brand-500 hover:underline font-bold"
+                                        >
+                                            + Nova marca
+                                        </button>
                                     </label>
                                     <div className="relative">
                                         <select
@@ -599,6 +622,64 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Campos específicos de peça */}
+                            {itemType === 'peca' && (
+                                <div className="space-y-4 pt-2 border-t border-slate-100">
+                                    <div>
+                                        <label className="text-xs font-black text-slate-400 uppercase block mb-2">
+                                            Tipo de Peça
+                                        </label>
+                                        <PartTypeSelector
+                                            value={form.part_type}
+                                            onChange={(v) => setForm(prev => ({ ...prev, part_type: v }))}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs font-black text-slate-400 uppercase block mb-2">
+                                            Qualidade
+                                        </label>
+                                        <QualitySelector
+                                            value={form.quality}
+                                            onChange={(v) => setForm(prev => ({ ...prev, quality: v }))}
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs font-black text-slate-400 uppercase">Marca (Aparelho)</label>
+                                            <input
+                                                name="part_brand"
+                                                value={form.part_brand}
+                                                onChange={handleChange}
+                                                className="input-glass mt-1 w-full"
+                                                placeholder="Ex: Apple"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-black text-slate-400 uppercase">Modelo Específico</label>
+                                            <input
+                                                name="model"
+                                                value={form.model}
+                                                onChange={handleChange}
+                                                className="input-glass mt-1 w-full"
+                                                placeholder="Ex: iPhone 15 Pro Max"
+                                            />
+                                        </div>
+                                        <div className="col-span-2">
+                                            <label className="text-xs font-black text-slate-400 uppercase">Fornecedor</label>
+                                            <input
+                                                name="supplier"
+                                                value={form.supplier || ''}
+                                                onChange={handleChange}
+                                                className="input-glass mt-1 w-full"
+                                                placeholder="Ex: Distribuidora XYZ"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </GlassCard>
                     
@@ -796,57 +877,85 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                 <Plus size={14} />
                                 Ajustar Estoque
                             </button>
-                        </div>
-                    </GlassCard>
-                </div>
 
-                {/* Terceira Seção: Especificações */}
-                <div className="col-span-1 space-y-6">
-                    <GlassCard title="Especificações" icon={Info}>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4">
-                                <div>
-                                    <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
-                                        Condição
-                                    </label>
-                                    <div className="relative">
-                                        <select
-                                            name="condicao"
-                                            value={form.condicao}
-                                            onChange={handleChange}
-                                            className="input-glass appearance-none bg-transparent relative z-10"
-                                        >
-                                            <option value="novo">Novo</option>
-                                            <option value="vitrine">Vitrine</option>
-                                            <option value="usado">Usado</option>
-                                            <option value="recondicionado">Recondicionado</option>
-                                        </select>
-                                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 z-0" />
-                                    </div>
-                                </div>
-                                {isSmartphone && (
-                                    <div>
-                                        <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
-                                            Saúde da Bateria
-                                        </label>
-                                        <div className="relative">
-                                            <Battery size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            <input
-                                                type="text"
-                                                name="saudeBateria"
-                                                value={form.saudeBateria}
-                                                onChange={handleChange}
-                                                className="input-glass pl-9"
-                                                placeholder="ex: 100"
-                                            />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">%</span>
-                                        </div>
-                                    </div>
-                                )}
+                            <button
+                                type="button"
+                                onClick={() => setShowMovementModal(true)}
+                                className="w-full py-2 bg-slate-50 border border-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition-all flex items-center justify-center gap-2"
+                            >
+                                <Activity size={14} />
+                                Ver Histórico
+                            </button>
+
+                            <div className="mt-3 pt-3 border-t border-slate-100">
+                                <label className="text-[10px] font-black text-amber-600 uppercase block mb-1">
+                                    Alerta de Estoque Baixo
+                                </label>
+                                <p className="text-[10px] text-slate-400 mb-2">
+                                    Alertar quando estoque for igual ou menor a:
+                                </p>
+                                <input
+                                    type="number"
+                                    name="estoqueMinimo"
+                                    value={form.estoqueMinimo}
+                                    onChange={handleChange}
+                                    min="0"
+                                    className="w-full bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 text-center font-bold text-amber-900 outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                                />
                             </div>
                         </div>
                     </GlassCard>
                 </div>
+
+                {/* Terceira Seção: Especificações — ocultar para peças */}
+                {itemType !== 'peca' && (
+                    <div className="col-span-1 space-y-6">
+                        <GlassCard title="Especificações" icon={Info}>
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 gap-4">
+                                    <div>
+                                        <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
+                                            Condição
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                name="condicao"
+                                                value={form.condicao}
+                                                onChange={handleChange}
+                                                className="input-glass appearance-none bg-transparent relative z-10"
+                                            >
+                                                <option value="novo">Novo</option>
+                                                <option value="vitrine">Vitrine</option>
+                                                <option value="usado">Usado</option>
+                                                <option value="recondicionado">Recondicionado</option>
+                                            </select>
+                                            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 z-0" />
+                                        </div>
+                                    </div>
+                                    {isSmartphone && (
+                                        <div>
+                                            <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
+                                                Saúde da Bateria
+                                            </label>
+                                            <div className="relative">
+                                                <Battery size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                <input
+                                                    type="text"
+                                                    name="saudeBateria"
+                                                    value={form.saudeBateria}
+                                                    onChange={handleChange}
+                                                    className="input-glass pl-9"
+                                                    placeholder="ex: 100"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">%</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </GlassCard>
+                    </div>
+                )}
             </div>
 
             {/* Footer com Botão Flutuante ou Fixo */}
@@ -870,50 +979,125 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                 </button>
             </div>
             </form>
-            {/* Histórico/Timeline */}
-            {form.imei && (
-                <GlassCard title="Histórico do Item" icon={Activity}>
-                    <div className="space-y-6">
-                        <p className="text-sm text-slate-500">Histórico completo de eventos atrelados ao IMEI {form.imei}</p>
-                        
-                        {historico.length === 0 ? (
-                            <div className="text-center py-8 text-slate-400 italic text-sm">
-                                Nenhum evento registrado para este IMEI.
-                            </div>
-                        ) : (
-                            <div className="relative space-y-8 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
-                                {historico.map((evento) => (
-                                    <div key={evento.id} className="relative flex items-start gap-6 group">
-                                        <div className="absolute left-0 mt-1.5 w-10 h-10 rounded-full border-4 border-white bg-slate-100 flex items-center justify-center shadow-sm z-10 group-hover:scale-110 transition-transform">
-                                            <div className="w-2 h-2 rounded-full bg-slate-400" />
-                                        </div>
-                                        
-                                        <div className="flex-1 pt-1 ml-4">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <span className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                                                    {evento.usuario_nome && (
-                                                        <>
-                                                            👤 {evento.usuario_nome}
-                                                            <span className="text-slate-200">•</span>
-                                                        </>
-                                                    )}
-                                                    <Clock size={12} />
-                                                    {new Date(evento.created_at).toLocaleString('pt-BR')}
-                                                </span>
-                                            </div>
-                                            <h4 className="text-sm font-bold text-slate-700 leading-snug">
-                                                {evento.descricao}
-                                            </h4>
-                                            {evento.referencia_id && (
-                                                <p className="text-[10px] text-brand-500 font-mono mt-1">
-                                                    Ref: {evento.referencia_id.substring(0, 8)}...
-                                                </p>
-                                            )}
-                                        </div>
+            {/* Histórico de Movimentações */}
+            <GlassCard title="Histórico de Movimentações" icon={Activity}>
+                <div className="space-y-3">
+                    {/* Filtros */}
+                    <div className="flex gap-3">
+                        <select
+                            value={movementsFilters.type}
+                            onChange={(e) => handleMovementFilterChange('type', e.target.value)}
+                            className="h-9 bg-slate-50 border border-slate-100 rounded-xl px-3 text-xs font-bold text-slate-600 outline-none"
+                        >
+                            <option value="">Todos os tipos</option>
+                            <option value="entrada">Entrada</option>
+                            <option value="saida">Saída</option>
+                            <option value="ajuste">Ajuste</option>
+                            <option value="venda">Venda</option>
+                            <option value="compra">Compra</option>
+                        </select>
+                        <select
+                            value={movementsFilters.unitId}
+                            onChange={(e) => handleMovementFilterChange('unitId', e.target.value)}
+                            className="h-9 bg-slate-50 border border-slate-100 rounded-xl px-3 text-xs font-bold text-slate-600 outline-none"
+                        >
+                            <option value="">Todas as unidades</option>
+                            {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                    </div>
+
+                    {/* Lista de movimentações */}
+                    {movementsLoading ? (
+                        <div className="py-8 text-center text-slate-400 text-sm">Carregando...</div>
+                    ) : movements.length === 0 ? (
+                        <div className="py-8 text-center text-slate-400 text-sm italic">
+                            Nenhuma movimentação registrada.
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {movements.map((mov: any) => (
+                                <div key={mov.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div className={cn(
+                                        "w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0",
+                                        mov.type === 'entrada' || mov.type === 'compra' ? "bg-emerald-50 text-emerald-600" :
+                                        mov.type === 'saida' || mov.type === 'venda' ? "bg-red-50 text-red-600" :
+                                        "bg-indigo-50 text-indigo-600"
+                                    )}>
+                                        {mov.type === 'entrada' || mov.type === 'compra' ? '+' :
+                                         mov.type === 'saida' || mov.type === 'venda' ? '-' : '='}
                                     </div>
-                                ))}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-bold text-slate-700 truncate">
+                                            {mov.reason || mov.type}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400">
+                                            {mov.unit?.name || 'Unidade'} · {new Date(mov.created_at).toLocaleDateString('pt-BR')}
+                                        </p>
+                                    </div>
+                                    <span className={cn(
+                                        "text-sm font-black shrink-0",
+                                        mov.qty_change > 0 ? "text-emerald-600" : "text-red-600"
+                                    )}>
+                                        {mov.qty_change > 0 ? '+' : ''}{mov.qty_change}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Paginação do histórico */}
+                    {movementsTotalPages > 1 && (
+                        <div className="flex items-center justify-between pt-2">
+                            <button
+                                disabled={movementsPage === 1}
+                                onClick={() => setMovementsPage(p => p - 1)}
+                                className="text-xs font-bold text-slate-500 disabled:opacity-30 hover:text-brand-500 transition-colors"
+                            >
+                                ← Anterior
+                            </button>
+                            <span className="text-xs text-slate-400">
+                                Página {movementsPage} de {movementsTotalPages}
+                            </span>
+                            <button
+                                disabled={movementsPage === movementsTotalPages}
+                                onClick={() => setMovementsPage(p => p + 1)}
+                                className="text-xs font-bold text-slate-500 disabled:opacity-30 hover:text-brand-500 transition-colors"
+                            >
+                                Próxima →
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </GlassCard>
+
+            {/* Histórico IMEI (legado) */}
+            {form.imei && historico.length > 0 && (
+                <GlassCard title="Histórico do IMEI" icon={Activity}>
+                    <div className="relative space-y-8 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
+                        {historico.map((evento) => (
+                            <div key={evento.id} className="relative flex items-start gap-6 group">
+                                <div className="absolute left-0 mt-1.5 w-10 h-10 rounded-full border-4 border-white bg-slate-100 flex items-center justify-center shadow-sm z-10 group-hover:scale-110 transition-transform">
+                                    <div className="w-2 h-2 rounded-full bg-slate-400" />
+                                </div>
+                                <div className="flex-1 pt-1 ml-4">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                            {evento.usuario_nome && (
+                                                <>
+                                                    👤 {evento.usuario_nome}
+                                                    <span className="text-slate-200">•</span>
+                                                </>
+                                            )}
+                                            <Clock size={12} />
+                                            {new Date(evento.created_at).toLocaleString('pt-BR')}
+                                        </span>
+                                    </div>
+                                    <h4 className="text-sm font-bold text-slate-700 leading-snug">
+                                        {evento.descricao}
+                                    </h4>
+                                </div>
                             </div>
-                        )}
+                        ))}
                     </div>
                 </GlassCard>
             )}

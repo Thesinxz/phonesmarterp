@@ -14,6 +14,7 @@ import { cn } from "@/utils/cn";
 import { createClient } from "@/lib/supabase/client";
 import { searchPartsByModel, type PartSearchResult } from "@/app/actions/parts";
 import { bulkUpdateCatalogItems, deleteCatalogItem, getCatalogItems } from "@/services/catalog";
+import { StockBadge } from "@/components/estoque/StockBadge";
 
 interface Props {
     initialItems: any[];
@@ -47,6 +48,11 @@ export function EstoqueListaClient({
     const [activeTab, setActiveTab] = useState("todos"); // todos, celular, acessorio, peca
     const [brandFilter, setBrandFilter] = useState("");
     const [stockFilter, setStockFilter] = useState("todos"); // todos, in_stock, low_stock, out_of_stock
+    
+    // Paginação
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
+    const PAGE_SIZE = 50;
     
     // Metadata from props (might update if needed, but mostly static)
     const [brands] = useState(initialBrands);
@@ -113,23 +119,18 @@ export function EstoqueListaClient({
                 setPartResults(results);
             }
 
-            const data = await getCatalogItems(empresaId, {
+            const result = await getCatalogItems(empresaId, {
                 search: debouncedSearch,
                 item_type: activeTab,
                 brand_id: brandFilter || undefined,
-                stock_status: stockFilter !== 'todos' ? stockFilter : undefined
+                stock_status: stockFilter !== 'todos' ? stockFilter : undefined,
+                page: currentPage,
+                pageSize: PAGE_SIZE,
             });
             
-            setItems(data);
-            
-            if (data.length > 0) {
-                const supabase = createClient();
-                const { data: stocks } = await supabase
-                    .from("unit_stock")
-                    .select("*")
-                    .in("catalog_item_id", (data as any[]).map(i => i.id));
-                if (stocks) setUnitStocks(stocks);
-            }
+            const data = result.items || result;
+            setItems(data as any[]);
+            setTotalItems(result.total || (data as any[]).length);
         } catch (error) {
             console.error("Error loading catalogue:", error);
             toast.error("Erro ao carregar estoque.");
@@ -139,10 +140,15 @@ export function EstoqueListaClient({
     }
 
     useEffect(() => {
-        // Skip first load if filters are default
-        if (debouncedSearch === "" && activeTab === "todos" && brandFilter === "" && stockFilter === "todos") return;
+        // Skip first load if filters are default and page is 1
+        if (debouncedSearch === "" && activeTab === "todos" && brandFilter === "" && stockFilter === "todos" && currentPage === 1) return;
         loadData();
         setSelectedIds([]);
+    }, [debouncedSearch, activeTab, brandFilter, stockFilter, currentPage]);
+
+    // Reset page when filters change
+    useEffect(() => {
+        setCurrentPage(1);
     }, [debouncedSearch, activeTab, brandFilter, stockFilter]);
 
     const handleDelete = async (id: string) => {
@@ -434,15 +440,20 @@ export function EstoqueListaClient({
                         <div className="p-8 text-center text-slate-400 font-medium">Nenhum item encontrado.</div>
                     ) : (
                         items.map(item => (
-                            <div key={item.id} className={cn(
-                                "bg-white/80 p-4 border rounded-2xl flex items-center justify-between shadow-sm transition-all",
-                                selectedIds.includes(item.id) ? "border-brand-300 bg-brand-50/30" : "border-slate-100"
-                            )}>
+                            <Link
+                                key={item.id}
+                                href={`/estoque/${item.id}`}
+                                className={cn(
+                                    "bg-white/80 p-4 border rounded-2xl flex items-center justify-between shadow-sm transition-all block",
+                                    selectedIds.includes(item.id) ? "border-brand-300 bg-brand-50/30" : "border-slate-100"
+                                )}
+                            >
                                 <div className="flex items-center gap-3 overflow-hidden">
                                     <input 
                                         type="checkbox" 
                                         checked={selectedIds.includes(item.id)}
-                                        onChange={() => toggleSelectItem(item.id)}
+                                        onChange={(e) => { e.stopPropagation(); toggleSelectItem(item.id); }}
+                                        onClick={(e) => e.preventDefault()}
                                         className="w-5 h-5 rounded-lg border-slate-300 text-brand-600 focus:ring-brand-500"
                                     />
                                     <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
@@ -454,15 +465,10 @@ export function EstoqueListaClient({
                                             <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded uppercase truncate max-w-[80px]">
                                                 {item.item_type === 'peca' ? item.part_type || 'Peça' : item.brand?.name || item.item_type}
                                             </span>
-                                            <span className={cn("text-[10px] font-black rounded px-1.5 py-0.5 whitespace-nowrap", 
-                                                (() => {
-                                                    const qty = selectedUnitId === 'todos' ? (item.stock_qty || 0) : (unitStocks.find(us => us.unit_id === selectedUnitId && us.catalog_item_id === item.id)?.qty || 0);
-                                                    return qty > (item.stock_alert_qty || 1) ? "bg-emerald-50 text-emerald-600" :
-                                                           qty > 0 ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600";
-                                                })()
-                                            )}>
-                                                {selectedUnitId === 'todos' ? (item.stock_qty || 0) : (unitStocks.find(us => us.unit_id === selectedUnitId && us.catalog_item_id === item.id)?.qty || 0)} em est.
-                                            </span>
+                                            <StockBadge 
+                                                qty={selectedUnitId === 'todos' ? (item.stock_qty || 0) : (unitStocks.find(us => us.unit_id === selectedUnitId && us.catalog_item_id === item.id)?.qty || 0)}
+                                                alertQty={item.stock_alert_qty}
+                                            />
                                         </div>
                                         <div className="flex flex-col items-end mt-1">
                                             <span className="text-sm font-bold text-emerald-600">
@@ -474,15 +480,15 @@ export function EstoqueListaClient({
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-1 shrink-0 ml-2">
-                                    <Link href={`/estoque/${item.id}`} className="p-2.5 text-slate-400 hover:text-brand-600 bg-slate-50 hover:bg-brand-50 rounded-xl transition-all">
+                                <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.preventDefault()}>
+                                    <Link href={`/estoque/${item.id}`} onClick={(e) => e.stopPropagation()} className="p-2.5 text-slate-400 hover:text-brand-600 bg-slate-50 hover:bg-brand-50 rounded-xl transition-all">
                                         <Edit size={16} />
                                     </Link>
-                                    <button onClick={() => handleDelete(item.id)} className="p-2.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-xl transition-all">
+                                    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(item.id); }} className="p-2.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-xl transition-all">
                                         <Trash2 size={16} />
                                     </button>
                                 </div>
-                            </div>
+                            </Link>
                         ))
                     )}
                 </div>
@@ -523,15 +529,20 @@ export function EstoqueListaClient({
                                     <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-400 font-medium">Nenhum item encontrado.</td></tr>
                                 ) : (
                                     items.map(item => (
-                                        <tr key={item.id} className={cn(
-                                            "hover:bg-slate-50/50 group transition-colors",
-                                            selectedIds.includes(item.id) && "bg-brand-50/20"
-                                        )}>
+                                        <tr
+                                            key={item.id}
+                                            onClick={() => router.push(`/estoque/${item.id}`)}
+                                            className={cn(
+                                                "hover:bg-slate-50/50 group transition-colors cursor-pointer",
+                                                selectedIds.includes(item.id) && "bg-brand-50/20"
+                                            )}
+                                        >
                                             <td className="px-6 py-3">
                                                 <input 
                                                     type="checkbox" 
                                                     checked={selectedIds.includes(item.id)}
-                                                    onChange={() => toggleSelectItem(item.id)}
+                                                    onChange={(e) => { e.stopPropagation(); toggleSelectItem(item.id); }}
+                                                    onClick={(e) => e.stopPropagation()}
                                                     className="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                                                 />
                                             </td>
@@ -549,9 +560,23 @@ export function EstoqueListaClient({
                                             </td>
                                             {(activeTab === 'todos' || activeTab === 'celular' || activeTab === 'peca') && (
                                                 <td className="px-6 py-3">
-                                                    <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-md uppercase">
-                                                        {item.item_type === 'peca' ? (item.part_type || 'Peça') : item.item_type}
-                                                    </span>
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-md uppercase inline-block w-fit">
+                                                            {item.item_type === 'peca'
+                                                                ? (item.part_type || 'Peça')
+                                                                : item.item_type === 'celular' ? 'Celular' : 'Acessório'}
+                                                        </span>
+                                                        {item.quality && (
+                                                            <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded uppercase inline-block w-fit">
+                                                                {item.quality}
+                                                            </span>
+                                                        )}
+                                                        {item.subcategory && (
+                                                            <span className="text-[9px] text-slate-400 truncate max-w-[80px]">
+                                                                {item.subcategory}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             )}
                                             {(activeTab === 'todos' || activeTab === 'celular') && (
@@ -614,38 +639,18 @@ export function EstoqueListaClient({
                                             </td>
                                             <td className="px-6 py-3 text-center">
                                                 <div className="flex flex-col items-center gap-1">
-                                                    {selectedUnitId === 'todos' ? (
-                                                        <>
-                                                            <span className={cn(
-                                                                "px-2.5 py-1 rounded-lg text-xs font-black",
-                                                                (item.stock_qty || 0) > (item.stock_alert_qty || 1) ? "bg-emerald-50 text-emerald-600" :
-                                                                (item.stock_qty || 0) > 0 ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600"
-                                                            )}>
-                                                                {item.stock_qty || 0}
-                                                            </span>
-                                                        </>
-                                                    ) : (
-                                                        (() => {
-                                                            const qty = unitStocks.find(us => us.unit_id === selectedUnitId && us.catalog_item_id === item.id)?.qty || 0;
-                                                            return (
-                                                                <span className={cn(
-                                                                    "px-3 py-1 rounded-lg text-xs font-black",
-                                                                    qty > (item.stock_alert_qty || 1) ? "bg-emerald-50 text-emerald-600" :
-                                                                    qty > 0 ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600"
-                                                                )}>
-                                                                    {qty} un
-                                                                </span>
-                                                            );
-                                                        })()
-                                                    )}
+                                                    <StockBadge 
+                                                        qty={selectedUnitId === 'todos' ? (item.stock_qty || 0) : (unitStocks.find(us => us.unit_id === selectedUnitId && us.catalog_item_id === item.id)?.qty || 0)}
+                                                        alertQty={item.stock_alert_qty}
+                                                    />
                                                 </div>
                                             </td>
                                             <td className="px-6 py-3 text-right">
                                                 <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Link href={`/estoque/${item.id}`} className="p-2 text-slate-400 hover:text-brand-600 bg-slate-50 hover:bg-brand-50 rounded-lg">
+                                                    <Link href={`/estoque/${item.id}`} onClick={(e) => e.stopPropagation()} className="p-2 text-slate-400 hover:text-brand-600 bg-slate-50 hover:bg-brand-50 rounded-lg">
                                                         <Edit size={16} />
                                                     </Link>
-                                                    <button onClick={() => handleDelete(item.id)} className="p-2 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-lg">
+                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }} className="p-2 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-lg">
                                                         <Trash2 size={16} />
                                                     </button>
                                                 </div>
@@ -657,6 +662,35 @@ export function EstoqueListaClient({
                         </table>
                     </div>
                 </GlassCard>
+
+                {/* Paginação */}
+                {totalItems > PAGE_SIZE && (
+                    <div className="flex items-center justify-between pt-4">
+                        <p className="text-xs text-slate-400 font-medium">
+                            Mostrando {Math.min((currentPage - 1) * PAGE_SIZE + 1, totalItems)}–
+                            {Math.min(currentPage * PAGE_SIZE, totalItems)} de {totalItems} itens
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <button
+                                disabled={currentPage === 1}
+                                onClick={() => setCurrentPage(p => p - 1)}
+                                className="h-9 px-4 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 disabled:opacity-30 hover:bg-slate-50 transition-all"
+                            >
+                                ← Anterior
+                            </button>
+                            <span className="text-xs font-bold text-slate-500 px-2">
+                                {currentPage} / {Math.ceil(totalItems / PAGE_SIZE)}
+                            </span>
+                            <button
+                                disabled={currentPage >= Math.ceil(totalItems / PAGE_SIZE)}
+                                onClick={() => setCurrentPage(p => p + 1)}
+                                className="h-9 px-4 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 disabled:opacity-30 hover:bg-slate-50 transition-all"
+                            >
+                                Próxima →
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Barra Flutuante de Ações em Massa */}

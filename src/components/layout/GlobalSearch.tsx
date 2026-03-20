@@ -42,8 +42,8 @@ export function GlobalSearch() {
             setLoading(true);
             try {
                 // search via getCatalogItems
-                const data = await getCatalogItems(profile.empresa_id, { search: query });
-                setResults(data);
+                const result = await getCatalogItems(profile.empresa_id, { search: query });
+                setResults(result.items || []);
                 setOpen(true);
             } catch (error) {
                 console.error("Search error", error);

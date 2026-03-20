@@ -586,46 +586,67 @@ export async function createCatalogItemWithStock(params: {
     compatibleModels?: string[];
 }) {
     const supabase = await createClient();
-    const { item, unitStocks, compatibleModels } = params;
+    console.log('[Server Action] createCatalogItemWithStock started. item name:', params.item.name);
+    try {
+        const { item, unitStocks, compatibleModels } = params;
 
-    // 1. Criar o item no catálogo
-    const { data: newItem, error: itemError } = await (supabase as any)
-        .from('catalog_items')
-        .insert(item)
-        .select()
-        .single();
+        // 1. Criar o item no catálogo
+        const { data: newItem, error: itemError } = await (supabase as any)
+            .from('catalog_items')
+            .insert(item)
+            .select()
+            .single();
 
-    if (itemError) throw itemError;
+        if (itemError) {
+            console.error('[Server Action] catalog_items insert error:', itemError);
+            throw new Error(`Erro ao criar item no catálogo: ${itemError.message}`);
+        }
 
-    const catalogItemId = newItem.id;
+        const catalogItemId = newItem.id;
+        console.log('[Server Action] catalog_items item created:', catalogItemId);
 
-    // 2. Salvar estoques por unidade
-    const stockEntries = Object.entries(unitStocks).map(([unitId, qty]) => ({
-        tenant_id: item.empresa_id,
-        catalog_item_id: catalogItemId,
-        unit_id: unitId,
-        qty: qty,
-        alert_qty: item.stock_alert_qty || 2
-    }));
+        // 2. Salvar estoques por unidade
+        const stockEntries = Object.entries(unitStocks).map(([unitId, qty]) => ({
+            tenant_id: item.empresa_id,
+            catalog_item_id: catalogItemId,
+            unit_id: unitId,
+            qty: qty,
+            alert_qty: item.stock_alert_qty || 2
+        }));
 
-    if (stockEntries.length > 0) {
-        const { error: stockError } = await (supabase as any)
-            .from('unit_stock')
-            .insert(stockEntries);
-        if (stockError) throw stockError;
+        if (stockEntries.length > 0) {
+            const { error: stockError } = await (supabase as any)
+                .from('unit_stock')
+                .insert(stockEntries);
+            if (stockError) {
+                console.error('[Server Action] unit_stock insert error:', stockError);
+                throw new Error(`Erro ao salvar estoque por unidade: ${stockError.message}`);
+            }
+            console.log('[Server Action] unit_stock entries created:', stockEntries.length);
+        }
+
+        // 3. Salvar modelos compatíveis se for peça
+        if (item.item_type === 'peca' && compatibleModels && compatibleModels.length > 0) {
+            try {
+                await savePartCompatibleModels(
+                    item.empresa_id,
+                    catalogItemId,
+                    compatibleModels.map(m => ({ deviceModel: m, deviceModelDisplay: m }))
+                );
+                console.log('[Server Action] compatible models saved:', compatibleModels.length);
+            } catch (compatErr: any) {
+                console.error('[Server Action] savePartCompatibleModels error:', compatErr);
+                // Não derrubar tudo se a compatibilidade falhar, mas avisar
+                // return newItem; // Opcional, ou jogar um erro específico
+            }
+        }
+
+        revalidatePath('/estoque');
+        return newItem;
+    } catch (globalErr: any) {
+        console.error('[Server Action] global error in createCatalogItemWithStock:', globalErr);
+        throw globalErr;
     }
-
-    // 3. Salvar modelos compatíveis se for peça
-    if (item.item_type === 'peca' && compatibleModels && compatibleModels.length > 0) {
-        await savePartCompatibleModels(
-            item.empresa_id,
-            catalogItemId,
-            compatibleModels.map(m => ({ deviceModel: m, deviceModelDisplay: m }))
-        );
-    }
-
-    revalidatePath('/estoque');
-    return newItem;
 }
 
 export async function getPartMovements(

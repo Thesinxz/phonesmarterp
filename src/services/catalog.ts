@@ -149,19 +149,25 @@ export async function getCatalogItems(
         item_type?: string;
         brand_id?: string;
         stock_status?: string; // 'in_stock', 'low_stock', 'out_of_stock'
+        page?: number;
+        pageSize?: number;
     }
 ) {
     const supabase = await createClient();
+    const page = filters?.page || 1;
+    const pageSize = filters?.pageSize || 50;
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
     
     let query = (supabase as any)
         .from("catalog_items")
         .select(`
             *,
-            brand:brands(name),
-            unit_stock(qty, unit:units(name))
-        `)
+            brand:brands(name)
+        `, { count: 'exact' })
         .eq("empresa_id", empresa_id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(from, to);
         
     if (filters?.search) {
         const words = filters.search.trim().split(/\s+/).filter(w => w.length > 0);
@@ -188,18 +194,33 @@ export async function getCatalogItems(
         }
     }
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
     if (error) {
         console.error("Error fetching catalog items:", error);
-        return [];
+        return { items: [], total: 0 };
+    }
+
+    // Buscar unit_stocks separado para evitar duplicatas
+    let result = data || [];
+    if (result.length > 0) {
+        const { data: stocks } = await (supabase as any)
+            .from("unit_stock")
+            .select("catalog_item_id, qty, unit_id")
+            .in("catalog_item_id", result.map((i: any) => i.id));
+
+        // Merge: adicionar unit_stocks em cada item
+        result = result.map((item: any) => ({
+            ...item,
+            unit_stock: (stocks || []).filter((s: any) => s.catalog_item_id === item.id)
+        }));
     }
     
-    let filteredData = data;
+    let filteredData = result;
     if (filters?.stock_status === 'low_stock') {
-        filteredData = (data as any[]).filter((item: any) => item.stock_qty > 0 && item.stock_qty <= (item.stock_alert_qty || 1));
+        filteredData = (result as any[]).filter((item: any) => item.stock_qty > 0 && item.stock_qty <= (item.stock_alert_qty || 1));
     }
     
-    return filteredData;
+    return { items: filteredData, total: count || 0 };
 }
 export async function bulkUpdateCatalogItems(ids: string[], updates: Partial<CatalogItem>) {
     const supabase = await createClient();

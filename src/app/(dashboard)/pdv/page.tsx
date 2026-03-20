@@ -195,8 +195,8 @@ export default function PDVPage() {
         if (!profile?.empresa_id) return;
         if (!background) setLoading(true);
         try {
-            const data = await getCatalogItems(profile.empresa_id, { search, stock_status: 'in_stock' });
-            setProducts(data);
+            const result = await getCatalogItems(profile.empresa_id, { search, stock_status: 'in_stock' });
+            setProducts((result.items || []) as CatalogItem[]);
         } catch (error) {
             console.error("Erro ao carregar produtos:", error);
         } finally {
