@@ -53,6 +53,9 @@ import { MovimentacaoModal } from "@/components/estoque/MovimentacaoModal";
 import { PartTypeSelector } from "@/components/estoque/PartTypeSelector";
 import { QualitySelector } from "@/components/estoque/QualitySelector";
 import { StockBadge } from "@/components/estoque/StockBadge";
+import { BarcodeGenerator } from "@/components/barcode/BarcodeGenerator";
+import { BarcodeDisplay } from "@/components/barcode/BarcodeDisplay";
+import { generateEAN13, generateSKU, generatePartSKU } from "@/utils/barcode";
 
 export default function DetalheProdutoPage({ params }: { params: { id: string } }) {
     const router = useRouter();
@@ -338,10 +341,6 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
     const isDevice = showDeviceSpecs;
     const showColorAndGrade = true; // Sempre relevante
 
-    const gerarSKU = () => {
-        const randomStr = Math.floor(100000 + Math.random() * 900000).toString();
-        setForm(prev => ({ ...prev, codigoBarras: `SMT-${randomStr}` }));
-    };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
@@ -681,6 +680,58 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                     </div>
                                 </div>
                             )}
+
+                            {/* Seção de código de barras */}
+                            <div className="pt-4 border-t border-slate-100">
+                                <label className="text-xs font-black text-slate-400 uppercase flex items-center gap-1 mb-4">
+                                    <Barcode size={14}/> Código de Barras / SKU
+                                </label>
+                                
+                                <div className="space-y-6">
+                                    {/* Preview se já tem código */}
+                                    {form.codigoBarras && (
+                                        <div className="flex justify-center p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <BarcodeDisplay
+                                                value={form.codigoBarras}
+                                                size="md"
+                                                showEAN={true}
+                                                showQR={true}
+                                                productName={form.nome}
+                                                price={parseInt(form.precoVenda.replace(/\D/g,''), 10) || 0}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Gerador */}
+                                    <BarcodeGenerator
+                                        itemType={itemType as any || undefined}
+                                        partType={form.part_type}
+                                        imei={form.imei}
+                                        currentBarcode={form.codigoBarras}
+                                        onGenerated={(barcode) => {
+                                            setForm(prev => ({ ...prev, codigoBarras: barcode }));
+                                        }}
+                                    />
+
+                                    {/* Campos manuais (avançado) */}
+                                    <details className="group">
+                                        <summary className="text-[10px] font-black text-slate-400 uppercase cursor-pointer hover:text-slate-600 transition-colors list-none flex items-center gap-1">
+                                            <ChevronDown size={10} className="group-open:rotate-180 transition-transform" /> 
+                                            Editar manualmente
+                                        </summary>
+                                        <div className="mt-3">
+                                            <label className="text-xs font-black text-slate-400 uppercase">Cód. Barras/EAN ou SKU</label>
+                                            <input
+                                                name="codigoBarras"
+                                                value={form.codigoBarras}
+                                                onChange={handleChange}
+                                                className="input-glass mt-1 w-full font-mono text-sm"
+                                                placeholder="Ex: 7891234567890 ou SMT-123456"
+                                            />
+                                        </div>
+                                    </details>
+                                </div>
+                            </div>
                         </div>
                     </GlassCard>
                     

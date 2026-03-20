@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save, Package, Smartphone, Headphones, Wrench, DollarSign, Barcode, Eye, FileText, Upload, Tag, Cpu, X, Info } from "lucide-react";
+import { ArrowLeft, Save, Package, Smartphone, Headphones, Wrench, DollarSign, Barcode, Eye, FileText, Upload, Tag, Cpu, X, Info, ChevronDown } from "lucide-react";
 import { createCatalogItem } from "@/services/catalog";
 import { uploadProdutoImage } from "@/services/estoque"; // reaproveitando upload
 import { useAuth } from "@/context/AuthContext";
@@ -21,6 +21,9 @@ import { IMEIScanner } from "@/components/inventory/IMEIScanner";
 import { PartTypeSelector } from "@/components/estoque/PartTypeSelector";
 import { QualitySelector } from "@/components/estoque/QualitySelector";
 import { registerIMEI } from "@/app/actions/imei";
+import { BarcodeGenerator } from "@/components/barcode/BarcodeGenerator";
+import { BarcodeDisplay } from "@/components/barcode/BarcodeDisplay";
+import { generateEAN13, generateSKU, generatePartSKU } from "@/utils/barcode";
 
 type ItemType = 'celular' | 'acessorio' | 'peca' | null;
 
@@ -260,6 +263,18 @@ export default function NovoCatalogItemPage() {
             console.log('[Debug] finalUnitStocks:', finalUnitStocks);
             console.log('[Debug] stock_qty total:', stockQtyTotal);
 
+            // Auto-gerar barcode se não tiver
+            let finalBarcode = form.barcode;
+            let finalSku = form.sku;
+            if (!finalBarcode) {
+                finalBarcode = itemType === 'peca'
+                    ? generatePartSKU(form.part_type)
+                    : generateEAN13();
+            }
+            if (!finalSku) {
+                finalSku = generateSKU();
+            }
+
             const itemData = {
                 empresa_id: profile.empresa_id,
                 item_type: itemType,
@@ -270,8 +285,8 @@ export default function NovoCatalogItemPage() {
                 stock_alert_qty: stock_alert_qty,
                 show_in_storefront: form.show_in_storefront,
                 description: form.description || null,
-                sku: form.sku || null,
-                barcode: form.barcode || null,
+                sku: finalSku,
+                barcode: finalBarcode,
                 ncm: form.ncm || null,
                 cfop: form.cfop || null,
                 origin_code: form.origin_code || null,
@@ -606,14 +621,66 @@ export default function NovoCatalogItemPage() {
                                 </div>
                             </label>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-xs font-black text-slate-400 uppercase flex items-center gap-1"><Barcode size={14}/> Cód. Barras/EAN</label>
-                                    <input name="barcode" value={form.barcode} onChange={handleChange} className="input-glass mt-1 w-full font-mono text-sm" />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-black text-slate-400 uppercase flex items-center gap-1"><Tag size={14}/> SKU</label>
-                                    <input name="sku" value={form.sku} onChange={handleChange} className="input-glass mt-1 w-full font-mono text-sm uppercase" />
+                            {/* Seção de código de barras */}
+                            <div className="pt-4 border-t border-slate-100">
+                                <label className="text-xs font-black text-slate-400 uppercase flex items-center gap-1 mb-4">
+                                    <Barcode size={14}/> Código de Barras / SKU
+                                </label>
+                                
+                                <div className="space-y-6">
+                                    {/* Preview se já tem código */}
+                                    {(form.barcode || form.sku) && (
+                                        <div className="flex justify-center p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <BarcodeDisplay
+                                                value={form.barcode || form.sku}
+                                                size="md"
+                                                showEAN={true}
+                                                showQR={true}
+                                                productName={form.name}
+                                                price={parseInt(form.sale_price.replace(/\D/g,''), 10) || 0}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Gerador */}
+                                    <BarcodeGenerator
+                                        itemType={itemType || undefined}
+                                        partType={form.part_type}
+                                        imei={itemType === 'celular' ? form.imei : undefined}
+                                        currentBarcode={form.barcode}
+                                        onGenerated={(barcode, sku) => {
+                                            setForm(prev => ({ ...prev, barcode, sku }));
+                                        }}
+                                    />
+
+                                    {/* Campos manuais (avançado) */}
+                                    <details className="group">
+                                        <summary className="text-[10px] font-black text-slate-400 uppercase cursor-pointer hover:text-slate-600 transition-colors list-none flex items-center gap-1">
+                                            <ChevronDown size={10} className="group-open:rotate-180 transition-transform" /> 
+                                            Editar manualmente
+                                        </summary>
+                                        <div className="grid grid-cols-2 gap-4 mt-3">
+                                            <div>
+                                                <label className="text-xs font-black text-slate-400 uppercase">Cód. Barras/EAN</label>
+                                                <input
+                                                    name="barcode"
+                                                    value={form.barcode}
+                                                    onChange={handleChange}
+                                                    className="input-glass mt-1 w-full font-mono text-sm"
+                                                    placeholder="Ex: 7891234567890"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-black text-slate-400 uppercase">SKU Interno</label>
+                                                <input
+                                                    name="sku"
+                                                    value={form.sku}
+                                                    onChange={handleChange}
+                                                    className="input-glass mt-1 w-full font-mono text-sm uppercase"
+                                                />
+                                            </div>
+                                        </div>
+                                    </details>
                                 </div>
                             </div>
                         </div>

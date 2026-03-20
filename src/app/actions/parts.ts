@@ -5,6 +5,28 @@ import { revalidatePath } from "next/cache";
 import { createInternalNotification } from "@/actions/notifications";
 
 /**
+ * Busca peça específica pelo código de barras ou SKU
+ */
+export async function searchPartsByBarcode(empresaId: string, code: string) {
+  const supabase = await createClient();
+  const { data, error } = await (supabase as any)
+    .from('catalog_items')
+    .select('*')
+    .eq('empresa_id', empresaId)
+    .eq('item_type', 'peca')
+    .or(`barcode.eq.${code},sku.eq.${code}`)
+    .limit(1)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+      console.error('[Parts] Erro ao buscar por barcode:', error);
+      return null;
+  }
+  
+  return data;
+}
+
+/**
  * Normaliza o nome do modelo: minúsculas, sem caracteres especiais, espaços por hífens.
  */
 import { normalizeDeviceModel } from "@/utils/normalize";

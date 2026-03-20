@@ -27,6 +27,7 @@ import { cn } from "@/utils/cn";
 import { toast } from "sonner";
 import { getProdutos } from "@/services/estoque";
 import { useAuth } from "@/context/AuthContext";
+import { LabelSheetA4, LabelThermal } from "@/components/barcode/LabelTemplate";
 
 interface LabelItem extends Produto {
     quantidade: number;
@@ -90,14 +91,20 @@ function EtiquetasContent() {
     async function loadProducts(ids: string[]) {
         try {
             const supabase = createClient();
+            // Buscar tanto em produtos (legado) quanto catalog_items
             const { data, error } = await supabase
-                .from('produtos')
+                .from('catalog_items')
                 .select('*')
                 .in('id', ids);
 
             if (error) throw error;
 
-            setItens(data.map((p: any) => ({ ...p, quantidade: 1 })));
+            setItens(data.map((p: any) => ({ 
+                ...p, 
+                quantidade: 1,
+                // Mapear campos para compatibilidade se necessário
+                codigo_barras: p.barcode || p.sku || p.imei
+            })));
         } catch (error) {
             console.error(error);
             toast.error("Erro ao carregar produtos selecionados");
@@ -150,25 +157,29 @@ function EtiquetasContent() {
             toast.error("Adicione pelo menos um produto ao lote");
             return;
         }
-        // Formatar dados para a página de impressão
-        const printData = itens.map(item => ({
-            id: item.id,
-            q: item.quantidade,
-            p: item.precoPersonalizado // Preço personalizado opcional
-        }));
-
-        const params = new URLSearchParams();
-        params.set("data", JSON.stringify(printData));
-        params.set("f", format);
-        params.set("t", type);
-
-        // Abrir em nova aba a rota de impressão em lote
-        window.open(`/print/etiquetas?${params.toString()}`, '_blank');
+        window.print();
     };
+
+    // Helper to map LabelItem → print-compatible LabelItem
+    const toLabelItem = (i: any) => ({
+        id: i.id,
+        name: i.nome || i.name || '',
+        barcode: i.barcode || i.codigo_barras || i.sku || i.imei || '',
+        price: i.precoPersonalizado ?? i.sale_price ?? i.preco_venda_centavos,
+        sku: i.sku || undefined,
+        qty: i.quantidade || 1,
+    });
 
     if (loading) return <div className="p-12 text-center">Carregando central de etiquetas...</div>;
 
     return (
+        <>
+        <style>{`
+            @media print {
+                body > * { display: none !important; }
+                #print-area { display: block !important; }
+            }
+        `}</style>
         <div className="space-y-6 page-enter pb-20">
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -402,7 +413,36 @@ function EtiquetasContent() {
                     ))}
                 </div>
             </div>
+
+            {/* Raiz de Impressão (Oculta no Browser, Visível no Print) */}
+            <div id="print-area" style={{ display: 'none' }}>
+                {format === 'a4' ? (
+                    <LabelSheetA4 items={itens.map(toLabelItem)} />
+                ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2mm', padding: '5mm' }}>
+                        {itens.flatMap(i =>
+                            Array.from({ length: i.quantidade }, (_, idx) => (
+                                <LabelThermal key={`${i.id}-${idx}`} item={toLabelItem(i)} />
+                            ))
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Preview flutuante (Opcional) */}
+            {itens.length > 0 && (
+                <div className="fixed bottom-6 right-6 z-40">
+                    <button
+                        onClick={handlePrint}
+                        className="flex items-center gap-3 px-8 py-4 bg-slate-900 text-white rounded-2xl font-black shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                    >
+                        <Printer size={20} />
+                        Imprimir {itens.reduce((acc, i) => acc + i.quantidade, 0)} Etiquetas
+                    </button>
+                </div>
+            )}
         </div>
+        </>
     );
 }
 

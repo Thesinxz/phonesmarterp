@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Package, Wrench, Plus, Trash2, ShoppingBag, DollarSign, Tag as TagIcon } from "lucide-react";
+import { Package, Wrench, Plus, Trash2, ShoppingBag, DollarSign, Tag as TagIcon, Search } from "lucide-react";
 import { BuscaPecaEstoque } from "./BuscaPecaEstoque";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
+import { BarcodeInput } from "@/components/barcode/BarcodeInput";
+import { searchPartsByBarcode } from "@/app/actions/parts";
+import { toast } from "sonner";
 
 interface OSStep4PecasServicosProps {
     data: any;
@@ -17,7 +20,7 @@ export function OSStep4PecasServicos({ data, onChange }: OSStep4PecasServicosPro
     const addPeca = (peca: any) => {
         console.log("DEBUG: Tentando adicionar peça:", peca);
         if (!peca.id) {
-            import("sonner").then(({ toast }) => toast.error("Erro interno: Peça sem ID. Verifique o console."));
+            toast.error("Erro interno: Peça sem ID. Verifique o console.");
             console.error("DEBUG: Erro - Peça sem ID:", peca);
             return;
         }
@@ -25,14 +28,34 @@ export function OSStep4PecasServicos({ data, onChange }: OSStep4PecasServicosPro
         // Se ja existe, aumenta a qtd
         const exists = current.find((p: any) => p.id === peca.id);
         if (exists) {
-            import("sonner").then(({ toast }) => toast.success(`Quantidade de ${peca.nome} aumentada!`));
+            toast.success(`Quantidade de ${peca.nome} aumentada!`);
             onChange({
                 ...data,
                 pecas: current.map((p: any) => p.id === peca.id ? { ...p, qtd: p.qtd + 1 } : p)
             });
         } else {
-            import("sonner").then(({ toast }) => toast.success(`${peca.nome} adicionado!`));
+            toast.success(`${peca.nome} adicionado!`);
             onChange({ ...data, pecas: [...current, peca] });
+        }
+    };
+
+    const handleScan = async (code: string) => {
+        try {
+            const item = await searchPartsByBarcode(data.empresa_id, code);
+            if (item) {
+                addPeca({
+                    id: item.id,
+                    nome: item.name,
+                    preco: item.sale_price,
+                    qtd: 1,
+                    isManual: false
+                });
+            } else {
+                toast.error("Nenhuma peça encontrada com este código.");
+            }
+        } catch (error) {
+            console.error("Scan error:", error);
+            toast.error("Erro ao buscar peça.");
         }
     };
 
@@ -43,19 +66,19 @@ export function OSStep4PecasServicos({ data, onChange }: OSStep4PecasServicosPro
     const addMaoObra = () => {
         console.log("DEBUG: Tentando adicionar mão de obra:", maoObraManual);
         if (!maoObraManual.descricao || !maoObraManual.valor) {
-            import("sonner").then(({ toast }) => toast.error("Preencha descrição e valor da mão de obra"));
+            toast.error("Preencha descrição e valor da mão de obra");
             return;
         }
         const valorCentavos = Math.round(parseFloat(maoObraManual.valor.replace(",", ".")) * 100);
         if (isNaN(valorCentavos)) {
-            import("sonner").then(({ toast }) => toast.error("Valor inválido"));
+            toast.error("Valor inválido");
             return;
         }
         onChange({
             ...data,
             servicos: [...(data.servicos || []), { ...maoObraManual, valor: valorCentavos }]
         });
-        import("sonner").then(({ toast }) => toast.success("Serviço adicionado!"));
+        toast.success("Serviço adicionado!");
         setMaoObraManual({ descricao: "", valor: "" });
     };
 
@@ -85,8 +108,23 @@ export function OSStep4PecasServicos({ data, onChange }: OSStep4PecasServicosPro
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Coluna 1: Peças */}
                 <div>
-                    <div className="section-label">PEÇAS DO ESTOQUE (CATÁLOGO)</div>
-                    <div className="mb-4">
+                    <div className="section-label">PEÇAS DO ESTOQUE (CATÁLOGO / SCANNER)</div>
+                    <div className="mb-4 space-y-3">
+                        <div className="relative group">
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors z-10">
+                                <Search size={18} />
+                            </div>
+                            <BarcodeInput 
+                                onScan={handleScan}
+                                placeholder="Escaneie o código de barras da peça..."
+                                className="w-full h-12 pl-11 pr-4 rounded-xl border border-slate-200 bg-white text-sm outline-none transition-all focus:border-indigo-600 focus:ring-4 focus:ring-indigo-500/10"
+                            />
+                        </div>
+                        <div className="flex items-center gap-2 py-2">
+                            <div className="h-px flex-1 bg-slate-100"></div>
+                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Ou busque manualmente</span>
+                            <div className="h-px flex-1 bg-slate-100"></div>
+                        </div>
                         <BuscaPecaEstoque onSelect={addPeca} modeloEquipamento={data.modelo_equipamento} addedParts={data.pecas || []} />
                     </div>
 

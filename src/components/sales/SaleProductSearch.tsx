@@ -19,6 +19,7 @@ import { BrowserQRCodeReader } from "@zxing/browser";
 import { cn } from "@/utils/cn";
 import { formatCurrency } from "@/utils/formatCurrency";
 import { toast } from "sonner";
+import { BarcodeInput } from "@/components/barcode/BarcodeInput";
 
 interface SaleProductSearchProps {
     tenantId: string;
@@ -64,11 +65,15 @@ export function SaleProductSearch({ tenantId, unitId, userRole, onProductSelecte
             setInputType(res.type);
             setMessage(res.message || "");
 
-            // If it's a direct match (like a scanner would provide) and it's unique
-            if ((res.type === 'imei' || res.type === 'barcode') && res.products.length === 1 && res.products[0].canSell) {
-                // We could auto-add here if we wanted, but let's show the result first for confirmation
-                // unless we want "ultra-fast" scanning. Let's stick to manual click for safety or
-                // check if the last char was Enter.
+            // Auto-add logic if it's a unique scan match
+            if ((res.type === 'imei' || res.type === 'barcode') && res.products.length === 1) {
+                const product = res.products[0];
+                if (product.canSell) {
+                    handleAdd(product);
+                    toast.success(`${product.name} adicionado ao carrinho`);
+                } else {
+                    toast.error(product.blockReason || "Produto não disponível para venda");
+                }
             }
         } catch (error) {
             console.error("Search error:", error);
@@ -144,12 +149,17 @@ export function SaleProductSearch({ tenantId, unitId, userRole, onProductSelecte
                 <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-500 transition-colors">
                     <Search size={22} />
                 </div>
-                <input 
-                    ref={inputRef}
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={handleKeyDown}
+                <BarcodeInput 
                     placeholder="Buscar por nome, código de barras ou IMEI..."
+                    onScan={(val) => {
+                        setQuery(val);
+                        performSearch(val);
+                    }}
+                    value={query}
+                    onChange={(val) => {
+                        setQuery(val);
+                        //performSearch is handled by useEffect for text
+                    }}
                     className="w-full h-16 bg-white border-2 border-slate-100 rounded-[28px] pl-14 pr-32 text-lg font-bold placeholder:text-slate-300 outline-none focus:border-brand-500 shadow-sm focus:shadow-xl focus:shadow-brand-500/5 transition-all"
                 />
                 

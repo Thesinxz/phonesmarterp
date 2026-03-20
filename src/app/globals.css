@@ -144,6 +144,22 @@ body {
   }
 }
 
+@media print {
+  body > *:not(#print-root) { display: none !important; }
+  #print-root { 
+    display: block !important; 
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background: white;
+  }
+  @page { margin: 0; size: auto; }
+}
+
 /* ─── Page Transitions ──────────────────────────────────── */
 .page-enter {
   animation: fadeIn 0.3s ease-out, slideUp 0.3s ease-out;

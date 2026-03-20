@@ -27,11 +27,18 @@ interface SaleProductResult {
 }
 
 function detectInputType(input: string): 'imei' | 'barcode' | 'text' {
-  const digits = input.replace(/\D/g, '')
-  if (digits.length === 15) return 'imei'
-  // Barcodes normally 8-13 digits, allowing some flexibility
-  if (digits.length >= 8 && digits.length <= 13 && /^\d+$/.test(input.trim())) return 'barcode'
-  return 'text'
+  const clean = input.trim();
+  const digits = clean.replace(/\D/g, '');
+  
+  if (digits.length === 15) return 'imei';
+  
+  // EAN-13 or other numeric barcodes
+  if (digits.length >= 8 && digits.length <= 14 && /^\d+$/.test(clean)) return 'barcode';
+  
+  // SMT- or PEC- SKUs
+  if (clean.startsWith('SMT-') || clean.startsWith('PEC-')) return 'barcode';
+  
+  return 'text';
 }
 
 export async function searchProductForSale(params: {
@@ -115,10 +122,10 @@ export async function searchProductForSale(params: {
       .eq("unit_stocks.unit_id", unitId);
 
     if (inputType === 'barcode') {
-      queryBuilder = queryBuilder.eq("barcode", query);
+      queryBuilder = queryBuilder.or(`barcode.eq.${query},sku.eq.${query}`);
     } else {
       if (query.length < 2) return { type: 'text', products: [] };
-      queryBuilder = queryBuilder.ilike("name", `%${query}%`).limit(10);
+      queryBuilder = queryBuilder.or(`name.ilike.%${query}%,barcode.eq.${query},sku.eq.${query}`).limit(10);
     }
 
     const { data: products, error } = await queryBuilder;
