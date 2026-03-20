@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -73,6 +73,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
     const [units, setUnits] = useState<any[]>([]);
     const [showMovementModal, setShowMovementModal] = useState(false);
     const [showAdjustModal, setShowAdjustModal] = useState(false);
+    const isSubmittingRef = useRef(false);
 
     // Histórico de movimentações
     const [movements, setMovements] = useState<any[]>([]);
@@ -262,9 +263,11 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
     };
 
     useRealtimeSubscription({
-        table: 'produtos',
+        table: 'catalog_items',
         filter: `id=eq.${params.id}`,
-        callback: () => loadData()
+        callback: () => {
+            if (!isSubmittingRef.current) loadData();
+        }
     });
 
     useEffect(() => {
@@ -356,8 +359,12 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
         e.preventDefault();
         console.log("[Client] handleSubmit started");
 
+        if (isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
+
         if (!profile) {
             toast.error("Sua sessão pode ter expirado. Tente atualizar a página.");
+            isSubmittingRef.current = false;
             return;
         }
 
@@ -373,6 +380,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
 
             if (isNaN(custoVal) || isNaN(vendaVal)) {
                 toast.error("Preço inválido. Use o formato 0,00");
+                isSubmittingRef.current = false;
                 setLoading(false);
                 return;
             }
@@ -393,6 +401,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
             // Validar IMEI se preenchido (deve ter 15 dígitos)
             if (form.imei && !/^\d{15}$/.test(form.imei)) {
                 toast.error("O IMEI deve conter exatamente 15 números.");
+                isSubmittingRef.current = false;
                 setLoading(false);
                 return;
             }
@@ -482,8 +491,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
             console.error("[Client] Error in handleSubmit:", error);
             const msg = error.message || "Erro desconhecido";
             toast.error(`Falha ao salvar: ${msg}`);
-        } finally {
-            console.log("[Client] handleSubmit finally block");
+            isSubmittingRef.current = false;
             setLoading(false);
         }
     }
