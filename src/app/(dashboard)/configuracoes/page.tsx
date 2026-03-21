@@ -51,7 +51,7 @@ import { CatalogoPanel } from "./CatalogoPanel";
 import { UnidadesPanel } from "./UnidadesPanel";
 import { LayoutGrid } from "lucide-react";
 
-type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "unidades" | "segmentos" | "marcas" | "tipos" | "apelidos" | "ai_config" | "vitrine" | "etiquetas" | "auditoria" | "contador" | "crediario" | "termos_os";
+type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "unidades" | "segmentos" | "marcas" | "tipos" | "apelidos" | "ai_config" | "vitrine" | "etiquetas" | "auditoria" | "contador" | "crediario" | "termos_os" | "integracoes";
 
 import { type WhatsappConfig, type FinanceiroConfig } from "@/types/configuracoes";
 import { getFiscalConfig, upsertFiscalConfig, ConfiguracaoFiscal } from "@/services/fiscal";
@@ -102,6 +102,7 @@ export default function ConfiguracoesPage() {
     const { user, profile, empresa, isLoading } = useAuth();
     const { refresh: refreshFinanceConfig } = useFinanceConfig();
     const [activeTab, setActiveTab] = useState<Tab>("empresa");
+    const [sickwKey, setSickwKey] = useState("");
     const [saving, setSaving] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [confirmDeleteName, setConfirmDeleteName] = useState("");
@@ -226,7 +227,7 @@ export default function ConfiguracoesPage() {
             const supabase = createClient();
             const { data, error } = await supabase
                 .from('configuracoes')
-                .select('chave, valor')
+                .select('chave, valor, sickw_api_key')
                 .eq('empresa_id', profile.empresa_id);
 
             if (error) throw error;
@@ -238,7 +239,8 @@ export default function ConfiguracoesPage() {
             }
 
             data.forEach((row: any) => {
-                const { chave, valor } = row;
+                const { chave, valor, sickw_api_key } = row;
+                if (sickw_api_key) setSickwKey(sickw_api_key);
                 if (chave === "nfe_emitente") setEmitente(valor as EmitenteConfig);
                 if (chave === "whatsapp") setWhatsappConfig(valor as any);
                 if (chave === "financeiro") {
@@ -451,6 +453,29 @@ export default function ConfiguracoesPage() {
         }
     }
 
+    async function saveSickwKey() {
+        if (!profile?.empresa_id) return;
+        setSaving(true);
+        try {
+            const supabase = createClient();
+            // Como configuracoes pode ter múltiplas linhas (EAV), 
+            // vamos atualizar todas as linhas daquela empresa com a mesma chave
+            // ou melhor, injetar na API de save-config se ela suportar colunas extras.
+            // Mas seguindo o SQL do user: Update direto.
+            const { error } = await (supabase
+                .from('configuracoes') as any)
+                .update({ sickw_api_key: sickwKey })
+                .eq('empresa_id', profile.empresa_id);
+
+            if (error) throw error;
+            toast.success("Chave Sickw salva com sucesso!");
+        } catch (error: any) {
+            toast.error("Erro ao salvar chave: " + error.message);
+        } finally {
+            setSaving(false);
+        }
+    }
+
     async function saveConfig(chave: string, valor: any) {
         console.log(`[Config] Início do saveConfig para chave: ${chave}`);
 
@@ -593,6 +618,7 @@ export default function ConfiguracoesPage() {
         { id: "crediario", label: "Crediário & Efíbank", icon: CreditCard, desc: "Fiado e Boletos" },
         { id: "etiquetas", label: "Etiquetas", icon: Scan, desc: "Modelos Térmicos e A4" },
         { id: "termos_os", label: "Termos da OS", icon: Shield, desc: "Garantias e Condições" },
+        { id: "integracoes", label: "Integrações", icon: Globe, desc: "Sickw API e Externos" },
         { id: "contador", label: "Contabilidade", icon: FileText, desc: "Fechamento e XML Automático" },
         { id: "auditoria", label: "Auditoria", icon: HistoryIcon, desc: "Log de alterações e segurança" },
     ];
@@ -2115,6 +2141,48 @@ export default function ConfiguracoesPage() {
                         )}
 
                         {/* ── TAB: Termos da OS ── */}
+                        {activeTab === "integracoes" && (
+                            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
+                                <GlassCard title="Integração Sickw IMEI" icon={Shield}>
+                                    <div className="space-y-3">
+                                        <p className="text-xs text-slate-500">
+                                            Verificação gratuita de IMEI: carrier, SIM lock, iCloud e informações Apple.
+                                            Crie sua conta em{' '}
+                                            <a href="https://sickw.com" target="_blank" className="text-brand-500 hover:underline">
+                                                sickw.com
+                                            </a>{' '}
+                                            e cole sua chave API abaixo.
+                                        </p>
+                                        <div>
+                                            <label className="text-xs font-black text-slate-400 uppercase">Chave API Sickw</label>
+                                            <input
+                                                type="password"
+                                                value={sickwKey}
+                                                onChange={(e) => setSickwKey(e.target.value)}
+                                                className="input-glass mt-1 w-full font-mono text-sm"
+                                                placeholder="SickwAPIKey..."
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                                            <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                                            <p className="text-xs text-emerald-700">
+                                                Serviços gratuitos: Carrier Check, SIM Lock, iCloud Status, Apple Serial Info.
+                                                Custo: $0.00 por verificação.
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={saveSickwKey}
+                                            disabled={saving}
+                                            className="btn-primary h-12 text-sm w-full md:w-auto px-8"
+                                        >
+                                            {saving ? <Loader2 className="animate-spin" /> : <Save size={16} />}
+                                            {saving ? "Salvando..." : "Salvar Chave"}
+                                        </button>
+                                    </div>
+                                </GlassCard>
+                            </div>
+                        )}
+
                         {activeTab === "termos_os" && (
                             <div className="space-y-6">
                                 <GlassCard title="Termos e Condições da Ordem de Serviço" icon={Shield}>

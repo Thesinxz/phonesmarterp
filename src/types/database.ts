@@ -264,6 +264,27 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["financeiro"]["Row"], "id" | "created_at">;
                 Update: Partial<Database["public"]["Tables"]["financeiro"]["Insert"]>;
+            }, imei_verifications: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    imei: string;
+                    catalog_item_id: string | null;
+                    carrier: string | null;
+                    country: string | null;
+                    sim_lock: string | null;
+                    icloud_status: string | null;
+                    apple_model: string | null;
+                    apple_color: string | null;
+                    purchase_date: string | null;
+                    warranty_status: string | null;
+                    warranty_until: string | null;
+                    raw_data: Json | null;
+                    verified_at: string;
+                    verified_by: string | null;
+                };
+                Insert: Omit<Database["public"]["Tables"]["imei_verifications"]["Row"], "id" | "verified_at">;
+                Update: Partial<Database["public"]["Tables"]["imei_verifications"]["Insert"]>;
             }, configuracoes: {
                 Row: {
                     id: string;
@@ -272,6 +293,7 @@ export interface Database {
                     valor: any; // JSONB
                     descricao: string | null;
                     is_secret: boolean;
+                    sickw_api_key: string | null;
                     created_at: string;
                     updated_at: string;
                 };
@@ -282,6 +304,7 @@ export interface Database {
                     valor: any;
                     descricao?: string | null;
                     is_secret?: boolean;
+                    sickw_api_key?: string | null;
                     created_at?: string;
                     updated_at?: string;
                 };
@@ -291,6 +314,7 @@ export interface Database {
                     valor: any;
                     descricao: string | null;
                     is_secret: boolean;
+                    sickw_api_key: string | null;
                 }>;
             }, tecnicos: {
                 Row: {
@@ -947,7 +971,7 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["imei_anatel_checks"]["Row"], "id" | "checked_at">;
                 Update: Partial<Database["public"]["Tables"]["imei_anatel_checks"]["Insert"]>;
-            };
+            }
         };
         Views: Record<string, never>;
         Functions: Record<string, never>;

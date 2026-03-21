@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, User, Package, CheckCircle2, Printer, History, Percent, Clock, Lock, DollarSign, LogOut, FileCode2, Receipt, Smartphone, RefreshCw, Keyboard } from "lucide-react";
+import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, User, Package, CheckCircle2, Printer, History, Percent, Clock, Lock, DollarSign, LogOut, FileCode2, Receipt, Smartphone, RefreshCw, Keyboard, Shield } from "lucide-react";
 import { finalizarVenda } from "@/services/vendas";
 import { getCatalogItems } from "@/services/catalog";
 import { getClientes } from "@/services/clientes";
@@ -869,6 +869,38 @@ export default function PDVPage() {
                             <span className="font-bold text-sm">Emitir NFC-e</span>
                         </button>
                     </div>
+
+                    {/* Certificados de Procedência */}
+                    {cart.some(item => (item as any).imei) && (
+                        <div className="mt-8 w-full max-w-6xl space-y-3">
+                            <div className="flex items-center gap-2 mb-2 px-1">
+                                <Shield className="w-4 h-4 text-brand-500" />
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Certificados de Procedência</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {cart.filter(item => (item as any).imei).map(item => (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        onClick={() => window.open(
+                                            `/print/certificado-imei/${(item as any).imei}?item=${item.id}&cliente=${selectedClient?.nome || ''}&venda=${new Date().toLocaleDateString('pt-BR')}&valor=${Math.round(item.sale_price * item.quantity)}`,
+                                            '_blank'
+                                        )}
+                                        className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100 hover:border-brand-300 hover:shadow-lg transition-all text-left group"
+                                    >
+                                        <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center text-brand-500 group-hover:bg-brand-500 group-hover:text-white transition-colors">
+                                            <Shield size={20} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-slate-800 truncate">{item.name}</p>
+                                            <p className="text-[10px] text-slate-400 font-mono">{(item as any).imei}</p>
+                                        </div>
+                                        <span className="text-[10px] font-black text-brand-500 uppercase">Imprimir</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="mt-10">
                         <button onClick={() => {

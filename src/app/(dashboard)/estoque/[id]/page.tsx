@@ -56,6 +56,9 @@ import { StockBadge } from "@/components/estoque/StockBadge";
 import { BarcodeGenerator } from "@/components/barcode/BarcodeGenerator";
 import { BarcodeDisplay } from "@/components/barcode/BarcodeDisplay";
 import { generateEAN13, generateSKU, generatePartSKU } from "@/utils/barcode";
+import { IMEIVerifier } from "@/components/imei/IMEIVerifier";
+import { getIMEIVerification } from "@/app/actions/imei-verify";
+import { Shield } from "lucide-react";
 
 export default function DetalheProdutoPage({ params }: { params: { id: string } }) {
     const router = useRouter();
@@ -73,6 +76,7 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
     const [units, setUnits] = useState<any[]>([]);
     const [showMovementModal, setShowMovementModal] = useState(false);
     const [showAdjustModal, setShowAdjustModal] = useState(false);
+    const [existingVerification, setExistingVerification] = useState<any>(null);
     const isSubmittingRef = useRef(false);
 
     // Histórico de movimentações
@@ -209,6 +213,11 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                 loadMovements(catItem.id, 1, { unitId: "", type: "" });
 
                 console.log("[Debug] Loaded catalog item:", catItem.id, catItem.name);
+                
+                if (catItem.item_type === 'celular' && catItem.imei) {
+                    getIMEIVerification(catItem.imei).then(setExistingVerification);
+                }
+
                 setPrecoEditadoManualmente(true);
                 return;
             }
@@ -252,6 +261,8 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                 if (data.imei) {
                     const hist = await getProdutoHistorico(params.id);
                     setHistorico(hist);
+                    
+                    getIMEIVerification(data.imei).then(setExistingVerification);
                 }
                 setPrecoEditadoManualmente(true);
             }
@@ -1004,6 +1015,48 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                                 />
                                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">%</span>
                                             </div>
+                                        </div>
+                                    )}
+
+                                    {itemType === 'celular' && form.imei && (
+                                        <div className="mt-8 pt-8 border-t border-slate-100">
+                                            <div className="flex items-center gap-2 mb-4">
+                                                <Shield className="w-5 h-5 text-brand-500" />
+                                                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
+                                                    Procedência e IMEI
+                                                </h3>
+                                            </div>
+                                            <IMEIVerifier
+                                                imei={form.imei}
+                                                catalogItemId={params.id}
+                                                initialData={existingVerification ? {
+                                                    carrier: existingVerification.carrier,
+                                                    country: existingVerification.country,
+                                                    simLock: existingVerification.sim_lock,
+                                                    icloudStatus: existingVerification.icloud_status,
+                                                    appleModel: existingVerification.apple_model,
+                                                    appleColor: existingVerification.apple_color,
+                                                    purchaseDate: existingVerification.purchase_date,
+                                                    warrantyStatus: existingVerification.warranty_status,
+                                                    warrantyUntil: existingVerification.warranty_until,
+                                                    rawData: existingVerification.raw_data || {},
+                                                    verifiedAt: existingVerification.verified_at,
+                                                    fromCache: true,
+                                                } : null}
+                                            />
+                                            {existingVerification && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => window.open(
+                                                        `/print/certificado-imei/${form.imei}?item=${params.id}`,
+                                                        '_blank'
+                                                    )}
+                                                    className="w-full mt-3 py-3 bg-white border-2 border-brand-100 text-brand-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-brand-50 hover:border-brand-200 transition-all flex items-center justify-center gap-2 shadow-sm"
+                                                >
+                                                    <FileText size={16} />
+                                                    Imprimir Certificado de Procedência
+                                                </button>
+                                            )}
                                         </div>
                                     )}
                                 </div>
