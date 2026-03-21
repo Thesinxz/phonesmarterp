@@ -160,23 +160,23 @@ function NovoCatalogContent() {
     
     // Auto-select Pricing Segment based on Item Type
     useEffect(() => {
-        if (!itemType || !productTypes.length) return;
+        if (!itemType || !productTypes.length || form.pricing_segment_id) return;
         
         const pt = productTypes.find(t => t.slug === itemType);
         if (pt?.default_pricing_segment_id) {
             setForm(prev => ({ ...prev, pricing_segment_id: pt.default_pricing_segment_id as string }));
         }
-    }, [itemType, productTypes]);
+    }, [itemType, productTypes, form.pricing_segment_id]);
 
     // Auto-select Pricing Segment based on Category
     useEffect(() => {
-        if (!form.category_id || !categories.length) return;
+        if (!form.category_id || !categories.length || form.pricing_segment_id) return;
         
         const cat = categories.find(c => c.id === form.category_id);
         if (cat?.default_pricing_segment_id) {
             setForm(prev => ({ ...prev, pricing_segment_id: cat.default_pricing_segment_id as string }));
         }
-    }, [form.category_id, categories]);
+    }, [form.category_id, categories, form.pricing_segment_id]);
 
     useEffect(() => {
         if (precoEditado || !config) return;
@@ -327,10 +327,12 @@ function NovoCatalogContent() {
                 cest: form.cest || null,
                 image_url: form.image_url || null,
                 
-                // Celular / Geral
+                // Geral
                 brand_id: form.brand_id || null,
                 pricing_segment_id: form.pricing_segment_id || null,
                 subcategory: form.subcategory || null,
+                
+                // Celular
                 condicao: itemType === 'celular' ? form.condicao : null,
                 color: form.color || null,
                 grade: form.grade || null,
