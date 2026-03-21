@@ -15,6 +15,7 @@ import {
 import { cn } from "@/utils/cn";
 import { validateIMEIFull } from "@/app/actions/imei";
 import { BrowserMultiFormatReader } from "@zxing/browser";
+import { validateIMEILuhn } from "@/utils/tac-lookup";
 
 interface IMEIScannerProps {
     value: string;
@@ -207,6 +208,14 @@ export function IMEIScanner({ value, onChange, onValidated, tenantId, currentIte
                                 {isValidating ? <Loader2 className="animate-spin" size={20} /> : "Validar"}
                             </button>
                         </div>
+                        {value && value.length === 15 && (
+                          <p className={cn(
+                            "text-[10px] font-bold mt-1",
+                            validateIMEILuhn(value) ? "text-emerald-600" : "text-red-500"
+                          )}>
+                            {validateIMEILuhn(value) ? "✓ IMEI válido" : "✗ IMEI inválido — verifique os dígitos"}
+                          </p>
+                        )}
                         <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Dica: O IMEI está na caixa do aparelho ou digite *#06#</p>
                     </div>
                 )}

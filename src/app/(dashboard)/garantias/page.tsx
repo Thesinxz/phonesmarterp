@@ -11,7 +11,10 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getWarrantyClaims } from "@/app/actions/warranty";
-import { GlassCard } from "@/components/ui/GlassCard";
+import { 
+    GlassCard, PageHeader, EmptyState, SearchInput, 
+    StatusBadge, GARANTIA_STATUS 
+} from "@/components/ui";
 import { cn } from "@/utils/cn";
 import { formatDate } from "@/utils/formatDate";
 import Link from "next/link";
@@ -25,6 +28,7 @@ export default function GarantiasPage() {
     // Filtros
     const [status, setStatus] = useState("todas");
     const [claimType, setClaimType] = useState("todos");
+    const [search, setSearch] = useState("");
 
     useEffect(() => {
         if (profile?.empresa_id) {
@@ -58,20 +62,15 @@ export default function GarantiasPage() {
     return (
         <FeatureGate feature="os_garantias" featureName="Gestão de Garantias">
             <div className="space-y-6 page-enter pb-12">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                        <Shield className="text-indigo-500" /> Garantias
-                    </h1>
-                    <p className="text-slate-500 text-sm font-medium uppercase tracking-widest mt-1">Gestão de retornos e reclamações</p>
-                </div>
-                <Link 
-                    href="/os"
-                    className="h-11 px-6 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-500/20"
-                >
-                    <Shield size={16} /> Abrir da OS
-                </Link>
-            </div>
+            <PageHeader
+                title="Garantias"
+                subtitle="Gestão de retornos e reclamações"
+                actions={[{
+                    label: "Abrir da OS",
+                    href: "/os",
+                    icon: <Shield size={16} />,
+                }]}
+            />
 
             {/* Cards de Resumo */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -91,16 +90,13 @@ export default function GarantiasPage() {
             {/* Filtros */}
             <GlassCard>
                 <div className="flex flex-col md:flex-row gap-4 items-center">
-                    <div className="flex-1 w-full">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                            <input 
-                                type="text"
-                                placeholder="Buscar reclamação..."
-                                className="w-full pl-10 pr-4 h-11 rounded-xl border border-slate-100 bg-slate-50/50 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm"
-                            />
-                        </div>
-                    </div>
+                    <SearchInput
+                        value={search}
+                        onChange={setSearch}
+                        placeholder="Buscar reclamação..."
+                        className="flex-1 w-full"
+                        loading={loading && !!search}
+                    />
                     <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
                         <select 
                             value={status} 
@@ -146,15 +142,15 @@ export default function GarantiasPage() {
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={6} className="py-20 text-center">
-                                        <Loader2 className="animate-spin mx-auto text-indigo-500" />
-                                    </td>
+                                    <td colSpan={6} className="py-20 text-center text-slate-400 font-medium">Carregando...</td>
                                 </tr>
                             ) : claims.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="py-20 text-center">
-                                        <SearchX className="mx-auto text-slate-200 mb-4" size={48} />
-                                        <p className="text-slate-400 font-medium">Nenhuma garantia encontrada.</p>
+                                    <td colSpan={6}>
+                                        <EmptyState
+                                            title="Nenhuma garantia encontrada"
+                                            description="Não há registros correspondentes aos filtros selecionados."
+                                        />
                                     </td>
                                 </tr>
                             ) : claims.map(claim => (
@@ -183,19 +179,7 @@ export default function GarantiasPage() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className={cn(
-                                            "px-3 py-1.5 rounded-full text-[10px] font-black uppercase flex items-center gap-1.5 w-fit border shadow-sm",
-                                            claim.status === 'aberta' ? "bg-amber-50 text-amber-700 border-amber-100" :
-                                            claim.status === 'reparo_em_andamento' ? "bg-purple-50 text-purple-700 border-purple-100" :
-                                            claim.status === 'concluida' ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
-                                            "bg-red-50 text-red-700 border-red-100"
-                                        )}>
-                                            <div className={cn("w-1.5 h-1.5 rounded-full",
-                                                claim.status === 'aberta' ? "bg-amber-500 animate-pulse" :
-                                                claim.status === 'concluida' ? "bg-emerald-500" : "bg-slate-500"
-                                            )} />
-                                            {claim.status.replace('_', ' ')}
-                                        </div>
+                                        <StatusBadge status={claim.status} map={GARANTIA_STATUS} size="md" />
                                     </td>
                                     <td className="px-6 py-4">
                                         <Link 

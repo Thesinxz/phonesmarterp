@@ -7,8 +7,11 @@ import {
   Loader2, Info
 } from "lucide-react";
 import { cn } from "@/utils/cn";
-import { verifyIMEI, type SickwResult } from "@/app/actions/imei-verify";
+import { verifyIMEI, saveIMEIVerificationManually, type SickwResult } from "@/app/actions/imei-verify";
 import { toast } from "sonner";
+import { lookupTAC, validateIMEILuhn, type TACInfo } from "@/utils/tac-lookup";
+import { parseGenericIMEIText, isDeviceClean, warrantyLabel } from "@/utils/imei-parser";
+import { useEffect } from "react";
 
 interface Props {
   imei: string;
@@ -42,6 +45,30 @@ function StatusBadge({ value, positives, negatives }: {
 export function IMEIVerifier({ imei, catalogItemId, initialData }: Props) {
   const [data, setData] = useState<SickwResult | null>(initialData || null);
   const [loading, setLoading] = useState(false);
+  
+  // States para a Abordagem Híbrida
+  const [tacInfo, setTacInfo] = useState<TACInfo | null>(null);
+  const [tacLoading, setTacLoading] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [isSavingManual, setIsSavingManual] = useState(false);
+
+  // Lookup automático de TAC (modelo/marca)
+  useEffect(() => {
+    if (!imei || !validateIMEILuhn(imei)) return;
+
+    setTacLoading(true);
+    const serial = initialData?.rawData?.serial?.response?.serial || '';
+    const url = `/api/tac/${imei}${serial ? `?serial=${serial}` : ''}`;
+    
+    fetch(url)
+      .then(r => r.json())
+      .then(data => setTacInfo(data))
+      .catch(() => setTacInfo(null))
+      .finally(() => setTacLoading(false));
+  }, [imei, initialData?.rawData?.serial?.response?.serial]);
+
+  // Parser em tempo real do texto colado
+  const parsedFromPaste = parseGenericIMEIText(pasteText);
 
   if (!imei || !/^\d{15}$/.test(imei)) {
     return (
@@ -69,24 +96,153 @@ export function IMEIVerifier({ imei, catalogItemId, initialData }: Props) {
     }
   };
 
-  // Estado: sem verificação ainda
+  const handleSaveManual = async () => {
+    if (!parsedFromPaste) return;
+    setIsSavingManual(true);
+    try {
+      const result = await saveIMEIVerificationManually({
+        imei,
+        catalogItemId,
+        data: {
+          carrier: parsedFromPaste.lockedCarrier,
+          country: parsedFromPaste.purchaseCountry,
+          simLock: parsedFromPaste.simLockStatus,
+          icloudStatus: (parsedFromPaste as any).icloudStatus || (isDeviceClean(parsedFromPaste.modelDescription) ? 'OFF' : null),
+          appleModel: parsedFromPaste.model || parsedFromPaste.modelDescription,
+          appleColor: (parsedFromPaste as any).color || null,
+          purchaseDate: parsedFromPaste.purchaseDate,
+          warrantyStatus: parsedFromPaste.warrantyStatus,
+          rawData: { manual: true, text: pasteText, parsed: parsedFromPaste }
+        }
+      });
+      if (result.success) {
+        toast.success("Verificação salva com sucesso!");
+        // Recarregar os dados (neste caso, simular atualização local ou refresh)
+        window.location.reload();
+      } else {
+        toast.error(result.error || "Erro ao salvar");
+      }
+    } catch {
+      toast.error("Erro ao salvar verificação");
+    } finally {
+      setIsSavingManual(false);
+    }
+  };
+
+  // Estado: sem verificação detalhada ainda
   if (!data) {
     return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-          <Shield size={20} className="text-slate-400 shrink-0" />
-          <div className="flex-1">
-            <p className="text-xs font-bold text-slate-600">IMEI não verificado</p>
-            <p className="text-[10px] text-slate-400 font-mono mt-0.5">{imei}</p>
+      <div className="space-y-4">
+        {/* Identificação automática pelo TAC */}
+        {imei && (
+          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100">
+            <Smartphone size={16} className={cn(
+              "shrink-0",
+              tacLoading ? "text-slate-300 animate-pulse" : "text-brand-500"
+            )} />
+            <div className="flex-1 min-w-0">
+              {tacLoading ? (
+                <div className="h-3 bg-slate-200 rounded animate-pulse w-32" />
+              ) : tacInfo?.model ? (
+                <>
+                  <p className="text-xs font-black text-slate-700 truncate">
+                    {tacInfo.model}
+                    {tacInfo.storage && (
+                      <span className="ml-1 text-slate-400 font-normal">{tacInfo.storage}</span>
+                    )}
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    {tacInfo.brand}
+                    {tacInfo.source === 'local' && ' · base local'}
+                    {tacInfo.source === 'apple_api' && ' · Apple'}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-slate-400">
+                  {tacInfo?.brand && tacInfo.brand !== 'Desconhecido'
+                    ? `${tacInfo.brand} — modelo não identificado`
+                    : 'Modelo não identificado pelo TAC'
+                  }
+                </p>
+              )}
+            </div>
+            {!validateIMEILuhn(imei) && (
+              <span className="text-[10px] text-red-500 font-bold shrink-0">IMEI inválido</span>
+            )}
           </div>
-          <button
-            onClick={() => handleVerify(false)}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded-xl text-xs font-bold hover:bg-brand-600 transition-all disabled:opacity-50 shrink-0"
-          >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <Shield size={14} />}
-            {loading ? "Verificando..." : "Verificar"}
-          </button>
+        )}
+
+        {/* Instruções e Paste */}
+        <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
+          <Info size={16} className="text-blue-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-xs font-bold text-blue-800">
+              Como obter informações completas
+            </p>
+            <ol className="text-[11px] text-blue-700 mt-1 space-y-1 list-decimal list-inside">
+              <li>
+                Acesse um dos sites gratuitos abaixo com o IMEI{' '}
+                {imei && <span className="font-mono font-black">{imei}</span>}:
+              </li>
+            </ol>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {[
+                { name: 'sickw.com', url: `https://sickw.com/?imei=${imei || ''}` },
+                { name: 'imei.info', url: `https://www.imei.info/?imei=${imei || ''}` },
+                { name: 'imeipro.info', url: `https://www.imeipro.info/?imei=${imei || ''}` },
+              ].map(site => (
+                <a
+                  key={site.name}
+                  href={site.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-bold text-blue-600 underline hover:text-blue-800"
+                >
+                  {site.name}
+                </a>
+              ))}
+            </div>
+            <p className="text-[11px] text-blue-700 mt-2">
+              2. Copie todo o resultado e cole no campo abaixo:
+            </p>
+            
+            <textarea
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              placeholder="Cole aqui o resultado da verificação..."
+              className="w-full mt-2 p-2 h-20 text-[10px] font-mono border border-blue-200 rounded-lg focus:ring-1 focus:ring-blue-400 focus:outline-none resize-none"
+            />
+
+            {parsedFromPaste ? (
+              <div className="mt-3 p-3 bg-white rounded-xl border border-blue-200 animate-in fade-in slide-in-from-top-2">
+                <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Resumo Identificado</p>
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-slate-700">{parsedFromPaste.model || parsedFromPaste.modelDescription}</p>
+                  <p className="text-[10px] text-slate-500">SN: {parsedFromPaste.serialNumber || '—'}</p>
+                </div>
+                <button
+                  onClick={handleSaveManual}
+                  disabled={isSavingManual}
+                  className="w-full mt-3 h-9 bg-brand-500 text-white rounded-lg text-xs font-bold hover:bg-brand-600 transition-all flex items-center justify-center gap-2"
+                >
+                  {isSavingManual ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                  Salvar Verificação
+                </button>
+              </div>
+            ) : (
+              <div className="mt-4 pt-4 border-t border-blue-100 flex items-center justify-between">
+                <span className="text-[10px] text-blue-400 italic">Ou use o serviço pago automático:</span>
+                <button
+                  onClick={() => handleVerify(false)}
+                  disabled={loading}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-brand-500 text-white rounded-lg text-[11px] font-bold hover:bg-brand-600 transition-all disabled:opacity-50"
+                >
+                  {loading ? <Loader2 size={12} className="animate-spin" /> : <Shield size={12} />}
+                  Sickw Automático
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );

@@ -148,6 +148,7 @@ export async function getCatalogItems(
         search?: string;
         item_type?: string;
         brand_id?: string;
+        category_id?: string;
         stock_status?: string; // 'in_stock', 'low_stock', 'out_of_stock'
         page?: number;
         pageSize?: number;
@@ -182,6 +183,10 @@ export async function getCatalogItems(
     
     if (filters?.brand_id) {
         query = query.eq("brand_id", filters.brand_id);
+    }
+
+    if (filters?.category_id) {
+        query = query.eq("category_id", filters.category_id);
     }
     
     if (filters?.stock_status) {

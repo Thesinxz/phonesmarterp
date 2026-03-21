@@ -187,6 +187,54 @@ export async function getIMEIVerification(imei: string) {
     .eq("empresa_id", profile.empresa_id)
     .eq("imei", imei)
     .maybeSingle() as any);
-
   return data;
+}
+
+export async function saveIMEIVerificationManually(params: {
+  imei: string;
+  catalogItemId?: string;
+  data: Partial<SickwResult>;
+}) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Não autenticado" };
+
+  const { data: profile } = await (supabase
+    .from("usuarios")
+    .select("empresa_id")
+    .eq("auth_user_id", user.id)
+    .single() as any);
+
+  if (!profile?.empresa_id) return { success: false, error: "Empresa não encontrada" };
+
+  const verifiedAt = new Date().toISOString();
+
+  const { error } = await (supabase
+    .from("imei_verifications") as any)
+    .upsert({
+      empresa_id: profile.empresa_id,
+      imei: params.imei,
+      catalog_item_id: params.catalogItemId || null,
+      carrier: params.data.carrier || null,
+      country: params.data.country || null,
+      sim_lock: params.data.simLock || null,
+      icloud_status: params.data.icloudStatus || null,
+      apple_model: params.data.appleModel || null,
+      apple_color: params.data.appleColor || null,
+      purchase_date: params.data.purchaseDate || null,
+      warranty_status: params.data.warrantyStatus || null,
+      warranty_until: params.data.warrantyUntil || null,
+      raw_data: params.data.rawData || {},
+      verified_at: verifiedAt,
+      verified_by: user.id,
+    }, { onConflict: "empresa_id,imei" });
+
+  if (error) {
+    console.error("Erro ao salvar verificação manual:", error);
+    return { success: false, error: "Erro ao salvar no banco" };
+  }
+
+  if (params.catalogItemId) revalidatePath(`/estoque/${params.catalogItemId}`);
+
+  return { success: true };
 }

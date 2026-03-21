@@ -3,13 +3,13 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save, Package, Smartphone, Headphones, Wrench, DollarSign, Barcode, Eye, FileText, Upload, Tag, Cpu, X, Info, ChevronDown } from "lucide-react";
+import { ArrowLeft, Save, Package, Smartphone, Headphones, Wrench, DollarSign, Barcode, Eye, FileText, Upload, Tag, Cpu, X, Info, ChevronDown, Layers } from "lucide-react";
 import { createCatalogItem } from "@/services/catalog";
 import { uploadProdutoImage } from "@/services/estoque"; // reaproveitando upload
 import { useAuth } from "@/context/AuthContext";
 import { useFinanceConfig } from "@/hooks/useFinanceConfig";
 import { calculateSuggestedPriceBySegment } from "@/utils/product-pricing";
-import { GlassCard } from "@/components/ui/GlassCard";
+import { GlassCard, PageHeader, PriceGroup } from "@/components/ui";
 import { cn } from "@/utils/cn";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -18,12 +18,21 @@ import { Search } from "lucide-react";
 import { Brand, PricingSegment, type CatalogItem } from "@/types/database";
 import { getExistingDeviceModels, createCatalogItemWithStock } from "@/app/actions/parts";
 import { IMEIScanner } from "@/components/inventory/IMEIScanner";
+import { validateIMEILuhn } from "@/utils/tac-lookup";
 import { PartTypeSelector } from "@/components/estoque/PartTypeSelector";
 import { QualitySelector } from "@/components/estoque/QualitySelector";
 import { registerIMEI } from "@/app/actions/imei";
 import { BarcodeGenerator } from "@/components/barcode/BarcodeGenerator";
 import { BarcodeDisplay } from "@/components/barcode/BarcodeDisplay";
 import { generateEAN13, generateSKU, generatePartSKU } from "@/utils/barcode";
+import { DeviceFields } from "@/components/inventory/DeviceFields";
+import { FiscalPanel } from "@/components/inventory/FiscalPanel";
+import { useEmpresaFiscal } from "@/hooks/useEmpresaFiscal";
+import { CategorySelector } from "@/components/catalog/CategorySelector";
+import { BrandSelector } from "@/components/catalog/BrandSelector";
+import { PricingSegmentSelector } from "@/components/catalog/PricingSegmentSelector";
+import { useCatalogCategories } from "@/hooks/useCatalogCategories";
+import { useCatalogData } from "@/hooks/useCatalogData";
 
 type ItemType = 'celular' | 'acessorio' | 'peca' | null;
 
@@ -31,13 +40,10 @@ export default function NovoCatalogItemPage() {
     const router = useRouter();
     const { profile } = useAuth();
     const { config } = useFinanceConfig();
+    const { regime, tributacoes } = useEmpresaFiscal();
     const [loading, setLoading] = useState(false);
     
     // Auxiliares
-    const [brands, setBrands] = useState<Brand[]>([]);
-    const [pricingSegments, setPricingSegments] = useState<PricingSegment[]>([]);
-    
-    const [itemType, setItemType] = useState<ItemType>(null);
     const [precoEditado, setPrecoEditado] = useState(false);
     
     // Form State Universal/Específico
@@ -60,6 +66,7 @@ export default function NovoCatalogItemPage() {
         sale_price_wholesale_brl: "0,00",
         sale_price_usd: "0,00",
         sale_price_usd_rate: "0,00",
+        category_id: "",
         
         // Celulares
         brand_id: "",
@@ -73,6 +80,19 @@ export default function NovoCatalogItemPage() {
         battery_health: "",
         imei: "",
         imei2: "",
+        serial_number: "",
+        battery_cycle: "",
+        dias_garantia: "90",
+        observacao: "",
+        data_entrada: "",
+        // Fiscal avançado
+        cst_csosn: "",
+        cfop_estadual_saida: "5102",
+        cfop_interestadual_saida: "6102",
+        cfop_estadual_entrada: "",
+        cfop_interestadual_entrada: "",
+        codigo_beneficio_fiscal: "",
+        tributacao_id: "",
         
         // Acessórios
         accessory_type: "",
@@ -87,27 +107,28 @@ export default function NovoCatalogItemPage() {
         compatible_models_parts: "" // será split(',') depois
     });
 
-    useEffect(() => {
-        if (!profile?.empresa_id) return;
-        const fetchData = async () => {
-            const supabase = createClient();
-            const [b, s, u] = await Promise.all([
-                supabase.from('brands').select('*').eq('empresa_id', profile.empresa_id).order('name'),
-                supabase.from('pricing_segments').select('*').eq('empresa_id', profile.empresa_id).order('name'),
-                supabase.from('units').select('*').eq('empresa_id', profile.empresa_id).eq('is_active', true).order('name')
-            ]);
-            if (b.data) setBrands(b.data as any);
-            if (s.data) setPricingSegments(s.data as any);
-            if (u.data) setUnits(u.data as any);
-        }
-        fetchData();
-    }, [profile?.empresa_id]);
-
+    const [itemType, setItemType] = useState<ItemType>(null);
+    const { segments, brands, productTypes, loading: catalogLoading } = useCatalogData();
+    const { categories } = useCatalogCategories(itemType || undefined);
+    
+    // Auxiliares
     const [units, setUnits] = useState<any[]>([]);
     const [compatibleModels, setCompatibleModels] = useState<string[]>([]);
     const [modelSearch, setModelSearch] = useState("");
     const [modelSuggestions, setModelSuggestions] = useState<any[]>([]);
     const [unitStocks, setUnitStocks] = useState<Record<string, string>>({});
+
+    
+    // Fetch Units independently if not in useCatalogData
+    useEffect(() => {
+        if (!profile?.empresa_id) return;
+        const fetchUnits = async () => {
+            const supabase = createClient();
+            const { data } = await supabase.from('units').select('*').eq('empresa_id', profile.empresa_id).eq('is_active', true).order('name');
+            if (data) setUnits(data);
+        }
+        fetchUnits();
+    }, [profile?.empresa_id]);
 
     useEffect(() => {
         if (modelSearch.length < 2 || !profile?.empresa_id) {
@@ -133,6 +154,26 @@ export default function NovoCatalogItemPage() {
     const removeModelTag = (name: string) => {
         setCompatibleModels(prev => prev.filter(m => m !== name));
     };
+    
+    // Auto-select Pricing Segment based on Item Type
+    useEffect(() => {
+        if (!itemType || !productTypes.length) return;
+        
+        const pt = productTypes.find(t => t.slug === itemType);
+        if (pt?.default_pricing_segment_id) {
+            setForm(prev => ({ ...prev, pricing_segment_id: pt.default_pricing_segment_id as string }));
+        }
+    }, [itemType, productTypes]);
+
+    // Auto-select Pricing Segment based on Category
+    useEffect(() => {
+        if (!form.category_id || !categories.length) return;
+        
+        const cat = categories.find(c => c.id === form.category_id);
+        if (cat?.default_pricing_segment_id) {
+            setForm(prev => ({ ...prev, pricing_segment_id: cat.default_pricing_segment_id as string }));
+        }
+    }, [form.category_id, categories]);
 
     useEffect(() => {
         if (precoEditado || !config) return;
@@ -141,19 +182,15 @@ export default function NovoCatalogItemPage() {
         if (isNaN(custo) || custo <= 0) return;
 
         let segment = null;
-        if (itemType === 'celular' && form.pricing_segment_id) {
-            segment = pricingSegments.find(s => s.id === form.pricing_segment_id);
-        } else if (itemType === 'acessorio' || itemType === 'peca') {
-            // usar margem bruta opcional, mas no sistema legado é só custo se não tiver segmento.
-            // Para peças e acessórios, vamos exigir preencher ou aplicar lógica default
-            return;
+        if (form.pricing_segment_id) {
+            segment = segments.find(s => s.id === form.pricing_segment_id);
         }
 
         if (segment) {
             const sugerido = calculateSuggestedPriceBySegment(custo, segment as any, config.taxa_nota_fiscal_pct);
             setForm(prev => ({ ...prev, sale_price: (sugerido / 100).toFixed(2).replace('.', ',') }));
         }
-    }, [form.cost_price, form.pricing_segment_id, config, precoEditado, itemType, pricingSegments]);
+    }, [form.cost_price, form.pricing_segment_id, config, precoEditado, itemType, segments]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
@@ -176,12 +213,6 @@ export default function NovoCatalogItemPage() {
 
         setForm(prev => {
             const up = { ...prev, [name]: value };
-            if (name === 'brand_id' && itemType === 'celular') {
-                const b = brands.find(x => x.id === value);
-                if (b?.default_pricing_segment_id) {
-                    up.pricing_segment_id = b.default_pricing_segment_id;
-                }
-            }
             return up;
         });
     };
@@ -293,9 +324,9 @@ export default function NovoCatalogItemPage() {
                 cest: form.cest || null,
                 image_url: form.image_url || null,
                 
-                // Celular
-                brand_id: (itemType === 'celular' && form.brand_id) ? form.brand_id : null,
-                pricing_segment_id: (itemType === 'celular' && form.pricing_segment_id) ? form.pricing_segment_id : null,
+                // Celular / Geral
+                brand_id: form.brand_id || null,
+                pricing_segment_id: form.pricing_segment_id || null,
                 subcategory: form.subcategory || null,
                 condicao: itemType === 'celular' ? form.condicao : null,
                 color: form.color || null,
@@ -306,6 +337,20 @@ export default function NovoCatalogItemPage() {
                 imei: form.imei || null,
                 imei2: form.imei2 || null,
                 
+                serial_number: form.serial_number || null,
+                battery_cycle: form.battery_cycle ? parseInt(form.battery_cycle) : null,
+                dias_garantia: parseInt(form.dias_garantia || '90') || 90,
+                observacao: form.observacao || null,
+                data_entrada: form.data_entrada || null,
+                // Fiscal avançado
+                cst_csosn: form.cst_csosn || null,
+                cfop_estadual_saida: form.cfop_estadual_saida || null,
+                cfop_interestadual_saida: form.cfop_interestadual_saida || null,
+                cfop_estadual_entrada: form.cfop_estadual_entrada || null,
+                cfop_interestadual_entrada: form.cfop_interestadual_entrada || null,
+                codigo_beneficio_fiscal: form.codigo_beneficio_fiscal || null,
+                tributacao_id: form.tributacao_id || null,
+
                 // Acessórios
                 accessory_type: itemType === 'acessorio' ? form.accessory_type : null,
                 compatible_models: itemType === 'acessorio' ? form.compatible_models : null,
@@ -417,27 +462,30 @@ export default function NovoCatalogItemPage() {
 
     return (
         <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-6 page-enter pb-32">
-            <div className="flex items-center justify-between sticky top-0 bg-slate-50/80 backdrop-blur-md z-40 py-4 -mx-4 px-4 sm:mx-0 sm:px-0">
-                <div className="flex items-center gap-4">
-                    <button type="button" onClick={() => setItemType(null)} className="p-2 bg-white hover:bg-slate-100 rounded-xl transition-all shadow-sm">
-                        <ArrowLeft size={18} className="text-slate-500" />
-                    </button>
-                    <div>
-                        <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                            {itemType === 'celular' ? <><Smartphone className="text-blue-500" size={20}/> Celular</> :
-                             itemType === 'acessorio' ? <><Headphones className="text-emerald-500" size={20}/> Acessório</> :
-                             <><Wrench className="text-amber-500" size={20}/> Peça</>}
-                        </h1>
-                        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Cadastro Unificado</p>
-                    </div>
-                </div>
+            <PageHeader
+                title={
+                    itemType === 'celular' ? "Novo Celular" :
+                    itemType === 'acessorio' ? "Novo Acessório" : "Nova Peça"
+                }
+                subtitle="Cadastro Unificado"
+                onBack={() => setItemType(null)}
+                actions={[
+                    {
+                        label: loading ? "Salvando..." : "Salvar",
+                        onClick: () => {}, // O botão de submit do form cuidará disso, mas o PageHeader renderiza botões. 
+                        // Na verdade, para forms, é melhor que o botão seja type="submit".
+                        // O PageHeader aceita 'icon' e 'onClick' ou 'href'. 
+                        // Vou passar o botão manualmente para manter o type="submit".
+                    }
+                ]}
+            >
                 <div className="flex gap-3">
                     <button type="button" onClick={() => router.back()} className="btn-secondary h-11 hidden sm:flex">Cancelar</button>
                     <button type="submit" disabled={loading} className="btn-primary h-11">
                         <Save size={18} /> {loading ? "Salvando..." : "Salvar"}
                     </button>
                 </div>
-            </div>
+            </PageHeader>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Coluna Principal (Esquerda) */}
@@ -449,46 +497,36 @@ export default function NovoCatalogItemPage() {
                                 <input required name="name" value={form.name} onChange={handleChange} className="input-glass mt-1 w-full text-lg font-bold" placeholder="Ex: iPhone 13 Pro Max 128GB" />
                             </div>
 
+                            {/* Categoria do catálogo */}
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                    Categoria
+                                </label>
+                                <CategorySelector
+                                    value={form.category_id || ''}
+                                    onChange={(id) => setForm(prev => ({ ...prev, category_id: id }))}
+                                    itemType={itemType || undefined}
+                                    allowCreate
+                                />
+                            </div>
+
                             {itemType === 'celular' && (
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-xs font-black text-slate-400 uppercase flex items-center justify-between">
-                                            <span>Marca</span>
-                                            <button
-                                                type="button"
-                                                onClick={async () => {
-                                                    const nome = window.prompt("Nome da nova marca:");
-                                                    if (!nome?.trim() || !profile?.empresa_id) return;
-                                                    const supabase = createClient();
-                                                    const { data, error } = await (supabase as any)
-                                                        .from('brands')
-                                                        .insert({ name: nome.trim(), empresa_id: profile.empresa_id })
-                                                        .select()
-                                                        .single();
-                                                    if (error) {
-                                                        toast.error("Erro ao criar marca");
-                                                        return;
+                                        <label className="text-xs font-black text-slate-400 uppercase mb-1 block">Marca</label>
+                                        <BrandSelector
+                                            value={form.brand_id}
+                                            onChange={(id, brand) => {
+                                                setForm(prev => {
+                                                    const up = { ...prev, brand_id: id };
+                                                    if (brand?.default_pricing_segment_id) {
+                                                        up.pricing_segment_id = brand.default_pricing_segment_id;
                                                     }
-                                                    setBrands(prev => [...prev, data as any]);
-                                                    setForm(prev => ({ ...prev, brand_id: data.id }));
-                                                    toast.success(`Marca "${nome.trim()}" criada!`);
-                                                }}
-                                                className="text-[10px] text-brand-500 hover:underline font-bold normal-case"
-                                            >
-                                                + Nova marca
-                                            </button>
-                                        </label>
-                                        <select name="brand_id" value={form.brand_id} onChange={handleChange} className="input-glass mt-1 w-full font-bold">
-                                            <option value="">Selecione...</option>
-                                            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-black text-slate-400 uppercase">Segmento (Precificação)</label>
-                                        <select name="pricing_segment_id" value={form.pricing_segment_id} onChange={handleChange} className="input-glass mt-1 w-full font-bold text-indigo-700">
-                                            <option value="">Nenhum / Manual</option>
-                                            {pricingSegments.map(s => <option key={s.id} value={s.id}>{s.name} (R$ {(s.default_margin/100).toFixed(2)})</option>)}
-                                        </select>
+                                                    return up;
+                                                });
+                                            }}
+                                            allowCreate
+                                        />
                                     </div>
                                     <div className="col-span-2 grid grid-cols-2 gap-4">
                                         <div>
@@ -546,8 +584,12 @@ export default function NovoCatalogItemPage() {
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-xs font-black text-slate-400 uppercase">Marca (Aparelho)</label>
-                                        <input name="part_brand" value={form.part_brand} onChange={handleChange} className="input-glass mt-1 w-full" placeholder="Ex: Apple" />
+                                        <label className="text-xs font-black text-slate-400 uppercase mb-1 block">Marca (Aparelho)</label>
+                                        <BrandSelector
+                                            value={form.brand_id}
+                                            onChange={(id) => setForm(p => ({ ...p, brand_id: id }))}
+                                            allowCreate
+                                        />
                                     </div>
                                     <div>
                                         <label className="text-xs font-black text-slate-400 uppercase">Modelo Específico</label>
@@ -687,86 +729,83 @@ export default function NovoCatalogItemPage() {
                     </GlassCard>
 
                     {itemType === 'celular' && (
-                        <GlassCard title="Especificações Técnicas" icon={Cpu}>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label className="text-xs font-black text-slate-400 uppercase">Cor</label>
-                                    <input name="color" value={form.color} onChange={handleChange} className="input-glass mt-1 w-full font-medium" />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-black text-slate-400 uppercase">Armazenamento</label>
-                                    <input name="storage" value={form.storage} onChange={handleChange} placeholder="Ex: 128GB" className="input-glass mt-1 w-full font-mono font-bold" />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-black text-slate-400 uppercase">Memória RAM</label>
-                                    <input name="ram" value={form.ram} onChange={handleChange} placeholder="Ex: 6GB" className="input-glass mt-1 w-full font-mono" />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-black text-slate-400 uppercase">Saúde Bateria %</label>
-                                    <input name="battery_health" type="number" min="0" max="100" value={form.battery_health} onChange={handleChange} className="input-glass mt-1 w-full font-mono font-bold text-emerald-600" />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-black text-slate-400 uppercase">Grade</label>
-                                    <select name="grade" value={form.grade} onChange={handleChange} className="input-glass mt-1 w-full font-bold">
-                                        <option value="">Nenhuma / Novo</option>
-                                        <option value="A">A (Impecável)</option>
-                                        <option value="B">B (Marcas leves)</option>
-                                        <option value="C">C (Marcas visíveis)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="mt-4">
-                                <label className="text-xs font-black text-slate-400 uppercase block mb-2 font-bold tracking-tight">IMEI Principal (Escaneie ou digite)</label>
-                                <IMEIScanner 
+                        <DeviceFields
+                            value={{
+                                imei: form.imei,
+                                imei2: form.imei2,
+                                serialNumber: form.serial_number,
+                                color: form.color,
+                                storage: form.storage,
+                                ram: form.ram,
+                                batteryHealth: form.battery_health,
+                                batteryCycle: form.battery_cycle,
+                                grade: form.grade,
+                                condicao: form.condicao,
+                                diasGarantia: form.dias_garantia,
+                                observacao: form.observacao,
+                                dataEntrada: form.data_entrada,
+                            }}
+                            onChange={(field, val) => {
+                                const fieldMap: Record<string, string> = {
+                                    imei: 'imei', imei2: 'imei2', serialNumber: 'serial_number',
+                                    color: 'color', storage: 'storage', ram: 'ram',
+                                    batteryHealth: 'battery_health', batteryCycle: 'battery_cycle',
+                                    grade: 'grade', condicao: 'condicao',
+                                    diasGarantia: 'dias_garantia', observacao: 'observacao',
+                                    dataEntrada: 'data_entrada',
+                                };
+                                setForm(prev => ({ ...prev, [fieldMap[field] || field]: val }));
+                            }}
+                            imeiScanner={
+                                <IMEIScanner
                                     value={form.imei}
                                     onChange={(val) => setForm(prev => ({ ...prev, imei: val }))}
                                     tenantId={profile?.empresa_id || ""}
                                 />
-                            </div>
-                        </GlassCard>
+                            }
+                        />
                     )}
 
-                    <GlassCard title="Classificação Fiscal (NFC-e / NF-e)" icon={FileText}>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="col-span-2">
-                                <label className="text-xs font-black text-slate-400 uppercase flex items-center justify-between">
-                                    NCM *
-                                    <button 
-                                        type="button" 
-                                        onClick={() => {
-                                            const suggestion = suggestNCM(form.name);
-                                            if (suggestion) {
-                                                setForm(prev => ({ ...prev, ncm: suggestion }));
-                                                toast.success(`NCM sugerido: ${suggestion}`);
-                                            } else {
-                                                toast.info("Não encontramos uma sugestão para este nome.");
-                                            }
-                                        }}
-                                        className="text-[10px] text-brand-600 hover:underline flex items-center gap-1"
-                                    >
-                                        <Search size={10} /> Sugerir
-                                    </button>
-                                </label>
-                                <input name="ncm" required value={form.ncm} onChange={handleChange} className="input-glass mt-1 w-full font-mono font-bold" />
-                            </div>
-                            <div>
-                                <label className="text-xs font-black text-slate-400 uppercase">CFOP *</label>
-                                <input name="cfop" required value={form.cfop} onChange={handleChange} className="input-glass mt-1 w-full font-mono font-bold" />
-                            </div>
-                            <div>
-                                <label className="text-xs font-black text-slate-400 uppercase">Origem *</label>
-                                <select name="origin_code" value={form.origin_code} onChange={handleChange} className="input-glass mt-1 w-full font-mono font-bold">
-                                    <option value="0">0 - Nacional</option>
-                                    <option value="1">1 - Estrangeira Import.</option>
-                                    <option value="2">2 - Estrangeira Interna</option>
-                                </select>
-                            </div>
-                            <div className="col-span-4">
-                                <label className="text-xs font-black text-slate-400 uppercase">CEST (Opcional)</label>
-                                <input name="cest" value={form.cest} onChange={handleChange} className="input-glass mt-1 w-full font-mono" />
-                            </div>
-                        </div>
-                    </GlassCard>
+                    <FiscalPanel
+                        value={{
+                            ncm: form.ncm,
+                            cfopEstadualSaida: form.cfop_estadual_saida || form.cfop,
+                            cfopInterestadualSaida: form.cfop_interestadual_saida,
+                            cfopEstadualEntrada: form.cfop_estadual_entrada,
+                            cfopInterestadualEntrada: form.cfop_interestadual_entrada,
+                            cstCsosn: form.cst_csosn,
+                            cest: form.cest,
+                            origemProduto: form.origin_code,
+                            codigoBeneficioFiscal: form.codigo_beneficio_fiscal,
+                            tributacaoId: form.tributacao_id,
+                        }}
+                        onChange={(field, val) => {
+                            const fieldMap: Record<string, string> = {
+                                ncm: 'ncm',
+                                cfopEstadualSaida: 'cfop_estadual_saida',
+                                cfopInterestadualSaida: 'cfop_interestadual_saida',
+                                cfopEstadualEntrada: 'cfop_estadual_entrada',
+                                cfopInterestadualEntrada: 'cfop_interestadual_entrada',
+                                cstCsosn: 'cst_csosn',
+                                cest: 'cest',
+                                origemProduto: 'origin_code',
+                                codigoBeneficioFiscal: 'codigo_beneficio_fiscal',
+                                tributacaoId: 'tributacao_id',
+                            };
+                            setForm(prev => ({ ...prev, [fieldMap[field] || field]: val }));
+                        }}
+                        regime={regime}
+                        tributacoes={tributacoes}
+                        onSuggestNCM={() => {
+                            const s = suggestNCM(form.name);
+                            if (s) {
+                                setForm(prev => ({ ...prev, ncm: s }));
+                                toast.success(`NCM sugerido: ${s}`);
+                            } else {
+                                toast.info("Não encontramos uma sugestão para este nome.");
+                            }
+                        }}
+                    />
                 </div>
 
                 {/* Coluna Lateral (Direita) */}
@@ -774,16 +813,32 @@ export default function NovoCatalogItemPage() {
                     <GlassCard title="Preços e Atacado" icon={DollarSign} className="bg-brand-50/10 border-brand-100">
                         <div className="space-y-4">
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase">Preço de Custo (R$)</label>
-                                <input name="cost_price" value={form.cost_price} onChange={handleChange} className="input-glass mt-1 w-full text-right text-xl font-mono text-slate-500 font-bold" />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-black text-emerald-600 uppercase flex justify-between">
-                                    <span>Preço Varejo (R$)</span>
-                                    {precoEditado && <span className="text-amber-500 lowercase">(manual)</span>}
+                                <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
+                                    <Layers size={14} className="text-brand-500" />
+                                    Perfil de Precificação
                                 </label>
-                                <input name="sale_price" value={form.sale_price} onChange={handleChange} className="input-glass mt-1 w-full text-right text-2xl font-black font-mono text-emerald-600 border-emerald-200 bg-white" />
+                                <PricingSegmentSelector
+                                    value={form.pricing_segment_id}
+                                    onChange={(id) => setForm(prev => ({ ...prev, pricing_segment_id: id }))}
+                                    allowCreate
+                                />
                             </div>
+
+                            <PriceGroup
+                                costValue={form.cost_price}
+                                saleValue={form.sale_price}
+                                wholesaleValue={form.sale_price_wholesale_brl}
+                                onCostChange={(val) => {
+                                    setPrecoEditado(false);
+                                    setForm(prev => ({ ...prev, cost_price: val }));
+                                }}
+                                onSaleChange={(val) => {
+                                    setForm(prev => ({ ...prev, sale_price: val }));
+                                    setPrecoEditado(true);
+                                }}
+                                onWholesaleChange={(val) => setForm(prev => ({ ...prev, sale_price_wholesale_brl: val }))}
+                            />
+                            
                             <div className="pt-2 border-t border-slate-100 space-y-3">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
@@ -791,13 +846,9 @@ export default function NovoCatalogItemPage() {
                                         <input name="sale_price_usd" value={form.sale_price_usd} onChange={handleChange} className="input-glass mt-1 w-full text-right font-bold text-indigo-600" />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-black text-brand-600 uppercase">Atacado (R$)</label>
-                                        <input name="sale_price_wholesale_brl" value={form.sale_price_wholesale_brl} onChange={handleChange} className="input-glass mt-1 w-full text-right font-bold text-brand-600" />
+                                        <label className="text-[10px] font-black text-slate-400 uppercase">Cotação Base USD</label>
+                                        <input name="sale_price_usd_rate" value={form.sale_price_usd_rate} onChange={handleChange} className="input-glass mt-1 w-full text-right text-sm text-slate-500" />
                                     </div>
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase">Cotação Base USD</label>
-                                    <input name="sale_price_usd_rate" value={form.sale_price_usd_rate} onChange={handleChange} className="input-glass mt-1 w-full text-right text-sm text-slate-500" />
                                 </div>
                             </div>
                         </div>

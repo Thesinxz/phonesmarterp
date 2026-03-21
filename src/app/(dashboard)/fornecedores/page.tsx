@@ -9,7 +9,10 @@ import {
 } from 'lucide-react'
 import { getFornecedores, deleteFornecedor } from '@/app/actions/fornecedores'
 import { useAuth } from '@/context/AuthContext'
-import { GlassCard } from '@/components/ui/GlassCard'
+import { 
+  GlassCard, PageHeader, EmptyState, SearchInput, 
+  ConfirmDialog, useConfirmDialog 
+} from '@/components/ui'
 import { toast } from 'sonner'
 import { cn } from '@/utils/cn'
 
@@ -27,6 +30,7 @@ export default function FornecedoresPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterCategoria, setFilterCategoria] = useState('')
+  const { confirm, Dialog } = useConfirmDialog()
 
   const loadData = useCallback(async () => {
     if (!profile?.empresa_id) return
@@ -44,7 +48,12 @@ export default function FornecedoresPage() {
   useEffect(() => { loadData() }, [loadData])
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Deseja realmente arquivar este fornecedor?')) return
+    const ok = await confirm(
+      'Arquivar fornecedor',
+      'Deseja realmente arquivar este fornecedor? Esta ação pode ser revertida contatando o suporte.',
+      'warning'
+    )
+    if (!ok) return
     try {
       await deleteFornecedor(id)
       toast.success('Fornecedor arquivado com sucesso')
@@ -68,23 +77,15 @@ export default function FornecedoresPage() {
   return (
     <div className="space-y-6 page-enter pb-20">
       {/* Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 flex items-center gap-3">
-            <div className="p-3 bg-brand-500 text-white rounded-[20px] shadow-brand-glow">
-              <Truck size={24} />
-            </div>
-            Gestão de Fornecedores
-          </h1>
-          <p className="text-slate-500 text-sm mt-2 ml-1 font-medium">Controle de parceiros, compras e custos operacionais</p>
-        </div>
-        <Link 
-          href="/fornecedores/novo" 
-          className="btn-primary h-14 px-8 flex items-center gap-3 shadow-brand-glow text-base"
-        >
-          <Plus size={20} /> Novo Fornecedor
-        </Link>
-      </div>
+      <PageHeader
+        title="Gestão de Fornecedores"
+        subtitle="Controle de parceiros, compras e custos operacionais"
+        actions={[{
+          label: "Novo Fornecedor",
+          href: "/fornecedores/novo",
+          icon: <Plus size={20} />,
+        }]}
+      />
 
       {/* KPIs Rápidos */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -110,15 +111,13 @@ export default function FornecedoresPage() {
 
       {/* Barra de Filtros */}
       <GlassCard className="p-4 flex flex-col md:flex-row gap-4 items-center">
-        <div className="relative flex-1 group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-500 transition-colors" size={18} />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por nome, razão social ou CNPJ..."
-            className="input-glass pl-11 h-12 text-sm font-bold"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por nome, razão social ou CNPJ..."
+          className="flex-1"
+          loading={loading && !!search}
+        />
         <div className="flex gap-2 w-full md:w-auto">
           <select 
             value={filterCategoria}
@@ -141,18 +140,13 @@ export default function FornecedoresPage() {
           <p className="mt-4 font-black uppercase text-[10px] text-slate-400 tracking-[0.2em]">Carregando Fornecedores...</p>
         </div>
       ) : filtered.length === 0 ? (
-        <GlassCard className="py-24 text-center border-dashed border-2 border-slate-100">
-          <div className="max-w-md mx-auto">
-            <div className="w-24 h-24 bg-slate-50 rounded-[40px] flex items-center justify-center text-slate-200 mx-auto mb-6 shadow-inner">
-              <Truck size={48} />
-            </div>
-            <h3 className="text-xl font-black text-slate-800">Nenhum fornecedor encontrado</h3>
-            <p className="text-slate-400 text-sm mt-2 font-medium">Tente ajustar seus filtros ou cadastre um novo parceiro de negócios.</p>
-            <Link href="/fornecedores/novo" className="btn-primary inline-flex mt-8 px-8 h-12 items-center gap-2 shadow-brand-glow">
-               <Plus size={18} /> Cadastrar Agora
-            </Link>
-          </div>
-        </GlassCard>
+        <EmptyState
+          icon={<Truck size={48} />}
+          title="Nenhum fornecedor encontrado"
+          description="Tente ajustar seus filtros ou cadastre um novo parceiro de negócios."
+          action={{ label: "Cadastrar Agora", href: "/fornecedores/novo" }}
+          className="py-24"
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map(f => (
@@ -223,6 +217,8 @@ export default function FornecedoresPage() {
           ))}
         </div>
       )}
+
+      {Dialog}
     </div>
   )
 }

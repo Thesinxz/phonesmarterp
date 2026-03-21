@@ -226,7 +226,7 @@ const navItems: NavItem[] = [
             { label: "Gestão de Empresas", href: "/configuracoes/empresas" },
             { label: "Etiquetas", href: "/configuracoes/etiquetas/a4", feature: "etiquetas" },
             { label: "Auditoria", href: "/configuracoes/auditoria", feature: "auditoria_logs" },
-            { label: "Contabilidade", href: "/configuracoes/contador", feature: "hub_contabilidade_feature" },
+            { label: "Contabilidade", href: "/configuracoes?tab=contador", feature: "hub_contabilidade_feature" },
         ]
     },
 ];

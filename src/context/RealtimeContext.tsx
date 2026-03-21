@@ -25,7 +25,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       .channel(`app-realtime-${id}`)
 
       .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'configuracoes'
+        event: '*', schema: 'public', table: 'configuracoes',
+        filter: `empresa_id=eq.${id}`
       }, () => {
         logger.log("[Realtime] configuracoes alterada");
         router.refresh();

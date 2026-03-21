@@ -5,16 +5,22 @@ import Link from "next/link";
 import { 
     Plus, Search, Filter, Package, AlertTriangle, Box, DollarSign, 
     Edit, Trash2, Smartphone, Headphones, Wrench, ChevronDown, 
-    Download, FileText, Printer, Settings, CheckSquare 
+    Download, FileText, Printer, Settings, CheckSquare, Layers
 } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
+import { 
+    GlassCard, PageHeader, EmptyState, SearchInput, 
+    ConfirmDialog, useConfirmDialog 
+} from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { searchPartsByModel, type PartSearchResult } from "@/app/actions/parts";
 import { bulkUpdateCatalogItems, deleteCatalogItem, getCatalogItems } from "@/services/catalog";
 import { StockBadge } from "@/components/estoque/StockBadge";
+import { CategorySelector } from "@/components/catalog/CategorySelector";
+import { BrandSelector } from "@/components/catalog/BrandSelector";
+import { PricingSegmentSelector } from "@/components/catalog/PricingSegmentSelector";
 
 interface Props {
     initialItems: any[];
@@ -41,12 +47,14 @@ export function EstoqueListaClient({
     const searchParams = useSearchParams();
     const [items, setItems] = useState<any[]>(initialItems);
     const [loading, setLoading] = useState(false);
+    const { confirm, Dialog } = useConfirmDialog();
     
     // Filtros
     const [searchTerm, setSearchTerm] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [activeTab, setActiveTab] = useState("todos"); // todos, celular, acessorio, peca
     const [brandFilter, setBrandFilter] = useState("");
+    const [categoryFilter, setCategoryFilter] = useState("");
     const [stockFilter, setStockFilter] = useState("todos"); // todos, in_stock, low_stock, out_of_stock
     
     // Paginação
@@ -123,6 +131,7 @@ export function EstoqueListaClient({
                 search: debouncedSearch,
                 item_type: activeTab,
                 brand_id: brandFilter || undefined,
+                category_id: categoryFilter || undefined,
                 stock_status: stockFilter !== 'todos' ? stockFilter : undefined,
                 page: currentPage,
                 pageSize: PAGE_SIZE,
@@ -141,18 +150,23 @@ export function EstoqueListaClient({
 
     useEffect(() => {
         // Skip first load if filters are default and page is 1
-        if (debouncedSearch === "" && activeTab === "todos" && brandFilter === "" && stockFilter === "todos" && currentPage === 1) return;
+        if (debouncedSearch === "" && activeTab === "todos" && brandFilter === "" && categoryFilter === "" && stockFilter === "todos" && currentPage === 1) return;
         loadData();
         setSelectedIds([]);
-    }, [debouncedSearch, activeTab, brandFilter, stockFilter, currentPage]);
+    }, [debouncedSearch, activeTab, brandFilter, categoryFilter, stockFilter, currentPage]);
 
     // Reset page when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [debouncedSearch, activeTab, brandFilter, stockFilter]);
+    }, [debouncedSearch, activeTab, brandFilter, categoryFilter, stockFilter]);
 
     const handleDelete = async (id: string) => {
-        if (!confirm("Excluir este item permanentemente?")) return;
+        const ok = await confirm(
+            "Excluir item",
+            "Esta ação é permanente e não pode ser desfeita.",
+            "danger"
+        );
+        if (!ok) return;
         try {
             await deleteCatalogItem(id);
             toast.success("Item excluído!");
@@ -165,7 +179,12 @@ export function EstoqueListaClient({
 
     const handleBulkDelete = async () => {
         if (selectedIds.length === 0) return;
-        if (!confirm(`Excluir ${selectedIds.length} itens permanentemente?`)) return;
+        const ok = await confirm(
+            `Excluir ${selectedIds.length} itens`,
+            `Você tem certeza que deseja excluir ${selectedIds.length} itens permanentemente?`,
+            "danger"
+        );
+        if (!ok) return;
         
         setIsDeletingBulk(true);
         try {
@@ -266,44 +285,42 @@ export function EstoqueListaClient({
     return (
         <div className="space-y-4 sm:space-y-6 page-enter max-w-7xl mx-auto pb-20 w-full overflow-x-hidden sm:overflow-visible">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                        Estoque <span className="text-sm font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{totalItemsCount}</span>
-                    </h1>
-                    <p className="text-slate-500 text-sm mt-0.5">Catálogo unificado de produtos e peças</p>
-                </div>
-                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                    {selectedIds.length > 0 && (
-                        <button 
-                            onClick={handleBulkDelete}
-                            disabled={isDeletingBulk}
-                            className="bg-red-50 h-10 px-4 rounded-xl border border-red-200 text-red-600 flex items-center justify-center gap-2 text-sm font-bold hover:bg-red-100 transition-all w-full sm:w-auto animate-in zoom-in-95"
-                        >
-                            {isDeletingBulk ? "Excluindo..." : (
-                                <>
-                                    <Trash2 size={18} /> Excluir ({selectedIds.length})
-                                </>
-                            )}
-                        </button>
-                    )}
-                    <button 
-                        onClick={() => exportToCSV()}
-                        className="bg-white h-10 px-4 rounded-xl border border-slate-200 text-slate-600 flex items-center justify-center gap-2 text-sm font-bold hover:bg-slate-50 transition-all w-full sm:w-auto"
-                    >
-                        <Download size={18} /> Exportar
-                    </button>
-                    <Link 
-                        href="/marketing/lista-precos"
-                        className="bg-white h-10 px-4 rounded-xl border border-indigo-100 text-indigo-600 flex items-center justify-center gap-2 text-sm font-bold hover:bg-indigo-50 transition-all w-full sm:w-auto"
-                    >
-                        <FileText size={18} /> Lista de Preços
-                    </Link>
-                    <Link href="/estoque/novo" className="btn-primary flex-1 sm:flex-initial justify-center">
-                        <Plus size={18} /> Novo Item
-                    </Link>
-                </div>
-            </div>
+            <PageHeader
+                title="Estoque"
+                subtitle="Catálogo unificado de produtos e peças"
+                badge={{ label: totalItemsCount.toString() }}
+                actions={[
+                    ...(selectedIds.length > 0 ? [{
+                        label: `Excluir (${selectedIds.length})`,
+                        onClick: handleBulkDelete,
+                        variant: "danger" as const,
+                        icon: <Trash2 size={18} />
+                    }] : []),
+                    {
+                        label: "Exportar",
+                        onClick: () => exportToCSV(),
+                        variant: "secondary" as const,
+                        icon: <Download size={18} />
+                    },
+                    {
+                        label: "Lista de Preços",
+                        href: "/marketing/lista-precos",
+                        variant: "secondary" as const,
+                        icon: <FileText size={18} />
+                    },
+                    {
+                        label: "Nova Peça",
+                        href: "/estoque/peca/nova",
+                        variant: "secondary" as const,
+                        icon: <Wrench size={18} />
+                    },
+                    {
+                        label: "Novo Item",
+                        href: "/estoque/novo",
+                        icon: <Plus size={18} />
+                    }
+                ]}
+            />
 
             {/* Cards de Resumo */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 w-full">
@@ -351,15 +368,13 @@ export function EstoqueListaClient({
             {/* Filtros */}
             <GlassCard className="p-4 flex flex-col gap-4 w-full shadow-sm">
                 <div className="flex flex-col md:flex-row gap-4 w-full">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                        <input
-                            className="w-full bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 rounded-2xl pl-12 pr-4 py-3 text-sm font-bold transition-all"
-                            placeholder="Buscar produto ou modelo (ex: iPhone 13)..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                        />
-                    </div>
+                    <SearchInput
+                        value={searchTerm}
+                        onChange={setSearchTerm}
+                        placeholder="Buscar produto ou modelo (ex: iPhone 13)..."
+                        className="flex-1"
+                        loading={loading && !!searchTerm}
+                    />
 
                     <div className="w-full md:w-64">
                         <select 
@@ -402,8 +417,16 @@ export function EstoqueListaClient({
                                 {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                             </select>
                         )}
+                        <div className="w-full md:w-56">
+                            <CategorySelector
+                                value={categoryFilter}
+                                onChange={setCategoryFilter}
+                                itemType={activeTab !== 'todos' ? activeTab : undefined}
+                                placeholder="Todas Categorias"
+                            />
+                        </div>
                         <select 
-                            className="h-10 bg-slate-50 border border-slate-100 rounded-xl px-4 text-[10px] font-black uppercase tracking-widest text-slate-600 focus:ring-2 focus:ring-brand-500/20 outline-none flex-1 md:w-44" 
+                            className="h-[46px] bg-slate-50 border border-slate-100 rounded-xl px-4 text-[10px] font-black uppercase tracking-widest text-slate-600 focus:ring-2 focus:ring-brand-500/20 outline-none flex-1 md:w-44" 
                             value={stockFilter} 
                             onChange={e => setStockFilter(e.target.value)}
                         >
@@ -437,7 +460,11 @@ export function EstoqueListaClient({
                     {loading ? (
                         <div className="p-8 text-center text-slate-400 font-medium">Carregando estoque...</div>
                     ) : items.length === 0 ? (
-                        <div className="p-8 text-center text-slate-400 font-medium">Nenhum item encontrado.</div>
+                        <EmptyState
+                            title="Nenhum item encontrado"
+                            description="Tente ajustar os filtros ou cadastre um novo produto."
+                            action={{ label: "Novo Item", href: "/estoque/novo" }}
+                        />
                     ) : (
                         items.map(item => (
                             <Link
@@ -526,7 +553,15 @@ export function EstoqueListaClient({
                                 {loading ? (
                                     <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-400 font-medium">Carregando...</td></tr>
                                 ) : items.length === 0 ? (
-                                    <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-400 font-medium">Nenhum item encontrado.</td></tr>
+                                    <tr>
+                                        <td colSpan={10}>
+                                            <EmptyState
+                                                title="Nenhum item encontrado"
+                                                description="Tente ajustar os filtros ou cadastre um novo produto."
+                                                action={{ label: "Novo Item", href: "/estoque/novo" }}
+                                            />
+                                        </td>
+                                    </tr>
                                 ) : (
                                     items.map(item => (
                                         <tr
@@ -755,6 +790,8 @@ export function EstoqueListaClient({
                     }}
                 />
             )}
+
+            {Dialog}
         </div>
     );
 }
@@ -825,26 +862,22 @@ function BulkUpdateModal({ selectedIds, brands, pricingSegments, onClose, onSucc
 
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1 mb-1.5 block">Marca</label>
-                            <select 
+                            <BrandSelector
                                 value={form.brand_id}
-                                onChange={e => setForm({...form, brand_id: e.target.value})}
-                                className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                            >
-                                <option value="">Não alterar</option>
-                                {brands.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                            </select>
+                                onChange={id => setForm({...form, brand_id: id})}
+                                placeholder="Não alterar"
+                                allowCreate
+                            />
                         </div>
 
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1 mb-1.5 block">Segmento de Preço</label>
-                            <select 
+                            <PricingSegmentSelector
                                 value={form.pricing_segment_id}
-                                onChange={e => setForm({...form, pricing_segment_id: e.target.value})}
-                                className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                            >
-                                <option value="">Não alterar</option>
-                                {pricingSegments.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
+                                onChange={id => setForm({...form, pricing_segment_id: id})}
+                                placeholder="Não alterar"
+                                allowCreate
+                            />
                         </div>
                     </div>
 

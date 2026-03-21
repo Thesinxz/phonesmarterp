@@ -308,7 +308,7 @@ export default function ImportacaoPage() {
         margemTipoCustom?: 'percentual' | 'fixa',
         precoCustomPix?: number
     ) => {
-        const totalItems = items.reduce((acc, it) => acc + (it.quantidade || 0), 0) || 1;
+        const totalItems = items.reduce((acc, it) => acc + (Number(it.quantidade) || 0), 0) || 1;
         const valorTaxaUsdtUsd = itemCustoUsd * (params.taxaUsdtUsdPct / 100);
         const custoComUsdtUsd = itemCustoUsd + valorTaxaUsdtUsd;
         
@@ -483,9 +483,9 @@ export default function ImportacaoPage() {
                         pricing_segment_id: item.pricing_segment_id || null,
                         categoria: type?.name || item.categoria,
                         subcategoria: item.subcategoria || null,
-                        preco_custo_centavos: Math.round(custoFinalBrl),
-                        preco_venda_centavos: Math.round(precoSugeridoPix),
-                        estoque_qtd: 1, 
+                        preco_custo_centavos: Math.round(custoFinalBrl * 100),
+                        preco_venda_centavos: Math.round(precoSugeridoPix * 100),
+                        estoque_qtd: item.quantidade || 1, 
                         estoque_minimo: 1,
                         condicao: item.condicao || 'novo_lacrado',
                         saude_bateria: item.saudeBateria || null,
@@ -1451,6 +1451,28 @@ export default function ImportacaoPage() {
                                                             <div className="text-[10px] text-slate-400 mt-0.5">
                                                                 12x de {formatCurrency(Math.round((precoSugerido12x / 12) * 100))}
                                                             </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* ── Detalhes de Diluição: Fretes e Impostos ── */}
+                                                    <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3 bg-slate-50/50 p-2 rounded-lg border border-slate-100">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[7px] font-black text-slate-400 uppercase tracking-tighter">Imp. Diluído</span>
+                                                            <span className="text-[9px] font-bold text-amber-600">{formatCurrency(Math.round(calc.impostoBrl * 100))}</span>
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[7px] font-black text-slate-400 uppercase tracking-tighter">Frete EUA</span>
+                                                            <span className="text-[9px] font-bold text-slate-500">{formatCurrency(Math.round(calc.freteEuaBrl * 100))}</span>
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[7px] font-black text-slate-400 uppercase tracking-tighter">Frete BR</span>
+                                                            <span className="text-[9px] font-bold text-slate-500">{formatCurrency(Math.round(calc.freteBrasilBrl * 100))}</span>
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[7px] font-black text-slate-400 uppercase tracking-tighter">Total Diluído</span>
+                                                            <span className="text-[9px] font-black text-indigo-600">
+                                                                {formatCurrency(Math.round((calc.impostoBrl + calc.freteEuaBrl + calc.freteBrasilBrl) * 100))}
+                                                            </span>
                                                         </div>
                                                     </div>
 

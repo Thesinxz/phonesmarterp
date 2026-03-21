@@ -38,7 +38,7 @@ import { getProdutoHistorico } from "@/services/historico_produto";
 import { uploadProdutoImage } from "@/services/estoque";
 import { useAuth } from "@/context/AuthContext";
 import { useFinanceConfig } from "@/hooks/useFinanceConfig";
-import { GlassCard } from "@/components/ui/GlassCard";
+import { GlassCard, PageHeader, PriceGroup, ConfirmDialog, useConfirmDialog } from "@/components/ui";
 import { calculateSuggestedPriceBySegment } from "@/utils/product-pricing";
 import { cn } from "@/utils/cn";
 import { toast } from "sonner";
@@ -59,11 +59,21 @@ import { generateEAN13, generateSKU, generatePartSKU } from "@/utils/barcode";
 import { IMEIVerifier } from "@/components/imei/IMEIVerifier";
 import { getIMEIVerification } from "@/app/actions/imei-verify";
 import { Shield } from "lucide-react";
+import { DeviceFields } from "@/components/inventory/DeviceFields";
+import { FiscalPanel } from "@/components/inventory/FiscalPanel";
+import { useEmpresaFiscal } from "@/hooks/useEmpresaFiscal";
+import { CategorySelector } from "@/components/catalog/CategorySelector";
+import { BrandSelector } from "@/components/catalog/BrandSelector";
+import { PricingSegmentSelector } from "@/components/catalog/PricingSegmentSelector";
+import { useCatalogData } from "@/hooks/useCatalogData";
+import { useCatalogCategories } from "@/hooks/useCatalogCategories";
 
 export default function DetalheProdutoPage({ params }: { params: { id: string } }) {
     const router = useRouter();
     const { profile } = useAuth();
     const { config, defaultGateway } = useFinanceConfig();
+    const { regime, tributacoes } = useEmpresaFiscal();
+    const { confirm, Dialog } = useConfirmDialog();
     const [loading, setLoading] = useState(false);
     const [precoEditadoManualmente, setPrecoEditadoManualmente] = useState(false);
     const [historico, setHistorico] = useState<any[]>([]);
@@ -87,9 +97,6 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
     const [movementsFilters, setMovementsFilters] = useState({ unitId: "", type: "" });
 
     // Camadas de categorização
-    const [productTypes, setProductTypes] = useState<ProductType[]>([]);
-    const [brands, setBrands] = useState<Brand[]>([]);
-    const [pricingSegments, setPricingSegments] = useState<PricingSegment[]>([]);
     const [gatewaysData, setGatewaysData] = useState<PaymentGatewayTable[]>([]);
 
     const [form, setForm] = useState({
@@ -129,6 +136,21 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
         sale_price_usd: "0,00",
         sale_price_usd_rate: "0,00",
         precoAtacadoBRL: "0,00",
+        // Sprint 2 — novos campos
+        imei2: "",
+        serial_number: "",
+        battery_cycle: "",
+        dias_garantia: "90",
+        observacao: "",
+        data_entrada: "",
+        cst_csosn: "",
+        cfop_estadual_saida: "",
+        cfop_interestadual_saida: "",
+        cfop_estadual_entrada: "",
+        cfop_interestadual_entrada: "",
+        codigo_beneficio_fiscal: "",
+        tributacao_id: "",
+        category_id: "",
     });
 
     const loadMovements = async (itemId: string, page: number, filters: any) => {
@@ -197,6 +219,21 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                     part_brand: catItem.part_brand || "",
                     model: catItem.model || "",
                     supplier: catItem.supplier || "",
+                    // Sprint 2
+                    imei2: catItem.imei2 || "",
+                    serial_number: catItem.serial_number || "",
+                    battery_cycle: catItem.battery_cycle ? String(catItem.battery_cycle) : "",
+                    dias_garantia: catItem.dias_garantia ? String(catItem.dias_garantia) : "90",
+                    observacao: catItem.observacao || "",
+                    data_entrada: catItem.data_entrada || "",
+                    cst_csosn: catItem.cst_csosn || "",
+                    cfop_estadual_saida: catItem.cfop_estadual_saida || catItem.cfop || "5102",
+                    cfop_interestadual_saida: catItem.cfop_interestadual_saida || "6102",
+                    cfop_estadual_entrada: catItem.cfop_estadual_entrada || "",
+                    cfop_interestadual_entrada: catItem.cfop_interestadual_entrada || "",
+                    codigo_beneficio_fiscal: catItem.codigo_beneficio_fiscal || "",
+                    tributacao_id: catItem.tributacao_id || "",
+                    category_id: catItem.category_id || "",
                 }));
 
                 if (catItem.item_type === 'peca') {
@@ -285,23 +322,39 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
         loadData();
     }, [params.id]);
 
+    const { segments, productTypes, loading: catalogLoading } = useCatalogData();
+    const { categories } = useCatalogCategories(itemType || undefined);
+    
+    // Auto-select Pricing Segment based on Product Type
+    useEffect(() => {
+        if (!form.product_type_id || !productTypes.length || loading) return;
+        
+        const pt = productTypes.find(t => t.id === form.product_type_id);
+        if (pt?.default_pricing_segment_id) {
+            setForm(prev => ({ ...prev, pricing_segment_id: pt.default_pricing_segment_id as string }));
+        }
+    }, [form.product_type_id, productTypes, loading]);
+
+    // Auto-select Pricing Segment based on Category
+    useEffect(() => {
+        if (!form.category_id || !categories.length || loading) return;
+        
+        const cat = categories.find(c => c.id === form.category_id);
+        if (cat?.default_pricing_segment_id) {
+            setForm(prev => ({ ...prev, pricing_segment_id: cat.default_pricing_segment_id as string }));
+        }
+    }, [form.category_id, categories, loading]);
+
     useEffect(() => {
         if (!profile?.empresa_id) return;
         const fetchRelationalData = async () => {
             const supabase = createClient();
-            const [types, segments, brandsList, gateways, unitsList] = await Promise.all([
-                supabase.from('product_types').select('*').eq('empresa_id', profile.empresa_id).order('name'),
-                supabase.from('pricing_segments').select('*').eq('empresa_id', profile.empresa_id).order('name'),
-                supabase.from('brands').select('*').eq('empresa_id', profile.empresa_id).order('name'),
+            const [uRes, gRes] = await Promise.all([
+                supabase.from('units').select('*').eq('empresa_id', profile.empresa_id).eq('is_active', true).order('name'),
                 supabase.from('payment_gateways').select('*').eq('empresa_id', profile.empresa_id).order('nome'),
-                supabase.from('units').select('*').eq('empresa_id', profile.empresa_id).eq('is_active', true).order('name')
             ]);
-
-            if (types.data) setProductTypes(types.data as any);
-            if (segments.data) setPricingSegments(segments.data as any);
-            if (brandsList.data) setBrands(brandsList.data as any);
-            if (gateways.data) setGatewaysData(gateways.data as any);
-            if (unitsList.data) setUnits(unitsList.data as any);
+            if (uRes.data) setUnits(uRes.data as any);
+            if (gRes.data) setGatewaysData(gRes.data as any);
         };
         fetchRelationalData();
     }, [profile?.empresa_id]);
@@ -339,13 +392,13 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
         const custoCentavos = Math.round(parseFloat(form.precoCusto.replace(/\./g, '').replace(',', '.')) * 100) || 0;
         if (custoCentavos <= 0) return;
 
-        const segment = pricingSegments.find(s => s.id === form.pricing_segment_id);
+        const segment = segments.find(s => s.id === form.pricing_segment_id);
         if (!segment) return;
 
-        const sugerido = calculateSuggestedPriceBySegment(custoCentavos, segment, config.taxa_nota_fiscal_pct);
+        const sugerido = calculateSuggestedPriceBySegment(custoCentavos, segment as any, config.taxa_nota_fiscal_pct);
         const precoFormatado = (sugerido / 100).toFixed(2).replace('.', ',');
         setForm(prev => ({ ...prev, precoVenda: precoFormatado }));
-    }, [form.precoCusto, form.pricing_segment_id, config, precoEditadoManualmente]);
+    }, [form.precoCusto, form.pricing_segment_id, config, precoEditadoManualmente, segments]);
 
     const selectedType = productTypes.find(t => t.id === form.product_type_id);
     const showDeviceSpecs = selectedType?.show_device_specs ?? false;
@@ -456,7 +509,22 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                     part_brand: form.part_brand || null,
                     model: form.model || null,
                     supplier: form.supplier || null,
-                });
+                    // Sprint 2
+                    imei2: form.imei2 || null,
+                    serial_number: form.serial_number || null,
+                    battery_cycle: form.battery_cycle ? parseInt(form.battery_cycle) : null,
+                    dias_garantia: parseInt(form.dias_garantia || '90') || 90,
+                    observacao: form.observacao || null,
+                    data_entrada: form.data_entrada || null,
+                    cst_csosn: form.cst_csosn || null,
+                    cfop_estadual_saida: form.cfop_estadual_saida || null,
+                    cfop_interestadual_saida: form.cfop_interestadual_saida || null,
+                    cfop_estadual_entrada: form.cfop_estadual_entrada || null,
+                    cfop_interestadual_entrada: form.cfop_interestadual_entrada || null,
+                    codigo_beneficio_fiscal: form.codigo_beneficio_fiscal || null,
+                    tributacao_id: form.tributacao_id || null,
+                    category_id: form.category_id || null,
+                } as any);
                 console.log("[Client] updateCatalogItem completed");
             } else {
                 console.log("[Client] Calling updateProduto server action...");
@@ -496,19 +564,25 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
 
             console.log("[Client] Success! Showing toast...");
             toast.success("Produto salvo com sucesso!");
-            router.refresh();
             router.push("/estoque");
         } catch (error: any) {
             console.error("[Client] Error in handleSubmit:", error);
             const msg = error.message || "Erro desconhecido";
             toast.error(`Falha ao salvar: ${msg}`);
+        } finally {
             isSubmittingRef.current = false;
             setLoading(false);
         }
     }
 
     async function handleDelete() {
-        if (!confirm("Tem certeza que deseja excluir este produto permanentemente?")) return;
+        const confirmed = await confirm(
+            "Excluir Produto",
+            "Tem certeza que deseja excluir este produto permanentemente? Esta ação não pode ser desfeita.",
+            "danger"
+        );
+
+        if (!confirmed) return;
 
         setLoading(true);
         try {
@@ -527,34 +601,26 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
     return (
         <div className="space-y-6 page-enter pb-12">
             {/* Header */}
-            <div className="flex items-center gap-4">
-                <Link href="/estoque" className="p-2 hover:bg-white/50 rounded-lg transition-colors">
-                    <ArrowLeft className="w-5 h-5 text-slate-600" />
-                </Link>
-                <div className="flex-1">
-                    <h1 className="text-2xl font-bold text-slate-800">Editar Produto</h1>
-                    <p className="text-slate-500 text-sm mt-0.5">Atualize as informações do item no estoque</p>
-                </div>
-                <div className="flex gap-2">
-                    <button
-                        type="button"
-                        onClick={() => window.open(`/print/etiqueta/${params.id}`, '_blank')}
-                        className="h-10 px-4 rounded-xl border border-slate-200 text-slate-600 flex items-center gap-2 text-sm font-bold hover:bg-slate-50 transition-all"
-                    >
-                        <Printer size={16} />
-                        Imprimir Etiqueta
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleDelete}
-                        disabled={loading}
-                        className="h-10 px-4 rounded-xl border border-red-200 text-red-500 flex items-center gap-2 text-sm font-bold hover:bg-red-50 transition-all disabled:opacity-50"
-                    >
-                        <Trash2 size={16} />
-                        Excluir
-                    </button>
-                </div>
-            </div>
+            <PageHeader
+                title="Editar Produto"
+                subtitle="Atualize as informações do item no estoque"
+                onBack={() => router.push("/estoque")}
+                actions={[
+                    {
+                        label: "Imprimir Etiqueta",
+                        icon: <Printer size={18} />,
+                        onClick: () => window.open(`/print/etiqueta/${params.id}`, '_blank'),
+                        variant: "secondary"
+                    },
+                    {
+                        label: "Excluir",
+                        icon: <Trash2 size={18} />,
+                        onClick: handleDelete,
+                        variant: "danger",
+                        disabled: loading
+                    }
+                ]}
+            />
 
             <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-3 gap-6">
@@ -574,6 +640,20 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                         required
                                     />
                                 </div>
+
+                                {/* Categoria do catálogo */}
+                                <div className="col-span-2">
+                                    <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
+                                        <Layers size={14} className="text-brand-500" />
+                                        Categoria do Catálogo
+                                    </label>
+                                    <CategorySelector
+                                        value={form.category_id || ''}
+                                        onChange={(id) => setForm(prev => ({ ...prev, category_id: id }))}
+                                        itemType={itemType as any || undefined}
+                                        allowCreate
+                                    />
+                                </div>
                                 <div>
                                     <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
                                         <Tag size={14} className="text-brand-500" />
@@ -585,7 +665,6 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                             value={form.product_type_id}
                                             onChange={handleChange}
                                             className="input-glass appearance-none bg-transparent relative z-10"
-                                            required={productTypes.length > 0 && !itemType}
                                         >
                                             <option value="">Selecione o tipo</option>
                                             {productTypes.map(t => (
@@ -596,49 +675,15 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center justify-between">
-                                        <span className="flex items-center gap-1.5">
-                                            <Smartphone size={14} className="text-brand-500" />
-                                            Marca
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={async () => {
-                                                const nome = window.prompt("Nome da nova marca:");
-                                                if (!nome?.trim() || !profile?.empresa_id) return;
-                                                const supabase = createClient();
-                                                const { data, error } = await (supabase as any)
-                                                    .from('brands')
-                                                    .insert({ name: nome.trim(), empresa_id: profile.empresa_id })
-                                                    .select()
-                                                    .single();
-                                                if (error) {
-                                                    toast.error("Erro ao criar marca");
-                                                    return;
-                                                }
-                                                setBrands(prev => [...prev, data as any]);
-                                                setForm(prev => ({ ...prev, brand_id: data.id }));
-                                                toast.success(`Marca "${nome.trim()}" criada!`);
-                                            }}
-                                            className="text-[10px] text-brand-500 hover:underline font-bold"
-                                        >
-                                            + Nova marca
-                                        </button>
+                                    <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
+                                        <Smartphone size={14} className="text-brand-500" />
+                                        Marca
                                     </label>
-                                    <div className="relative">
-                                        <select
-                                            name="brand_id"
-                                            value={form.brand_id}
-                                            onChange={handleChange}
-                                            className="input-glass appearance-none bg-transparent relative z-10"
-                                        >
-                                            <option value="">Selecione a marca</option>
-                                            {brands.map(b => (
-                                                <option key={b.id} value={b.id}>{b.name}</option>
-                                            ))}
-                                        </select>
-                                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 z-0" />
-                                    </div>
+                                    <BrandSelector
+                                        value={form.brand_id}
+                                        onChange={(id) => setForm(prev => ({ ...prev, brand_id: id }))}
+                                        allowCreate
+                                    />
                                 </div>
                             </div>
 
@@ -667,13 +712,11 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="text-xs font-black text-slate-400 uppercase">Marca (Aparelho)</label>
-                                            <input
-                                                name="part_brand"
-                                                value={form.part_brand}
-                                                onChange={handleChange}
-                                                className="input-glass mt-1 w-full"
-                                                placeholder="Ex: Apple"
+                                            <label className="text-xs font-black text-slate-400 uppercase mb-1 block">Marca (Aparelho)</label>
+                                            <BrandSelector
+                                                value={form.brand_id}
+                                                onChange={(id) => setForm(p => ({ ...p, brand_id: id }))}
+                                                allowCreate
                                             />
                                         </div>
                                         <div>
@@ -754,66 +797,41 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                         </div>
                     </GlassCard>
                     
-                    <GlassCard title="Informações Fiscais" icon={FileText}>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
-                                    NCM *
-                                    <button 
-                                        type="button" 
-                                        onClick={() => {
-                                            const suggested = suggestNCM(form.nome);
-                                            if (suggested) setForm(f => ({ ...f, ncm: suggested }));
-                                        }}
-                                        className="text-[10px] text-brand-500 hover:underline"
-                                    >
-                                        Sugerir
-                                    </button>
-                                </label>
-                                <input
-                                    type="text"
-                                    name="ncm"
-                                    value={form.ncm}
-                                    onChange={handleChange}
-                                    className="input-glass"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="text-sm font-semibold text-slate-600 block mb-1.5">CFOP *</label>
-                                <input
-                                    type="text"
-                                    name="cfop"
-                                    value={form.cfop}
-                                    onChange={handleChange}
-                                    className="input-glass"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="text-sm font-semibold text-slate-600 block mb-1.5">Origem *</label>
-                                <input
-                                    type="text"
-                                    name="origem"
-                                    value={form.origem}
-                                    onChange={handleChange}
-                                    className="input-glass"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="text-sm font-semibold text-slate-600 block mb-1.5">CEST</label>
-                                <input
-                                    type="text"
-                                    name="cest"
-                                    value={form.cest}
-                                    onChange={handleChange}
-                                    className="input-glass"
-                                    placeholder="Opcional"
-                                />
-                            </div>
-                        </div>
-                    </GlassCard>
+                    <FiscalPanel
+                        value={{
+                            ncm: form.ncm,
+                            cfopEstadualSaida: form.cfop_estadual_saida || form.cfop,
+                            cfopInterestadualSaida: form.cfop_interestadual_saida,
+                            cfopEstadualEntrada: form.cfop_estadual_entrada,
+                            cfopInterestadualEntrada: form.cfop_interestadual_entrada,
+                            cstCsosn: form.cst_csosn,
+                            cest: form.cest,
+                            origemProduto: form.origem,
+                            codigoBeneficioFiscal: form.codigo_beneficio_fiscal,
+                            tributacaoId: form.tributacao_id,
+                        }}
+                        onChange={(field, val) => {
+                            const fieldMap: Record<string, string> = {
+                                ncm: 'ncm',
+                                cfopEstadualSaida: 'cfop_estadual_saida',
+                                cfopInterestadualSaida: 'cfop_interestadual_saida',
+                                cfopEstadualEntrada: 'cfop_estadual_entrada',
+                                cfopInterestadualEntrada: 'cfop_interestadual_entrada',
+                                cstCsosn: 'cst_csosn',
+                                cest: 'cest',
+                                origemProduto: 'origem',
+                                codigoBeneficioFiscal: 'codigo_beneficio_fiscal',
+                                tributacaoId: 'tributacao_id',
+                            };
+                            setForm(prev => ({ ...prev, [fieldMap[field] || field]: val }));
+                        }}
+                        regime={regime}
+                        tributacoes={tributacoes}
+                        onSuggestNCM={() => {
+                            const suggested = suggestNCM(form.nome);
+                            if (suggested) setForm(f => ({ ...f, ncm: suggested }));
+                        }}
+                    />
                 </div>
 
                 {/* Coluna Direita: Preços + Outros */}
@@ -823,59 +841,29 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                             <div>
                                 <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
                                     <Layers size={14} className="text-brand-500" />
-                                    Segmento de Preço *
+                                    Perfil de Precificação
                                 </label>
-                                <div className="relative">
-                                    <select
-                                        name="pricing_segment_id"
-                                        value={form.pricing_segment_id}
-                                        onChange={handleChange}
-                                        className="input-glass appearance-none bg-transparent relative z-10"
-                                        required={pricingSegments.length > 0 && !itemType}
-                                    >
-                                        <option value="">Selecione o segmento</option>
-                                        {pricingSegments.map(s => (
-                                            <option key={s.id} value={s.id}>{s.name}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 z-0" />
-                                </div>
+                                <PricingSegmentSelector
+                                    value={form.pricing_segment_id}
+                                    onChange={(id) => setForm(prev => ({ ...prev, pricing_segment_id: id }))}
+                                    allowCreate
+                                />
                             </div>
                             
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-sm font-semibold text-slate-600 block mb-1.5">Preço de Custo</label>
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">R$</span>
-                                        <input
-                                            type="text"
-                                            name="precoCusto"
-                                            value={form.precoCusto}
-                                            onChange={(e) => {
-                                                setPrecoEditadoManualmente(false);
-                                                handleChange(e);
-                                            }}
-                                            className="input-glass pl-9"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-sm font-semibold text-slate-600 block mb-1.5">Preço de Venda</label>
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">R$</span>
-                                        <input
-                                            type="text"
-                                            name="precoVenda"
-                                            value={form.precoVenda}
-                                            onChange={(e) => {
-                                                setPrecoEditadoManualmente(true);
-                                                handleChange(e);
-                                            }}
-                                            className="input-glass pl-9"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                            <PriceGroup
+                                costValue={form.precoCusto}
+                                saleValue={form.precoVenda}
+                                wholesaleValue={form.precoAtacadoBRL}
+                                onCostChange={(val) => {
+                                    setPrecoEditadoManualmente(false);
+                                    setForm(prev => ({ ...prev, precoCusto: val }));
+                                }}
+                                onSaleChange={(val) => {
+                                    setPrecoEditadoManualmente(true);
+                                    setForm(prev => ({ ...prev, precoVenda: val }));
+                                }}
+                                onWholesaleChange={(val) => setForm(prev => ({ ...prev, precoAtacadoBRL: val }))}
+                            />
 
                             <div className="pt-2 border-t border-slate-100">
                                 <label className="text-sm font-semibold text-indigo-600 block mb-1.5">Atacado (US$)</label>
@@ -902,21 +890,6 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                                             placeholder="5.00"
                                         />
                                     </div>
-                                </div>
-                            </div>
-
-                            <div className="pt-2">
-                                <label className="text-sm font-semibold text-emerald-600 block mb-1.5">Atacado (R$)</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">R$</span>
-                                    <input
-                                        type="text"
-                                        name="precoAtacadoBRL"
-                                        value={form.precoAtacadoBRL}
-                                        onChange={handleChange}
-                                        className="input-glass pl-9"
-                                        placeholder="0,00"
-                                    />
                                 </div>
                             </div>
                         </div>
@@ -976,92 +949,76 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                 {/* Terceira Seção: Especificações — ocultar para peças */}
                 {itemType !== 'peca' && (
                     <div className="col-span-1 space-y-6">
-                        <GlassCard title="Especificações" icon={Info}>
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-1 gap-4">
-                                    <div>
-                                        <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
-                                            Condição
-                                        </label>
-                                        <div className="relative">
-                                            <select
-                                                name="condicao"
-                                                value={form.condicao}
-                                                onChange={handleChange}
-                                                className="input-glass appearance-none bg-transparent relative z-10"
-                                            >
-                                                <option value="novo">Novo</option>
-                                                <option value="vitrine">Vitrine</option>
-                                                <option value="usado">Usado</option>
-                                                <option value="recondicionado">Recondicionado</option>
-                                            </select>
-                                            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 z-0" />
-                                        </div>
-                                    </div>
-                                    {isSmartphone && (
-                                        <div>
-                                            <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
-                                                Saúde da Bateria
-                                            </label>
-                                            <div className="relative">
-                                                <Battery size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                                <input
-                                                    type="text"
-                                                    name="saudeBateria"
-                                                    value={form.saudeBateria}
-                                                    onChange={handleChange}
-                                                    className="input-glass pl-9"
-                                                    placeholder="ex: 100"
-                                                />
-                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">%</span>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {itemType === 'celular' && form.imei && (
-                                        <div className="mt-8 pt-8 border-t border-slate-100">
-                                            <div className="flex items-center gap-2 mb-4">
-                                                <Shield className="w-5 h-5 text-brand-500" />
-                                                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
-                                                    Procedência e IMEI
-                                                </h3>
-                                            </div>
-                                            <IMEIVerifier
-                                                imei={form.imei}
-                                                catalogItemId={params.id}
-                                                initialData={existingVerification ? {
-                                                    carrier: existingVerification.carrier,
-                                                    country: existingVerification.country,
-                                                    simLock: existingVerification.sim_lock,
-                                                    icloudStatus: existingVerification.icloud_status,
-                                                    appleModel: existingVerification.apple_model,
-                                                    appleColor: existingVerification.apple_color,
-                                                    purchaseDate: existingVerification.purchase_date,
-                                                    warrantyStatus: existingVerification.warranty_status,
-                                                    warrantyUntil: existingVerification.warranty_until,
-                                                    rawData: existingVerification.raw_data || {},
-                                                    verifiedAt: existingVerification.verified_at,
-                                                    fromCache: true,
-                                                } : null}
-                                            />
-                                            {existingVerification && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => window.open(
-                                                        `/print/certificado-imei/${form.imei}?item=${params.id}`,
-                                                        '_blank'
-                                                    )}
-                                                    className="w-full mt-3 py-3 bg-white border-2 border-brand-100 text-brand-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-brand-50 hover:border-brand-200 transition-all flex items-center justify-center gap-2 shadow-sm"
-                                                >
-                                                    <FileText size={16} />
-                                                    Imprimir Certificado de Procedência
-                                                </button>
-                                            )}
-                                        </div>
-                                    )}
+                        {itemType === 'celular' && (
+                            <DeviceFields
+                                value={{
+                                    imei: form.imei,
+                                    imei2: form.imei2,
+                                    serialNumber: form.serial_number,
+                                    color: form.cor,
+                                    storage: form.capacidade,
+                                    ram: form.memoriaRam,
+                                    batteryHealth: form.saudeBateria,
+                                    batteryCycle: form.battery_cycle,
+                                    grade: form.grade,
+                                    condicao: form.condicao,
+                                    diasGarantia: form.dias_garantia,
+                                    observacao: form.observacao,
+                                    dataEntrada: form.data_entrada,
+                                }}
+                                onChange={(field, val) => {
+                                    const fieldMap: Record<string, string> = {
+                                        imei: 'imei', imei2: 'imei2', serialNumber: 'serial_number',
+                                        color: 'cor', storage: 'capacidade', ram: 'memoriaRam',
+                                        batteryHealth: 'saudeBateria', batteryCycle: 'battery_cycle',
+                                        grade: 'grade', condicao: 'condicao',
+                                        diasGarantia: 'dias_garantia', observacao: 'observacao',
+                                        dataEntrada: 'data_entrada',
+                                    };
+                                    setForm(prev => ({ ...prev, [fieldMap[field] || field]: val }));
+                                }}
+                            />
+                        )}
+                        {/* IMEI Verifier (only if has IMEI) */}
+                        {itemType === 'celular' && form.imei && (
+                            <div className="mt-4 pt-4 border-t border-slate-100">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <Shield className="w-5 h-5 text-brand-500" />
+                                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Procedência e IMEI</h3>
                                 </div>
+                                <IMEIVerifier
+                                    imei={form.imei}
+                                    catalogItemId={params.id}
+                                    initialData={existingVerification ? {
+                                        carrier: existingVerification.carrier,
+                                        country: existingVerification.country,
+                                        simLock: existingVerification.sim_lock,
+                                        icloudStatus: existingVerification.icloud_status,
+                                        appleModel: existingVerification.apple_model,
+                                        appleColor: existingVerification.apple_color,
+                                        purchaseDate: existingVerification.purchase_date,
+                                        warrantyStatus: existingVerification.warranty_status,
+                                        warrantyUntil: existingVerification.warranty_until,
+                                        rawData: existingVerification.raw_data || {},
+                                        verifiedAt: existingVerification.verified_at,
+                                        fromCache: true,
+                                    } : null}
+                                />
+                                {existingVerification && (
+                                    <button
+                                        type="button"
+                                        onClick={() => window.open(
+                                            `/print/certificado-imei/${form.imei}?item=${params.id}`,
+                                            '_blank'
+                                        )}
+                                        className="w-full mt-3 py-3 bg-white border-2 border-brand-100 text-brand-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-brand-50 hover:border-brand-200 transition-all flex items-center justify-center gap-2 shadow-sm"
+                                    >
+                                        <FileText size={16} />
+                                        Imprimir Certificado de Procedência
+                                    </button>
+                                )}
                             </div>
-                        </GlassCard>
+                        )}
                     </div>
                 )}
             </div>
@@ -1226,6 +1183,8 @@ export default function DetalheProdutoPage({ params }: { params: { id: string } 
                     onClose={() => setShowMovementModal(false)} 
                 />
             )}
+
+            {Dialog}
         </div>
     );
 }

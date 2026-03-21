@@ -36,9 +36,12 @@ import {
     Layers,
     Download,
     Tag,
-    Package
+    Package,
+    FolderOpen
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
@@ -47,11 +50,13 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { cn } from "@/utils/cn";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
 import { syncConfigToAll } from "@/services/configuracoes";
-import { CatalogoPanel } from "./CatalogoPanel";
 import { UnidadesPanel } from "./UnidadesPanel";
+import { TributacoesPanel } from "./TributacoesPanel";
+import type { RegimeFiscal } from "@/components/inventory/FiscalPanel";
 import { LayoutGrid } from "lucide-react";
+import { CatalogAndFinancePanel } from "@/components/catalog/CatalogAndFinancePanel";
 
-type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "unidades" | "segmentos" | "marcas" | "tipos" | "apelidos" | "ai_config" | "vitrine" | "etiquetas" | "auditoria" | "contador" | "crediario" | "termos_os" | "integracoes";
+type Tab = "empresa" | "fiscal" | "certificado" | "whatsapp" | "financeiro" | "unidades" | "ai_config" | "vitrine" | "etiquetas" | "auditoria" | "contador" | "crediario" | "termos_os" | "integracoes";
 
 import { type WhatsappConfig, type FinanceiroConfig } from "@/types/configuracoes";
 import { getFiscalConfig, upsertFiscalConfig, ConfiguracaoFiscal } from "@/services/fiscal";
@@ -98,9 +103,12 @@ const codigosUF: Record<string, string> = {
     "AC": "12", "AL": "27", "AP": "16", "AM": "13", "BA": "29", "CE": "23", "DF": "53", "ES": "32", "GO": "52", "MA": "21", "MT": "51", "MS": "50", "MG": "31", "PA": "15", "PB": "25", "PR": "41", "PE": "26", "PI": "22", "RJ": "33", "RN": "24", "RS": "43", "RO": "11", "RR": "14", "SC": "42", "SP": "35", "SE": "28", "TO": "17"
 };
 
-export default function ConfiguracoesPage() {
+function ConfiguracoesContent() {
     const { user, profile, empresa, isLoading } = useAuth();
     const { refresh: refreshFinanceConfig } = useFinanceConfig();
+    const searchParams = useSearchParams();
+    const tabParam = searchParams.get('tab') as Tab;
+    
     const [activeTab, setActiveTab] = useState<Tab>("empresa");
     const [sickwKey, setSickwKey] = useState("");
     const [saving, setSaving] = useState(false);
@@ -111,6 +119,12 @@ export default function ConfiguracoesPage() {
     const [showSenha, setShowSenha] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
     const importConfigRef = useRef<HTMLInputElement>(null);
+
+    // Regime fiscal
+    const [regimeFiscal, setRegimeFiscal] = useState<RegimeFiscal>("simples_nacional");
+    const [inscricaoEstadual, setInscricaoEstadual] = useState("");
+    const [inscricaoMunicipal, setInscricaoMunicipal] = useState("");
+    const [savingRegime, setSavingRegime] = useState(false);
 
     const [emitente, setEmitente] = useState<EmitenteConfig>({
         razao_social: "", nome_fantasia: "", cnpj: "", ie: "", crt: "1",
@@ -278,11 +292,11 @@ export default function ConfiguracoesPage() {
             if (!background) setConfigsLoaded(true);
         }
 
-        // Subdominio e logo
+        // Subdominio, logo e regime fiscal da empresa
         try {
             const sb = createClient();
             const { data: emp } = await (sb.from("empresas") as any)
-                .select("subdominio, logo_url")
+                .select("subdominio, logo_url, regime_fiscal, inscricao_estadual, inscricao_municipal")
                 .eq("id", profile.empresa_id)
                 .single();
 
@@ -292,6 +306,9 @@ export default function ConfiguracoesPage() {
                     setEditingSlug(emp.subdominio);
                 }
                 if (emp.logo_url) setLogoUrl(emp.logo_url);
+                if (emp.regime_fiscal) setRegimeFiscal(emp.regime_fiscal as RegimeFiscal);
+                if (emp.inscricao_estadual) setInscricaoEstadual(emp.inscricao_estadual);
+                if (emp.inscricao_municipal) setInscricaoMunicipal(emp.inscricao_municipal ?? "");
             }
         } catch (e) {
             console.warn("Erro ao carregar dados adicionais", e);
@@ -299,8 +316,18 @@ export default function ConfiguracoesPage() {
     };
 
     useEffect(() => {
-        if (profile?.empresa_id) fetchConfigs();
-    }, [profile?.empresa_id]);
+        if (profile?.empresa_id) {
+            fetchConfigs();
+        } else if (!isLoading) {
+            setConfigsLoaded(true);
+        }
+    }, [profile?.empresa_id, isLoading]);
+
+    useEffect(() => {
+        if (tabParam) {
+            setActiveTab(tabParam);
+        }
+    }, [tabParam]);
 
     // Realtime Sync
     useRealtimeSubscription({
@@ -335,7 +362,7 @@ export default function ConfiguracoesPage() {
         }
     });
 
-    if (isLoading || !configsLoaded || !profile?.empresa_id) {
+    if (isLoading || (profile?.empresa_id && !configsLoaded)) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
                 <RefreshCw className="animate-spin text-brand-500" size={40} />
@@ -533,6 +560,27 @@ export default function ConfiguracoesPage() {
         }
     }
 
+    async function saveRegimeFiscal() {
+        if (!profile?.empresa_id) return;
+        setSavingRegime(true);
+        try {
+            const sb = createClient();
+            const { error } = await (sb.from("empresas") as any)
+                .update({
+                    regime_fiscal: regimeFiscal,
+                    inscricao_estadual: inscricaoEstadual || null,
+                    inscricao_municipal: inscricaoMunicipal || null,
+                })
+                .eq("id", profile.empresa_id);
+            if (error) throw error;
+            toast.success("Regime fiscal salvo!");
+        } catch (err: any) {
+            toast.error("Erro ao salvar regime fiscal: " + err.message);
+        } finally {
+            setSavingRegime(false);
+        }
+    }
+
     const handleSyncAll = async (key: string, value: any) => {
         if (!user || !profile) return;
         try {
@@ -608,11 +656,7 @@ export default function ConfiguracoesPage() {
         { id: "certificado", label: "Certificado Digital", icon: Shield, desc: "A1 (.pfx) + CSC" },
         { id: "whatsapp", label: "WhatsApp", icon: MessageSquare, desc: "Notificações automáticas" },
         { id: "unidades", label: "Unidades", icon: LayoutGrid, desc: "Capacidades das Lojas" },
-        { id: "financeiro", label: "Margens & Taxas", icon: DollarSign, desc: "Calculadoras e Lucro" },
-        { id: "segmentos", label: "Segmentos", icon: Layers, desc: "Lucro por categoria" },
-        { id: "marcas", label: "Marcas", icon: Tag, desc: "Fabricantes" },
-        { id: "tipos", label: "Tipos de Item", icon: Package, desc: "Celulares, Peças, etc" },
-        { id: "apelidos", label: "Apelidos", icon: RefreshCw, desc: "Equivalência de Modelos" },
+        { id: "financeiro", label: "Catálogo e Margens", icon: DollarSign, desc: "Preços, Marcas e Categorias" },
         { id: "ai_config", label: "IA e OCR", icon: Sparkles, desc: "Gemini 2.5 Flash" },
         { id: "vitrine", label: "Vitrine Online", icon: ShoppingBag, desc: "Catálogo público + TV" },
         { id: "crediario", label: "Crediário & Efíbank", icon: CreditCard, desc: "Fiado e Boletos" },
@@ -690,18 +734,14 @@ export default function ConfiguracoesPage() {
                             <UnidadesPanel />
                         )}
 
-                        {/* ── CATALOGO SECTIONS ── */}
-                        {activeTab === "segmentos" && (
-                            <CatalogoPanel initialTab="segmentos" />
-                        )}
-                        {activeTab === "marcas" && (
-                            <CatalogoPanel initialTab="marcas" />
-                        )}
-                        {activeTab === "tipos" && (
-                            <CatalogoPanel initialTab="tipos" />
-                        )}
-                        {activeTab === "apelidos" && (
-                            <CatalogoPanel initialTab="apelidos" />
+                        {/* ── CATALOGO CONSOLIDADO ── */}
+                        {activeTab === "financeiro" && (
+                            <CatalogAndFinancePanel 
+                                financeiroConfig={financeiroConfig}
+                                setFinanceiroConfig={setFinanceiroConfig}
+                                onSave={saveConfig}
+                                saving={saving}
+                            />
                         )}
 
                         {/* ── EMPRESA ── */}
@@ -872,6 +912,57 @@ export default function ConfiguracoesPage() {
                         {/* ── FISCAL ── */}
                         {activeTab === "fiscal" && (
                             <div className="space-y-6">
+                                {/* Regime Tributário da empresa */}
+                                <GlassCard title="Regime Tributário da Empresa" icon={FileText}>
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                            {([
+                                                { v: "simples_nacional", l: "Simples Nacional", desc: "Faturamento até R$4,8M/ano" },
+                                                { v: "lucro_presumido",  l: "Lucro Presumido",  desc: "Margem presumida de lucro" },
+                                                { v: "lucro_real",       l: "Lucro Real",       desc: "Apura o lucro contábil real" },
+                                                { v: "mei",             l: "MEI",              desc: "Microempreendedor Individual" },
+                                                { v: "isento",          l: "Isento",           desc: "Pessoa física / Isento" },
+                                            ] as { v: RegimeFiscal; l: string; desc: string }[]).map(r => (
+                                                <button
+                                                    key={r.v}
+                                                    type="button"
+                                                    onClick={() => setRegimeFiscal(r.v)}
+                                                    className={cn(
+                                                        "p-3 rounded-2xl border-2 text-left transition-all",
+                                                        regimeFiscal === r.v
+                                                            ? "border-brand-500 bg-brand-50"
+                                                            : "border-slate-100 hover:border-slate-200"
+                                                    )}
+                                                >
+                                                    <p className={cn("text-xs font-black", regimeFiscal === r.v ? "text-brand-700" : "text-slate-700")}>{r.l}</p>
+                                                    <p className="text-[10px] text-slate-400 mt-0.5">{r.desc}</p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">Inscrição Estadual</label>
+                                                <input value={inscricaoEstadual} onChange={e => setInscricaoEstadual(e.target.value)} className="input-glass w-full font-mono" placeholder="Isento ou número" />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">Inscrição Municipal</label>
+                                                <input value={inscricaoMunicipal} onChange={e => setInscricaoMunicipal(e.target.value)} className="input-glass w-full font-mono" placeholder="Opcional" />
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-end">
+                                            <button onClick={saveRegimeFiscal} disabled={savingRegime} className="btn-primary">
+                                                {savingRegime ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
+                                                Salvar Regime
+                                            </button>
+                                        </div>
+                                    </div>
+                                </GlassCard>
+
+                                {/* Tributações Cadastradas */}
+                                <GlassCard title="Tributações e Perfis Fiscais" icon={FileText}>
+                                    <TributacoesPanel />
+                                </GlassCard>
+
                                 <GlassCard title="Ambiente de Emissão" icon={FileText}>
                                     <div className="grid grid-cols-2 gap-4">
                                         {(["homologacao", "producao"] as const).map(amb => (
@@ -1172,452 +1263,6 @@ export default function ConfiguracoesPage() {
                             </GlassCard>
                         )}
 
-                        {/* ── FINANCEIRO ── */}
-
-
-                        {activeTab === "financeiro" && (
-                            <div className="space-y-6">
-                                <GlassCard title="Impostos e Margens Globais" icon={Percent}>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        <div>
-                                            <label className="label-sm">Taxa Nota Fiscal (%)</label>
-                                            <input type="number" className="input-glass mt-1"
-                                                value={financeiroConfig.taxa_nota_fiscal_pct}
-                                                onChange={e => setFinanceiroConfig(p => ({ ...p, taxa_nota_fiscal_pct: Number(e.target.value) }))} />
-                                        </div>
-                                        <div className="col-span-1 md:col-span-2">
-                                            <div className="flex justify-between items-center mb-1">
-                                                <label className="label-sm">Câmbio Dólar (Paraguai)</label>
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        id="btn-update-cambio"
-                                                        onClick={async () => {
-                                                            const btn = document.getElementById('btn-update-cambio');
-                                                            if (btn) {
-                                                                btn.innerText = "BUSCANDO...";
-                                                                btn.setAttribute('disabled', 'true');
-                                                                btn.classList.add('opacity-50', 'cursor-not-allowed');
-                                                            }
-
-                                                            try {
-                                                                const res = await fetch('/api/integrations/cambios-chaco');
-                                                                const data = await res.json();
-
-                                                                if (data.success) {
-                                                                    setFinanceiroConfig(p => ({ ...p, cotacao_dolar_paraguai: data.rate }));
-                                                                    if (btn) {
-                                                                        btn.innerText = "ATUALIZADO!";
-                                                                        btn.classList.remove('bg-slate-100', 'text-slate-400');
-                                                                        btn.classList.add('bg-emerald-50', 'text-emerald-600');
-                                                                    }
-                                                                    setTimeout(() => {
-                                                                        if (btn) {
-                                                                            btn.innerText = "ATUALIZAR";
-                                                                            btn.removeAttribute('disabled');
-                                                                            btn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-emerald-50', 'text-emerald-600');
-                                                                            btn.classList.add('bg-slate-100', 'text-slate-400');
-                                                                        }
-                                                                    }, 3000);
-                                                                } else {
-                                                                    throw new Error(data.error);
-                                                                }
-                                                            } catch (err) {
-                                                                console.error(err);
-                                                                alert("Erro ao conectar com API de Câmbio.");
-                                                                if (btn) {
-                                                                    btn.innerText = "ERRO";
-                                                                    setTimeout(() => {
-                                                                        btn.innerText = "ATUALIZAR";
-                                                                        btn.removeAttribute('disabled');
-                                                                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                                                                    }, 2000);
-                                                                }
-                                                            }
-                                                        }}
-                                                        className="text-[9px] font-bold text-slate-400 hover:text-brand-600 flex items-center gap-1 transition-colors bg-slate-100 hover:bg-brand-50 px-2 py-0.5 rounded-full cursor-pointer"
-                                                        title="Busca a cotação atualizada na API da Cambios Chaco (Adrian Jara)"
-                                                    >
-                                                        <RefreshCw size={10} /> ATUALIZAR
-                                                    </button>
-                                                    <a
-                                                        href="https://www.cambioschaco.com.py/pt-br/"
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-[9px] font-black text-brand-500 hover:text-brand-600 flex items-center gap-1 transition-colors bg-brand-50 px-2 py-0.5 rounded-full"
-                                                    >
-                                                        CAMBIOS CHACO <ExternalLink size={10} />
-                                                    </a>
-                                                </div>
-                                            </div>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    inputMode="decimal"
-                                                    className="input-glass mt-1 font-bold text-brand-600 pl-8"
-                                                    value={(financeiroConfig as any)._temp_dolar ?? (financeiroConfig.cotacao_dolar_paraguai === 0 ? "" : financeiroConfig.cotacao_dolar_paraguai.toString().replace('.', ','))}
-                                                    placeholder="0,00"
-                                                    onChange={e => {
-                                                        const raw = e.target.value.replace('.', ',');
-                                                        const clean = raw.replace(',', '.');
-                                                        if (raw === "" || /^\d*[,]?\d*$/.test(raw)) {
-                                                            setFinanceiroConfig(p => ({
-                                                                ...p,
-                                                                cotacao_dolar_paraguai: raw === "" || isNaN(Number(clean)) ? 0 : Number(clean),
-                                                                _temp_dolar: raw
-                                                            }));
-                                                        }
-                                                    }}
-                                                    onBlur={() => {
-                                                        setFinanceiroConfig(p => {
-                                                            const { _temp_dolar, ...rest } = p as any;
-                                                            return rest;
-                                                        });
-                                                    }}
-                                                />
-                                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">$</div>
-                                            </div>
-                                            <p className="text-[9px] text-slate-400 mt-1.5 font-medium leading-tight">
-                                                Cotação sugerida: <span className="font-bold text-slate-500">Cambios Chaco (Adrian Jara)</span>.
-                                                Utilizado nas ferramentas de importação.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </GlassCard>
-
-                                <GlassCard title="Categorias e Margens de Lucro" icon={Building2}>
-                                    <div className="space-y-4">
-                                        {(financeiroConfig.categorias || []).map((cat, idx) => (
-                                            <div key={idx} className="grid grid-cols-12 gap-3 items-end bg-white/50 p-4 rounded-2xl border border-slate-100 hover:border-brand-100 transition-all">
-                                                <div className="col-span-2">
-                                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Nome</label>
-                                                    <input className="input-glass h-9 text-xs" value={cat.nome}
-                                                        onChange={e => {
-                                                            const newCats = [...financeiroConfig.categorias];
-                                                            newCats[idx].nome = e.target.value;
-                                                            setFinanceiroConfig(p => ({ ...p, categorias: newCats }));
-                                                        }} />
-                                                </div>
-                                                <div className="col-span-3">
-                                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Gateway Padrão</label>
-                                                    <select className="input-glass h-9 text-[10px] font-bold" value={cat.default_gateway_id || ""}
-                                                        onChange={e => {
-                                                            const newCats = [...financeiroConfig.categorias];
-                                                            newCats[idx].default_gateway_id = e.target.value || undefined;
-                                                            setFinanceiroConfig(p => ({ ...p, categorias: newCats }));
-                                                        }}>
-                                                        <option value="">Padrão Sistema</option>
-                                                        {(financeiroConfig.gateways || []).map(gw => (
-                                                            <option key={gw.id} value={gw.id}>{gw.nome}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                                <div className="col-span-1">
-                                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Tipo</label>
-                                                    <select className="input-glass h-9 text-[10px] font-bold" value={cat.tipo_margem}
-                                                        onChange={e => {
-                                                            const newCats = [...financeiroConfig.categorias];
-                                                            newCats[idx].tipo_margem = e.target.value as any;
-                                                            setFinanceiroConfig(p => ({ ...p, categorias: newCats }));
-                                                        }}>
-                                                        <option value="porcentagem">%</option>
-                                                        <option value="fixo">R$</option>
-                                                    </select>
-                                                </div>
-                                                <div className="col-span-2">
-                                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Margem</label>
-                                                    <input
-                                                        type="text"
-                                                        inputMode="decimal"
-                                                        className="input-glass h-9 text-xs"
-                                                        value={(cat as any)._temp_margem ?? (cat.margem_padrao === 0 ? (cat as any)._temp_empty ? "" : "0" : cat.margem_padrao.toString().replace('.', ','))}
-                                                        placeholder="0"
-                                                        onChange={e => {
-                                                            const raw = e.target.value.replace('.', ',');
-                                                            const clean = raw.replace(',', '.');
-                                                            if (raw === "" || /^\d*[,]?\d*$/.test(raw)) {
-                                                                const newCats = [...financeiroConfig.categorias];
-                                                                newCats[idx].margem_padrao = raw === "" || isNaN(Number(clean)) ? 0 : Number(clean);
-                                                                (newCats[idx] as any)._temp_margem = raw;
-                                                                (newCats[idx] as any)._temp_empty = raw === "";
-                                                                setFinanceiroConfig(p => ({ ...p, categorias: newCats }));
-                                                            }
-                                                        }}
-                                                        onBlur={() => {
-                                                            const newCats = [...financeiroConfig.categorias];
-                                                            delete (newCats[idx] as any)._temp_margem;
-                                                            delete (newCats[idx] as any)._temp_empty;
-                                                            setFinanceiroConfig(p => ({ ...p, categorias: newCats }));
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div className="col-span-2">
-                                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Garantia</label>
-                                                    <input
-                                                        type="text"
-                                                        inputMode="numeric"
-                                                        className="input-glass h-9 text-xs"
-                                                        value={cat.garantia_padrao_dias === 0 ? "" : cat.garantia_padrao_dias.toString()}
-                                                        placeholder="0"
-                                                        onChange={e => {
-                                                            const val = e.target.value;
-                                                            if (val === "" || !isNaN(Number(val))) {
-                                                                const newCats = [...financeiroConfig.categorias];
-                                                                newCats[idx].garantia_padrao_dias = val === "" ? 0 : Number(val);
-                                                                setFinanceiroConfig(p => ({ ...p, categorias: newCats }));
-                                                            }
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div className="col-span-1">
-                                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">NF?</label>
-                                                    <button
-                                                        onClick={() => {
-                                                            const newCats = [...financeiroConfig.categorias];
-                                                            newCats[idx].nf_obrigatoria = !newCats[idx].nf_obrigatoria;
-                                                            setFinanceiroConfig(p => ({ ...p, categorias: newCats }));
-                                                        }}
-                                                        className={cn(
-                                                            "w-full h-9 rounded-lg border text-[9px] font-black transition-all flex items-center justify-center",
-                                                            cat.nf_obrigatoria ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-slate-50 border-slate-200 text-slate-400"
-                                                        )}
-                                                    >
-                                                        {cat.nf_obrigatoria ? "S" : "N"}
-                                                    </button>
-                                                </div>
-                                                <div className="col-span-1">
-                                                    <button
-                                                        onClick={() => {
-                                                            const newCats = financeiroConfig.categorias.filter((_, i) => i !== idx);
-                                                            setFinanceiroConfig(p => ({ ...p, categorias: newCats }));
-                                                        }}
-                                                        className="w-full h-9 text-red-400 hover:bg-red-50 rounded-lg flex items-center justify-center transition-all">
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                        <button
-                                            onClick={() => setFinanceiroConfig(p => ({
-                                                ...p,
-                                                categorias: [...p.categorias, {
-                                                    nome: "Nova Categoria",
-                                                    margem_padrao: 0,
-                                                    tipo_margem: "porcentagem",
-                                                    garantia_padrao_dias: 90,
-                                                    nf_obrigatoria: false,
-                                                    default_gateway_id: undefined
-                                                }]
-                                            }))}
-                                            className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-xs font-bold text-slate-400 hover:border-brand-300 hover:text-brand-500 transition-all">
-                                            + Adicionar Categoria
-                                        </button>
-                                    </div>
-                                </GlassCard>
-
-                                <GlassCard title="Gateways de Pagamento" icon={CreditCard}>
-                                    <div className="space-y-4">
-                                        {(financeiroConfig.gateways || []).map((gw, idx) => (
-                                            <div key={gw.id} className="space-y-3 bg-slate-50/50 rounded-2xl border border-slate-100 p-4 transition-all">
-                                                <div className="grid grid-cols-6 gap-3 items-end relative overflow-hidden">
-                                                    {gw.is_default && <div className="absolute -top-4 -right-4 bg-brand-500 text-white text-[8px] font-black px-6 pt-5 pb-1 rounded-bl-3xl rotate-45 shadow-sm">PADRÃO</div>}
-                                                    <div className="col-span-3">
-                                                        <label className="label-sm">Nome do Gateway</label>
-                                                        <input className="input-glass mt-1" value={gw.nome}
-                                                            onChange={e => {
-                                                                const newGws = [...financeiroConfig.gateways];
-                                                                newGws[idx].nome = e.target.value;
-                                                                setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
-                                                            }} />
-                                                    </div>
-                                                    <div className="flex gap-2">
-                                                        <button
-                                                            onClick={() => {
-                                                                const newGws = financeiroConfig.gateways.map((g, i) => ({ ...g, is_default: i === idx }));
-                                                                setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
-                                                                setExpandedGatewayId(gw.id);
-                                                            }}
-                                                            className={cn(
-                                                                "flex-1 h-10 rounded-xl border text-[10px] font-black uppercase transition-all",
-                                                                gw.is_default ? "bg-brand-500 border-brand-500 text-white shadow-brand-glow" : "bg-white border-slate-200 text-slate-400 hover:border-brand-200"
-                                                            )}
-                                                        >
-                                                            {gw.is_default ? "PADRÃO" : "USAR"}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setExpandedGatewayId(expandedGatewayId === gw.id ? null : gw.id)}
-                                                            className={cn(
-                                                                "w-10 h-10 flex items-center justify-center rounded-xl transition-all border",
-                                                                expandedGatewayId === gw.id ? "bg-brand-50 border-brand-200 text-brand-600" : "bg-white border-slate-200 text-slate-400"
-                                                            )}
-                                                        >
-                                                            <Settings size={18} />
-                                                        </button>
-                                                        <button
-                                                            disabled={gw.is_default}
-                                                            onClick={() => {
-                                                                const newGws = financeiroConfig.gateways.filter((_, i) => i !== idx);
-                                                                setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
-                                                            }}
-                                                            className="w-10 h-10 flex items-center justify-center text-red-400 hover:bg-red-50 rounded-xl disabled:opacity-30 transition-all border border-transparent hover:border-red-100"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Sub-painel de taxas específicas do Gateway */}
-                                                {expandedGatewayId === gw.id && (
-                                                    <div className="mt-4 pt-4 border-t border-slate-200 space-y-4 animate-in fade-in slide-in-from-top-2">
-                                                        <div className="grid grid-cols-2 gap-4">
-                                                            <div>
-                                                                <label className="label-sm">Taxa Pix (%) — {gw.nome}</label>
-                                                                <input
-                                                                    type="text"
-                                                                    inputMode="decimal"
-                                                                    className="input-glass mt-1"
-                                                                    value={(gw as any)._temp_pix ?? (gw.taxa_pix_pct === 0 ? "" : gw.taxa_pix_pct.toString().replace('.', ','))}
-                                                                    placeholder="0,00"
-                                                                    onChange={e => {
-                                                                        const raw = e.target.value.replace('.', ',');
-                                                                        const clean = raw.replace(',', '.');
-                                                                        if (raw === "" || /^\d*[,]?\d*$/.test(raw)) {
-                                                                            const newGws = [...financeiroConfig.gateways];
-                                                                            newGws[idx].taxa_pix_pct = raw === "" || isNaN(Number(clean)) ? 0 : Number(clean);
-                                                                            (newGws[idx] as any)._temp_pix = raw;
-                                                                            setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
-                                                                        }
-                                                                    }}
-                                                                    onBlur={() => {
-                                                                        const newGws = [...financeiroConfig.gateways];
-                                                                        delete (newGws[idx] as any)._temp_pix;
-                                                                        setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label className="label-sm">Taxa Débito (%) — {gw.nome}</label>
-                                                                <input
-                                                                    type="text"
-                                                                    inputMode="decimal"
-                                                                    className="input-glass mt-1"
-                                                                    value={(gw as any)._temp_debito ?? (gw.taxa_debito_pct === 0 ? "" : gw.taxa_debito_pct.toString().replace('.', ','))}
-                                                                    placeholder="0,00"
-                                                                    onChange={e => {
-                                                                        const raw = e.target.value.replace('.', ',');
-                                                                        const clean = raw.replace(',', '.');
-                                                                        if (raw === "" || /^\d*[,]?\d*$/.test(raw)) {
-                                                                            const newGws = [...financeiroConfig.gateways];
-                                                                            newGws[idx].taxa_debito_pct = raw === "" || isNaN(Number(clean)) ? 0 : Number(clean);
-                                                                            (newGws[idx] as any)._temp_debito = raw;
-                                                                            setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
-                                                                        }
-                                                                    }}
-                                                                    onBlur={() => {
-                                                                        const newGws = [...financeiroConfig.gateways];
-                                                                        delete (newGws[idx] as any)._temp_debito;
-                                                                        setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                        </div>
-
-                                                        <div>
-                                                            <label className="label-sm block mb-2">Tabela de Crédito Parcelado (1x a 21x)</label>
-                                                            <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
-                                                                {(gw.taxas_credito || []).map((taxa, tIdx) => (
-                                                                    <div key={tIdx} className="space-y-1">
-                                                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{taxa.parcela}x (%)</label>
-                                                                        <input
-                                                                            type="text"
-                                                                            inputMode="decimal"
-                                                                            className="input-glass h-8 text-[11px] font-bold text-center"
-                                                                            value={(taxa as any)._temp ?? (taxa.taxa === 0 ? "" : taxa.taxa.toString().replace('.', ','))}
-                                                                            placeholder="0,00"
-                                                                            onChange={e => {
-                                                                                const raw = e.target.value.replace('.', ',');
-                                                                                const clean = raw.replace(',', '.');
-                                                                                if (raw === "" || /^\d*[,]?\d*$/.test(raw)) {
-                                                                                    const newGws = [...financeiroConfig.gateways];
-                                                                                    const newTaxas = [...newGws[idx].taxas_credito];
-                                                                                    newTaxas[tIdx].taxa = raw === "" || isNaN(Number(clean)) ? 0 : Number(clean);
-                                                                                    (newTaxas[tIdx] as any)._temp = raw;
-                                                                                    newGws[idx].taxas_credito = newTaxas;
-                                                                                    setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
-                                                                                }
-                                                                            }}
-                                                                            onBlur={() => {
-                                                                                const newGws = [...financeiroConfig.gateways];
-                                                                                const newTaxas = [...newGws[idx].taxas_credito];
-                                                                                delete (newTaxas[tIdx] as any)._temp;
-                                                                                newGws[idx].taxas_credito = newTaxas;
-                                                                                setFinanceiroConfig(p => ({ ...p, gateways: newGws }));
-                                                                            }}
-                                                                        />
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                        <button
-                                            onClick={() => {
-                                                const nextId = `gw_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
-                                                setFinanceiroConfig(p => ({
-                                                    ...p,
-                                                    gateways: [...(p.gateways || []), {
-                                                        id: nextId,
-                                                        nome: `Novo Gateway ${p.gateways?.length + 1}`,
-                                                        taxa_pix_pct: 0,
-                                                        taxa_debito_pct: 0,
-                                                        taxas_credito: Array.from({ length: 21 }, (_, i) => ({ parcela: i + 1, taxa: 0 })),
-                                                        is_default: false,
-                                                        enabled: true
-                                                    }]
-                                                }));
-                                                // Expandir automaticamente o novo gateway para edição
-                                                setExpandedGatewayId(nextId);
-                                            }}
-                                            className="w-full py-3 border-2 border-dashed border-slate-200 rounded-2xl text-[10px] font-black text-slate-400 hover:border-brand-300 hover:text-brand-500 transition-all uppercase tracking-widest"
-                                        >
-                                            + Novo Gateway de Pagamento
-                                        </button>
-                                    </div>
-                                </GlassCard>
-
-
-                                <div className="flex justify-end gap-3">
-                                    <input 
-                                        type="file" 
-                                        className="hidden" 
-                                        accept=".json" 
-                                        ref={importConfigRef} 
-                                        onChange={handleImportFinance} 
-                                    />
-                                    <button 
-                                        type="button"
-                                        onClick={() => importConfigRef.current?.click()}
-                                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
-                                    >
-                                        <Upload size={14} />
-                                        Importar JSON
-                                    </button>
-                                    <button 
-                                        type="button"
-                                        onClick={handleExportFinance}
-                                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
-                                    >
-                                        <Download size={14} />
-                                        Exportar JSON
-                                    </button>
-                                    <button onClick={() => saveConfig("financeiro", financeiroConfig)} disabled={saving} className="btn-primary">
-                                        <Save size={16} />
-                                        Salvar Configurações Financeiras
-                                    </button>
-                                </div>
-                            </div>
-                        )}
 
                         {/* ── AI & OCR ── */}
                         {activeTab === "ai_config" && (
@@ -2348,5 +1993,17 @@ export default function ConfiguracoesPage() {
                 )}
             </div>
         </PermissionGuard>
+    );
+}
+
+export default function ConfiguracoesPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center min-h-screen">
+                <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
+            </div>
+        }>
+            <ConfiguracoesContent />
+        </Suspense>
     );
 }

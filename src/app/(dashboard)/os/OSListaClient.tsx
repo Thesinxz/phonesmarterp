@@ -12,8 +12,10 @@ import {
     User as UserIcon,
     Edit3,
     Trash2,
-    ChevronDown
+    ChevronDown,
+    Search as SearchIcon
 } from "lucide-react";
+import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
 import Link from "next/link";
 import { getOrdensServico, updateOSStatus, deleteOS } from "@/services/os";
 import { type OsStatus } from "@/types/database";
@@ -21,9 +23,12 @@ import { OSKanbanCard } from "@/components/os/OSKanbanCard";
 import { EditOSModal } from "@/components/os/EditOSModal";
 import { notifyOSStatusChange } from "@/actions/notifications";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
-import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
 import { toast } from "sonner";
 import { cn } from "@/utils/cn";
+import { 
+    GlassCard, PageHeader, EmptyState, SearchInput, 
+    StatusBadge, OS_STATUS, useConfirmDialog 
+} from "@/components/ui";
 
 const STAGES: { label: string; status: OsStatus; color: string }[] = [
     { label: "Abertas", status: "aberta", color: "bg-slate-500" },
@@ -56,6 +61,7 @@ export function OSListaClient({
     const [orders, setOrders] = useState<any[]>(initialOrders);
     const [selectedOS, setSelectedOS] = useState<any>(null);
     const [showEditModal, setShowEditModal] = useState(false);
+    const { confirm, Dialog } = useConfirmDialog();
 
     const [loading, setLoading] = useState(false);
     const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
@@ -110,6 +116,12 @@ export function OSListaClient({
     useRealtimeTable('ordens_servico', empresaId, () => loadOS(true));
 
     async function handleDeleteOS(id: string) {
+        const ok = await confirm(
+            "Excluir OS",
+            "Esta OS será removida permanentemente.",
+            "danger"
+        );
+        if (!ok) return;
         try {
             await deleteOS(id);
             toast.success("OS excluída com sucesso.");
@@ -140,21 +152,15 @@ export function OSListaClient({
     return (
         <div className="space-y-6 page-enter pb-10">
             {/* Header com ações */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Ordens de Serviço</h1>
-                    <p className="text-slate-500 text-xs md:text-sm">Gerencie todos os consertos e manutenções.</p>
-                </div>
-                <div className="flex gap-3 w-full sm:w-auto">
-                    <Link
-                        href="/os/nova"
-                        className="h-12 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition-all active:scale-95 flex-1 sm:flex-initial"
-                    >
-                        <Plus size={20} />
-                        <span className="whitespace-nowrap">Nova OS</span>
-                    </Link>
-                </div>
-            </div>
+            <PageHeader
+                title="Ordens de Serviço"
+                subtitle="Gerencie todos os consertos e manutenções."
+                actions={[{
+                    label: "Nova OS",
+                    href: "/os/nova",
+                    icon: <Plus size={20} />,
+                }]}
+            />
 
             {/* Filtros e Busca */}
             <div className="flex flex-wrap items-center gap-4 bg-slate-50/50 p-4 rounded-3xl border border-slate-100 relative overflow-hidden">
@@ -163,16 +169,13 @@ export function OSListaClient({
                     <div className="absolute top-0 left-0 h-1 bg-indigo-500 animate-[loading-bar_2s_infinite]" />
                 )}
 
-                <div className="flex-1 min-w-[280px] relative group">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
-                    <input
-                        type="text"
-                        placeholder="Buscar por cliente, equipamento, número..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-full h-11 pl-11 pr-4 bg-white rounded-xl border border-slate-200 shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
-                    />
-                </div>
+                <SearchInput
+                    value={search}
+                    onChange={setSearch}
+                    placeholder="Buscar por cliente, equipamento, número..."
+                    className="flex-1 min-w-[280px]"
+                    loading={loading && !!search}
+                />
 
                 <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
                     <div className="relative min-w-[160px] flex-1 sm:flex-initial">
@@ -335,9 +338,7 @@ export function OSListaClient({
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <span className={cn("px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter", stage ? stage.color.replace('bg-', 'text-').replace('500', '700') + " " + stage.color.replace('500', '100') : "bg-slate-100 text-slate-700")}>
-                                                    {stage?.label || os.status}
-                                                </span>
+                                                <StatusBadge status={os.status} map={OS_STATUS} />
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-1.5 text-xs text-slate-500">
@@ -365,9 +366,7 @@ export function OSListaClient({
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            if (window.confirm("Deseja excluir permanentemente esta OS?")) {
-                                                                handleDeleteOS(os.id);
-                                                            }
+                                                            handleDeleteOS(os.id);
                                                         }}
                                                         className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
                                                     >
@@ -383,14 +382,12 @@ export function OSListaClient({
                                 })}
                             </tbody>
                         </table>
-                        {orders.length === 0 && (
-                            <div className="py-20 text-center flex flex-col items-center justify-center bg-slate-50/20">
-                                <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4">
-                                    <Search className="text-slate-200" size={32} />
-                                </div>
-                                <h3 className="text-slate-800 font-bold">Nenhuma OS encontrada</h3>
-                                <p className="text-slate-400 text-sm">Tente ajustar sua busca ou filtros.</p>
-                            </div>
+                         {orders.length === 0 && (
+                            <EmptyState
+                                title="Nenhuma OS encontrada"
+                                description="Tente ajustar sua busca ou filtros."
+                                action={{ label: "Nova OS", href: "/os/nova" }}
+                            />
                         )}
                     </div>
                 )}
@@ -411,6 +408,8 @@ export function OSListaClient({
                     }}
                 />
             )}
+
+            {Dialog}
         </div>
     );
 }

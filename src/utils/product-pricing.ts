@@ -177,17 +177,28 @@ export function calculateSuggestedPrice(
  */
 export function calculateSuggestedPriceBySegment(
     custoCentavos: number,
-    segment: { default_margin: number } | null,
+    segment: { default_margin: number, margin_type?: string } | null,
     impostoPct: number
 ): number {
     if (!segment || custoCentavos <= 0) return custoCentavos;
     
-    // Margem já vem em centavos
-    const margemCentavos = segment.default_margin;
+    const margem = segment.default_margin;
+    const tipoMargem = segment.margin_type || 'valor';
     
     // Preço = (Custo + Margem) / (1 - Imposto%)
     const divisor = 1 - (impostoPct / 100);
-    return divisor > 0.001
-        ? Math.ceil((custoCentavos + margemCentavos) / divisor)
-        : custoCentavos + margemCentavos;
+    
+    const isPercent = tipoMargem === 'porcentagem' || tipoMargem === 'percent' || tipoMargem === 'percentual';
+    
+    if (isPercent) {
+        const divisorMargem = 1 - (margem / 100) - (impostoPct / 100);
+        return divisorMargem > 0.001 
+            ? Math.ceil(custoCentavos / divisorMargem)
+            : Math.ceil(custoCentavos * 1.5); // Fallback: 50% margem se divisor for inválido
+    } else {
+        // Margem fixa em centavos
+        return divisor > 0.001
+            ? Math.ceil((custoCentavos + margem) / divisor)
+            : custoCentavos + margem;
+    }
 }

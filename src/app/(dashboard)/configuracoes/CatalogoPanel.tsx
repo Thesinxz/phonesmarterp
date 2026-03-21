@@ -180,7 +180,7 @@ export function CatalogoPanel({ initialTab }: { initialTab?: 'segmentos' | 'marc
                         onClick={() => setActiveTab('segmentos')}
                         className={cn("px-4 py-2 font-bold text-sm rounded-xl transition-all", activeTab === 'segmentos' ? "bg-brand-500 text-white shadow-brand-glow" : "bg-white text-slate-500")}
                     >
-                        Segmentos (Metas de Lucro)
+                        Perfis de Precificação
                     </button>
                     <button
                         onClick={() => setActiveTab('marcas')}
@@ -209,19 +209,23 @@ export function CatalogoPanel({ initialTab }: { initialTab?: 'segmentos' | 'marc
                 <>
                     {activeTab === 'segmentos' && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <GlassCard title="Segmentos de Precificação" icon={Layers}>
-                                <p className="text-xs text-slate-500 mb-6">Cadastre as regras de margem de lucro por segmento (Ex: Apple, Xiaomi, Usados). A margem é em R$ e será somada ao custo do produto na hora da precificação.</p>
+                            <GlassCard title="Perfis de Precificação" icon={Layers}>
+                                <p className="text-xs text-slate-500 mb-2">Cadastre as regras de margem de lucro por perfil (Ex: Apple, Xiaomi, Usados). A margem é em R$ e será somada ao custo do produto na hora da precificação.</p>
+                                <p className="text-[11px] text-slate-400 mb-6">
+                                  Perfis de margem usados nas ferramentas de cálculo e precificação de produtos.
+                                  Não são categorias do catálogo — para categorizar produtos, use a aba Categorias.
+                                </p>
 
                                 <form onSubmit={handleAddSegment} className="flex gap-2 items-end mb-6 pb-6 border-b border-slate-100">
                                     <div className="flex-1">
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Nome do Segmento</label>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Nome do Perfil</label>
                                         <input required value={newSegmentName} onChange={e => setNewSegmentName(e.target.value)} placeholder="Ex: Apple Semi Novos" className="input-glass mt-1 w-full" />
                                     </div>
                                     <div className="w-32">
                                         <label className="text-[10px] font-bold text-slate-500 uppercase">Margem (R$)</label>
                                         <input required value={newSegmentMargin} onChange={e => setNewSegmentMargin(e.target.value)} placeholder="Ex: 400,00" className="input-glass mt-1 w-full" />
                                     </div>
-                                    <button className="btn-primary h-10 px-4"><Plus size={16} /></button>
+                                    <button className="btn-primary h-10 px-4" title="Novo Perfil"><Plus size={16} /></button>
                                 </form>
 
                                 <div className="space-y-3">
@@ -229,7 +233,7 @@ export function CatalogoPanel({ initialTab }: { initialTab?: 'segmentos' | 'marc
                                         <div key={seg.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl group">
                                             <div>
                                                 <p className="font-bold text-slate-800 text-sm">{seg.name}</p>
-                                                <p className="text-xs text-brand-600 font-black">+ R$ {formatBRL(seg.default_margin)} de lucro base</p>
+                                                <p className="text-xs text-brand-600 font-black">+ R$ {formatBRL(seg.default_margin)} de perfil base</p>
                                             </div>
                                             <button onClick={() => handleDeleteSegment(seg.id)} className="p-2 text-red-300 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
                                                 <Trash2 size={16} />
@@ -268,7 +272,7 @@ export function CatalogoPanel({ initialTab }: { initialTab?: 'segmentos' | 'marc
                                             <div>
                                                 <p className="font-bold text-slate-800 text-sm">{brand.name}</p>
                                                 {brand.default_pricing_segment_id && (
-                                                    <p className="text-xs text-slate-500 font-medium">Lincado ao segmento: <span className="font-bold">{segments.find(s => s.id === brand.default_pricing_segment_id)?.name}</span></p>
+                                                    <p className="text-xs text-slate-500 font-medium">Lincado ao perfil: <span className="font-bold">{segments.find(s => s.id === brand.default_pricing_segment_id)?.name}</span></p>
                                                 )}
                                             </div>
                                             <button onClick={() => handleDeleteBrand(brand.id)} className="p-2 text-red-300 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100">

@@ -21,6 +21,9 @@ export interface Database {
                     trial_ends_at: string | null;
                     onboarding_completed: boolean;
                     copied_from_empresa_id: string | null;
+                    regime_fiscal: "simples_nacional" | "lucro_real" | "lucro_presumido" | "mei" | "isento" | null;
+                    inscricao_estadual: string | null;
+                    inscricao_municipal: string | null;
                     created_at: string;
                     updated_at: string;
                 };
@@ -734,6 +737,21 @@ export interface Database {
                     sale_price_usd: number;
                     sale_price_usd_rate: number;
                     wholesale_price_brl: number;
+                    serial_number: string | null;
+                    battery_cycle: number | null;
+                    markup_pct: number | null;
+                    dias_garantia: number | null;
+                    observacao: string | null;
+                    fornecedor_id: string | null;
+                    data_entrada: string | null;
+                    cst_csosn: string | null;
+                    cfop_estadual_saida: string | null;
+                    cfop_interestadual_saida: string | null;
+                    cfop_estadual_entrada: string | null;
+                    cfop_interestadual_entrada: string | null;
+                    codigo_beneficio_fiscal: string | null;
+                    tributacao_id: string | null;
+                    category_id: string | null;
                 };
                 Insert: Omit<Database["public"]["Tables"]["catalog_items"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["catalog_items"]["Insert"]>;
@@ -747,6 +765,7 @@ export interface Database {
                     show_imei: boolean;
                     show_grade: boolean;
                     show_battery_health: boolean;
+                    default_pricing_segment_id: string | null;
                     created_at: string;
                 };
                 Insert: Omit<Database["public"]["Tables"]["product_types"]["Row"], "id" | "created_at">;
@@ -757,9 +776,11 @@ export interface Database {
                     empresa_id: string;
                     name: string;
                     default_margin: number;
+                    margin_type: 'fixed' | 'percent' | 'porcentagem' | 'percentual';
                     payment_gateway_id: string | null;
                     warranty_days: number;
                     requires_nf: boolean;
+                    finalidade: string | null;
                     created_at: string;
                 };
                 Insert: Omit<Database["public"]["Tables"]["pricing_segments"]["Row"], "id" | "created_at">;
@@ -789,6 +810,22 @@ export interface Database {
                 };
                 Insert: Omit<Database["public"]["Tables"]["units"]["Row"], "id" | "created_at" | "updated_at">;
                 Update: Partial<Database["public"]["Tables"]["units"]["Insert"]>;
+            },
+            catalog_categories: {
+                Row: {
+                    id: string;
+                    empresa_id: string;
+                    parent_id: string | null;
+                    name: string;
+                    slug: string;
+                    item_type_scope: string | null;
+                    is_active: boolean;
+                    position: number;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: Omit<Database["public"]["Tables"]["catalog_categories"]["Row"], "id" | "created_at" | "updated_at">;
+                Update: Partial<Database["public"]["Tables"]["catalog_categories"]["Insert"]>;
             }, unit_stock: {
                 Row: {
                     id: string;
@@ -1004,6 +1041,7 @@ export type Unit = Database["public"]["Tables"]["units"]["Row"];
 export type Brand = Database["public"]["Tables"]["brands"]["Row"];
 export type PaymentGatewayTable = Database["public"]["Tables"]["payment_gateways"]["Row"];
 
+export type CatalogCategory = Database["public"]["Tables"]["catalog_categories"]["Row"];
 export type CatalogItem = Database["public"]["Tables"]["catalog_items"]["Row"];
 export type WarrantyClaim = Database["public"]["Tables"]["warranty_claims"]["Row"];
 export type WarrantyEvidence = Database["public"]["Tables"]["warranty_evidences"]["Row"];
