@@ -4,8 +4,10 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import Link from "next/link";
-import { ArrowLeft, Save, Package, Smartphone, Headphones, Wrench, DollarSign, Barcode, Eye, FileText, Upload, Tag, Cpu, X, Info, ChevronDown, Layers } from "lucide-react";
+import { ArrowLeft, Save, Package, Smartphone, Headphones, Wrench, DollarSign, Barcode, Eye, FileText, Upload, Tag, Cpu, X, Info, ChevronDown, Layers, BarChart3, RefreshCw, MapPin, ShieldCheck } from "lucide-react";
 import { createCatalogItem } from "@/services/catalog";
+import { CompatibleModelsSelector } from "@/components/parts/CompatibleModelsSelector";
+import { PartStockSidebar } from "@/components/parts/PartStockSidebar";
 import { uploadProdutoImage } from "@/services/estoque"; // reaproveitando upload
 import { useAuth } from "@/context/AuthContext";
 import { useFinanceConfig } from "@/hooks/useFinanceConfig";
@@ -20,8 +22,8 @@ import { Brand, PricingSegment, type CatalogItem } from "@/types/database";
 import { getExistingDeviceModels, createCatalogItemWithStock } from "@/app/actions/parts";
 import { IMEIScanner } from "@/components/inventory/IMEIScanner";
 import { validateIMEILuhn } from "@/utils/tac-lookup";
-import { PartTypeSelector } from "@/components/estoque/PartTypeSelector";
-import { QualitySelector } from "@/components/estoque/QualitySelector";
+import { PartTypeSelector } from "@/components/parts/PartTypeSelector";
+import { QualitySelector } from "@/components/parts/QualitySelector";
 import { registerIMEI } from "@/app/actions/imei";
 import { BarcodeGenerator } from "@/components/barcode/BarcodeGenerator";
 import { BarcodeDisplay } from "@/components/barcode/BarcodeDisplay";
@@ -34,6 +36,14 @@ import { BrandSelector } from "@/components/catalog/BrandSelector";
 import { PricingSegmentSelector } from "@/components/catalog/PricingSegmentSelector";
 import { useCatalogCategories } from "@/hooks/useCatalogCategories";
 import { useCatalogData } from "@/hooks/useCatalogData";
+
+// New form components
+import { ProductGeneralInfo } from "@/components/estoque/form/ProductGeneralInfo";
+import { ProductPricingSection } from "@/components/estoque/form/ProductPricingSection";
+import { ProductStockSection } from "@/components/estoque/form/ProductStockSection";
+import { ProductPartDetails } from "@/components/estoque/form/ProductPartDetails";
+import { ProductMediaSection } from "@/components/estoque/form/ProductMediaSection";
+import { ProductBarcodeSection } from "@/components/estoque/form/ProductBarcodeSection";
 
 type ItemType = 'celular' | 'acessorio' | 'peca' | null;
 
@@ -70,6 +80,7 @@ function NovoCatalogContent() {
         sale_price_usd: "0,00",
         sale_price_usd_rate: "0,00",
         category_id: "",
+        product_type_id: "",
         
         // Celulares
         brand_id: "",
@@ -99,7 +110,6 @@ function NovoCatalogContent() {
         
         // Acessórios
         accessory_type: "",
-        compatible_models: "",
         
         // Peças
         part_type: "",
@@ -107,7 +117,14 @@ function NovoCatalogContent() {
         part_brand: "",
         model: "",
         supplier: "",
-        compatible_models_parts: "" // será split(',') depois
+        compatible_models_parts: "", // será split(',') depois
+        compatible_models: [] as { id: string; brand: string; model: string; isFreeText?: boolean }[],
+        supplier_ref: "",
+        storage_location: "",
+        reorder_point: "3",
+        warranty_days_part: "90",
+        supplier_lead_days: "3",
+        part_status: "ativo"
     });
 
     const [itemType, setItemType] = useState<ItemType>(initialTipo);
@@ -195,6 +212,14 @@ function NovoCatalogContent() {
         }
     }, [form.cost_price, form.pricing_segment_id, config, precoEditado, itemType, segments]);
 
+    const handleFieldChange = (field: string, value: any) => {
+        setForm(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handlePriceManualEdit = (manual: boolean) => {
+        setPrecoEditado(manual);
+    };
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
         
@@ -214,24 +239,7 @@ function NovoCatalogContent() {
             return;
         }
 
-        setForm(prev => {
-            const up = { ...prev, [name]: value };
-            return up;
-        });
-    };
-
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || !profile?.empresa_id) return;
-
-        try {
-            toast.loading("Enviando imagem...", { id: "upload" });
-            const url = await uploadProdutoImage(file, profile.empresa_id);
-            setForm(prev => ({ ...prev, image_url: url }));
-            toast.success("Imagem enviada!", { id: "upload" });
-        } catch (error) {
-            toast.error("Erro ao enviar imagem", { id: "upload" });
-        }
+        setForm(prev => ({ ...prev, [name]: value }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -360,15 +368,34 @@ function NovoCatalogContent() {
                 accessory_type: itemType === 'acessorio' ? form.accessory_type : null,
                 compatible_models: itemType === 'acessorio' ? form.compatible_models : null,
 
-                // Peças
-                part_type: itemType === 'peca' ? form.part_type : null,
-                quality: itemType === 'peca' ? form.quality : null,
-                part_brand: itemType === 'peca' ? form.part_brand : null,
-                supplier: itemType === 'peca' ? form.supplier : null,
-                model: itemType === 'peca' ? form.model : null,
                 sale_price_usd: Math.round(parseFloat(form.sale_price_usd.replace(',', '.')) * 100) || 0,
                 sale_price_usd_rate: parseFloat(form.sale_price_usd_rate.replace(',', '.')) || 0,
                 wholesale_price_brl: Math.round(parseFloat(form.sale_price_wholesale_brl.replace(',', '.')) * 100) || 0,
+
+                // Peças
+                ...(itemType === 'peca' && {
+                    part_type: form.part_type,
+                    quality: form.quality,
+                    part_brand: form.part_brand,
+                    supplier: form.supplier,
+                    model: form.model,
+                    compatible_models: form.compatible_models || [],
+                    supplier_ref: form.supplier_ref || null,
+                    storage_location: form.storage_location || null,
+                    reorder_point: parseInt(form.reorder_point) || 3,
+                    warranty_days_part: parseInt(form.warranty_days_part) || 90,
+                    supplier_lead_days: parseInt(form.supplier_lead_days) || null,
+                    status: form.part_status || 'ativo',
+                    vitrine_enabled: form.show_in_storefront,
+                    // Fiscal adicional
+                    cfop_estadual_saida: form.cfop_estadual_saida || form.cfop || null,
+                    cfop_interestadual_saida: form.cfop_interestadual_saida || null,
+                    cfop_estadual_entrada: form.cfop_estadual_entrada || null,
+                    cfop_interestadual_entrada: form.cfop_interestadual_entrada || null,
+                    cst_csosn: form.cst_csosn || null,
+                    codigo_beneficio_fiscal: form.codigo_beneficio_fiscal || null,
+                    tributacao_id: form.tributacao_id || null,
+                }),
             };
 
             // Se units não carregou ainda (race condition), buscar unidade inline
@@ -425,40 +452,51 @@ function NovoCatalogContent() {
 
     if (!itemType) {
         return (
-            <div className="max-w-4xl mx-auto space-y-6 page-enter pb-20">
-                 <div className="flex items-center gap-4">
-                    <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-xl transition-all">
-                        <ArrowLeft size={20} className="text-slate-500" />
-                    </button>
-                    <div>
-                        <h1 className="text-2xl font-black text-slate-800">Novo Item</h1>
-                        <p className="text-slate-500 text-sm">Selecione o tipo de item que deseja cadastrar</p>
-                    </div>
-                </div>
+            <div className="space-y-6 page-enter">
+                <PageHeader 
+                    title="Novo Item" 
+                    subtitle="Selecione o tipo de item que deseja cadastrar"
+                    onBack={() => router.push('/estoque')}
+                />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 pt-4 sm:pt-8">
-                    <button onClick={() => setItemType('celular')} className="group flex flex-col items-center text-center p-6 sm:p-8 bg-white border-2 border-slate-100 hover:border-blue-400 rounded-3xl sm:rounded-[32px] transition-all hover:shadow-xl hover:-translate-y-1">
-                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-blue-50 text-blue-500 rounded-2xl sm:rounded-3xl flex items-center justify-center mb-4 sm:mb-6 group-hover:scale-110 transition-transform">
-                            <Smartphone size={32} className="sm:w-10 sm:h-10" />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto pt-8">
+                    <button 
+                        onClick={() => setItemType('celular')}
+                        className="group p-8 bg-white border border-slate-100 rounded-[32px] hover:border-brand-500 hover:shadow-2xl hover:shadow-brand-500/10 transition-all flex flex-col items-center text-center gap-4"
+                    >
+                        <div className="w-20 h-20 bg-brand-50 rounded-2xl flex items-center justify-center text-brand-500 group-hover:scale-110 transition-transform">
+                            <Smartphone size={32} />
                         </div>
-                        <h2 className="text-lg sm:text-xl font-black text-slate-800 mb-2">Celular</h2>
-                        <p className="text-xs sm:text-sm text-slate-500 font-medium">Aparelhos para revenda. Campos para IMEI, saúde da bateria, grade.</p>
-                    </button>
-
-                    <button onClick={() => setItemType('acessorio')} className="group flex flex-col items-center text-center p-6 sm:p-8 bg-white border-2 border-slate-100 hover:border-emerald-400 rounded-3xl sm:rounded-[32px] transition-all hover:shadow-xl hover:-translate-y-1">
-                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-emerald-50 text-emerald-500 rounded-2xl sm:rounded-3xl flex items-center justify-center mb-4 sm:mb-6 group-hover:scale-110 transition-transform">
-                            <Headphones size={32} className="sm:w-10 sm:h-10" />
+                        <div>
+                            <h3 className="text-xl font-black text-slate-800 mb-1">Celular</h3>
+                            <p className="text-sm text-slate-500 font-bold px-4">Aparelhos para revenda. Campos para IMEI, saúde da bateria, grade.</p>
                         </div>
-                        <h2 className="text-lg sm:text-xl font-black text-slate-800 mb-2">Acessório & Película</h2>
-                        <p className="text-xs sm:text-sm text-slate-500 font-medium">Capas, cabos, películas, fones. Formulário rápido sem dados do aparelho.</p>
                     </button>
 
-                    <button onClick={() => setItemType('peca')} className="group flex flex-col items-center text-center p-6 sm:p-8 bg-white border-2 border-slate-100 hover:border-amber-400 rounded-3xl sm:rounded-[32px] transition-all hover:shadow-xl hover:-translate-y-1">
-                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-amber-50 text-amber-500 rounded-2xl sm:rounded-3xl flex items-center justify-center mb-4 sm:mb-6 group-hover:scale-110 transition-transform">
-                            <Wrench size={32} className="sm:w-10 sm:h-10" />
+                    <button 
+                        onClick={() => setItemType('acessorio')}
+                        className="group p-8 bg-white border border-slate-100 rounded-[32px] hover:border-emerald-500 hover:shadow-2xl hover:shadow-emerald-500/10 transition-all flex flex-col items-center text-center gap-4"
+                    >
+                        <div className="w-20 h-20 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
+                            <Headphones size={32} />
                         </div>
-                        <h2 className="text-lg sm:text-xl font-black text-slate-800 mb-2">Peça (Assistência)</h2>
-                        <p className="text-xs sm:text-sm text-slate-500 font-medium">Telas, baterias, conectores. Compatibilidade, qualidade e fornecedor.</p>
+                        <div>
+                            <h3 className="text-xl font-black text-slate-800 mb-1">Acessório & Película</h3>
+                            <p className="text-sm text-slate-500 font-bold px-4">Capas, cabos, películas, fones. Formulário rápido sem dados do aparelho.</p>
+                        </div>
+                    </button>
+
+                    <button 
+                        onClick={() => setItemType('peca')}
+                        className="group p-8 bg-white border border-slate-100 rounded-[32px] hover:border-amber-500 hover:shadow-2xl hover:shadow-amber-500/10 transition-all flex flex-col items-center text-center gap-4"
+                    >
+                        <div className="w-20 h-20 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
+                            <Wrench size={32} />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-black text-slate-800 mb-1">Peça (Assistência)</h3>
+                            <p className="text-sm text-slate-500 font-bold px-4">Telas, baterias, conectores. Compatibilidade, qualidade e fornecedor.</p>
+                        </div>
                     </button>
                 </div>
             </div>
@@ -466,454 +504,581 @@ function NovoCatalogContent() {
     }
 
     return (
-        <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-6 page-enter pb-32">
-            <PageHeader
-                title={
-                    itemType === 'celular' ? "Novo Celular" :
-                    itemType === 'acessorio' ? "Novo Acessório" : "Nova Peça"
-                }
-                subtitle="Cadastro Unificado"
+        <div className="space-y-6 page-enter pb-24">
+            <PageHeader 
+                title={itemType === 'celular' ? "Cadastrar Celular" : itemType === 'peca' ? "Cadastrar Peça" : "Cadastrar Acessório"}
+                subtitle="Preencha os dados do novo item para o catálogo"
                 onBack={() => setItemType(null)}
-                actions={[
-                    {
-                        label: loading ? "Salvando..." : "Salvar",
-                        onClick: () => {}, // O botão de submit do form cuidará disso, mas o PageHeader renderiza botões. 
-                        // Na verdade, para forms, é melhor que o botão seja type="submit".
-                        // O PageHeader aceita 'icon' e 'onClick' ou 'href'. 
-                        // Vou passar o botão manualmente para manter o type="submit".
-                    }
-                ]}
-            >
-                <div className="flex gap-3">
-                    <button type="button" onClick={() => router.back()} className="btn-secondary h-11 hidden sm:flex">Cancelar</button>
-                    <button type="submit" disabled={loading} className="btn-primary h-11">
-                        <Save size={18} /> {loading ? "Salvando..." : "Salvar"}
-                    </button>
-                </div>
-            </PageHeader>
+            />
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Coluna Principal (Esquerda) */}
-                <div className="lg:col-span-2 space-y-6">
-                    <GlassCard title="Informações Gerais" icon={Package}>
-                        <div className="space-y-4">
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {itemType !== 'peca' && (
+                    <>
+                        <div className="lg:col-span-2 space-y-6">
+                            <ProductGeneralInfo
+                                name={form.name}
+                                categoryId={form.category_id}
+                                productTypeId={form.product_type_id}
+                                brandId={form.brand_id}
+                                description={form.description}
+                                showInStorefront={form.show_in_storefront}
+                                itemType={itemType}
+                                productTypes={productTypes}
+                                onChange={handleFieldChange}
+                            />
+
+                            <FiscalPanel
+                                value={{
+                                    ncm: form.ncm,
+                                    cfopEstadualSaida: form.cfop_estadual_saida,
+                                    cfopInterestadualSaida: form.cfop_interestadual_saida,
+                                    cfopEstadualEntrada: form.cfop_estadual_entrada,
+                                    cfopInterestadualEntrada: form.cfop_interestadual_entrada,
+                                    cstCsosn: form.cst_csosn,
+                                    cest: form.cest,
+                                    origemProduto: form.origin_code,
+                                    codigoBeneficioFiscal: form.codigo_beneficio_fiscal,
+                                    tributacaoId: form.tributacao_id,
+                                }}
+                                onChange={handleFieldChange}
+                                regime={regime}
+                                tributacoes={tributacoes}
+                                onSuggestNCM={() => {
+                                    const sug = suggestNCM(form.name);
+                                    if (sug) handleFieldChange('ncm', sug);
+                                }}
+                            />
+                        </div>
+
+                        <div className="space-y-6">
+                            <ProductPricingSection
+                                pricingSegmentId={form.pricing_segment_id}
+                                costPrice={form.cost_price}
+                                salePrice={form.sale_price}
+                                wholesalePrice={form.sale_price_wholesale_brl}
+                                salePriceUsd={form.sale_price_usd}
+                                salePriceUsdRate={form.sale_price_usd_rate}
+                                onPriceManualEdit={handlePriceManualEdit}
+                                onChange={handleFieldChange}
+                            />
+
+                            <ProductStockSection
+                                units={units}
+                                totalQty={form.stock_qty}
+                                alertQty={form.stock_alert_qty}
+                                isEdit={false}
+                                onChange={handleFieldChange}
+                            />
+
+                            <ProductMediaSection
+                                imageUrl={form.image_url}
+                                onUpload={(file) => uploadProdutoImage(file, profile?.empresa_id || "")}
+                                onChange={(url) => handleFieldChange('image_url', url)}
+                            />
+
+                            <ProductBarcodeSection
+                                barcode={form.barcode}
+                                itemType={itemType}
+                                partType={form.part_type}
+                                imei={form.imei}
+                                productName={form.name}
+                                salePriceCentavos={Math.round(parseFloat(form.sale_price.replace(/\./g, '').replace(',', '.')) * 100) || 0}
+                                onChange={(val) => handleFieldChange('barcode', val)}
+                            />
+                        </div>
+                    </>
+                )}
+
+                {itemType === 'peca' && (
+                    <>
+                        {/* ══════════════════════════════
+                            COLUNA PRINCIPAL (2/3)
+                        ══════════════════════════════ */}
+                        <div className="lg:col-span-2 space-y-6">
+
+                        {/* 1. Identificação */}
+                        <GlassCard title="Identificação da Peça" icon={Wrench}>
+                            <div className="space-y-5">
+
+                            {/* Nome */}
                             <div>
-                                <label className="text-xs font-black text-slate-400 uppercase">Nome do Produto *</label>
-                                <input required name="name" value={form.name} onChange={handleChange} className="input-glass mt-1 w-full text-lg font-bold" placeholder="Ex: iPhone 13 Pro Max 128GB" />
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                Nome da Peça *
+                                </label>
+                                <input
+                                value={form.name}
+                                name="name"
+                                onChange={handleChange}
+                                required
+                                className="input-glass w-full text-base font-bold"
+                                placeholder="Ex: Tela iPhone 15 Pro Max Original"
+                                />
                             </div>
 
-                            {/* Categoria do catálogo */}
+                            {/* Tipo de peça */}
                             <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-2 block">
+                                Tipo de Peça *
+                                </label>
+                                <PartTypeSelector
+                                value={form.part_type || ''}
+                                onChange={(v) => handleFieldChange('part_type', v)}
+                                />
+                            </div>
+
+                            {/* Qualidade */}
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-2 block">
+                                Qualidade
+                                </label>
+                                <QualitySelector
+                                value={form.quality || 'oem'}
+                                onChange={(v) => handleFieldChange('quality', v)}
+                                />
+                            </div>
+
+                            {/* Categoria + Status */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
                                 <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
                                     Categoria
                                 </label>
                                 <CategorySelector
-                                    value={form.category_id || ''}
-                                    onChange={(id) => setForm(prev => ({ ...prev, category_id: id }))}
-                                    itemType={itemType || undefined}
+                                    value={form.category_id}
+                                    onChange={(v) => handleFieldChange('category_id', v)}
+                                    itemType="peca"
                                     allowCreate
+                                    onCreateRequest={() => window.open('/configuracoes?tab=categorias', '_blank')}
+                                />
+                                </div>
+                                <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                    Status
+                                </label>
+                                <select
+                                    value={form.part_status || 'ativo'}
+                                    name="part_status"
+                                    onChange={handleChange}
+                                    className="input-glass w-full"
+                                >
+                                    <option value="ativo">Ativo</option>
+                                    <option value="sob_encomenda">Sob Encomenda</option>
+                                    <option value="descontinuado">Descontinuado</option>
+                                    <option value="inativo">Inativo</option>
+                                </select>
+                                </div>
+                            </div>
+
+                            {/* Descrição */}
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                Descrição (visível na vitrine)
+                                </label>
+                                <textarea
+                                value={form.description}
+                                name="description"
+                                onChange={handleChange}
+                                rows={2}
+                                className="input-glass w-full resize-none"
+                                placeholder="Informações visíveis para o cliente..."
                                 />
                             </div>
 
-                            {itemType === 'celular' && (
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs font-black text-slate-400 uppercase mb-1 block">Marca</label>
-                                        <BrandSelector
-                                            value={form.brand_id}
-                                            onChange={(id, brand) => {
-                                                setForm(prev => {
-                                                    const up = { ...prev, brand_id: id };
-                                                    if (brand?.default_pricing_segment_id) {
-                                                        up.pricing_segment_id = brand.default_pricing_segment_id;
-                                                    }
-                                                    return up;
-                                                });
-                                            }}
-                                            allowCreate
-                                        />
-                                    </div>
-                                    <div className="col-span-2 grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-xs font-black text-slate-400 uppercase">Subcategoria / Modelo</label>
-                                            <input name="subcategory" value={form.subcategory} onChange={handleChange} className="input-glass mt-1 w-full" placeholder="Ex: iPhone 13 Pro Max" />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-black text-slate-400 uppercase">Condição</label>
-                                            <select name="condicao" value={form.condicao} onChange={handleChange} className="input-glass mt-1 w-full font-bold">
-                                                <option value="novo_lacrado">Novo Lacrado</option>
-                                                <option value="seminovo">Seminovo</option>
-                                                <option value="usado">Usado</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {itemType === 'acessorio' && (
-                                <div className="grid grid-cols-2 gap-4">
-                                     <div className="col-span-2">
-                                        <label className="text-xs font-black text-slate-400 uppercase block mb-2">Categoria</label>
-                                        <div className="flex flex-wrap gap-2">
-                                            {['pelicula', 'capa', 'cabo', 'carregador', 'fone', 'acessorio'].map(t => (
-                                                <button key={t} type="button" onClick={() => setForm(p => ({...p, accessory_type: t}))}
-                                                    className={cn("px-4 py-2 rounded-xl text-xs font-bold capitalize transition-all border-2",
-                                                        form.accessory_type === t ? "border-brand-500 bg-brand-50 text-brand-700" : "border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200"
-                                                    )}>
-                                                    {t}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                     <div className="col-span-2">
-                                        <label className="text-xs font-black text-slate-400 uppercase">Modelos Compatíveis</label>
-                                        <input name="compatible_models" value={form.compatible_models} onChange={handleChange} className="input-glass mt-1 w-full" placeholder="Ex: iPhone 15, Galaxy S24" />
-                                    </div>
-                                </div>
-                            )}
-
-                            {itemType === 'peca' && (
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="col-span-2">
-                                        <label className="text-xs font-black text-slate-400 uppercase block mb-2">Tipo de Peça</label>
-                                        <PartTypeSelector
-                                            value={form.part_type}
-                                            onChange={(v) => setForm(p => ({ ...p, part_type: v }))}
-                                        />
-                                    </div>
-                                    <div className="col-span-2">
-                                        <label className="text-xs font-black text-slate-400 uppercase block mb-2">Qualidade</label>
-                                        <QualitySelector
-                                            value={form.quality}
-                                            onChange={(v) => setForm(p => ({ ...p, quality: v }))}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-black text-slate-400 uppercase mb-1 block">Marca (Aparelho)</label>
-                                        <BrandSelector
-                                            value={form.brand_id}
-                                            onChange={(id) => setForm(p => ({ ...p, brand_id: id }))}
-                                            allowCreate
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-black text-slate-400 uppercase">Modelo Específico</label>
-                                        <input name="model" value={form.model} onChange={handleChange} className="input-glass mt-1 w-full" placeholder="Ex: iPhone 15 Pro Max" />
-                                    </div>
-                                    <div className="col-span-2">
-                                        <label className="text-xs font-black text-slate-400 uppercase block mb-1">Modelos Compatíveis</label>
-                                        <div className="flex flex-wrap gap-2 p-3 bg-white border border-slate-200 rounded-2xl min-h-[50px] focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
-                                            {compatibleModels.map(tag => (
-                                                <span key={tag} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-100 group">
-                                                    {tag}
-                                                    <button type="button" onClick={() => removeModelTag(tag)} className="p-0.5 hover:bg-indigo-200 rounded-md transition-colors">
-                                                        <X size={12} />
-                                                    </button>
-                                                </span>
-                                            ))}
-                                            <div className="relative flex-1 min-w-[150px]">
-                                                <input
-                                                    value={modelSearch}
-                                                    onChange={(e) => setModelSearch(e.target.value)}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') {
-                                                            e.preventDefault();
-                                                            if (modelSearch) addModelTag(modelSearch);
-                                                        }
-                                                    }}
-                                                    className="w-full bg-transparent border-none outline-none text-sm font-medium p-0"
-                                                    placeholder="Ex: Moto E7, Samsung A15..."
-                                                />
-                                                {modelSuggestions.length > 0 && (
-                                                    <div className="absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl mt-2 z-50 overflow-hidden">
-                                                        {modelSuggestions.map(s => (
-                                                            <button
-                                                                key={s.deviceModel}
-                                                                type="button"
-                                                                onClick={() => addModelTag(s.deviceModelDisplay)}
-                                                                className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center justify-between group"
-                                                            >
-                                                                <span className="font-bold text-slate-700">{s.deviceModelDisplay}</span>
-                                                                <span className="text-[10px] text-slate-400 font-bold uppercase">{s.usageCount}x usado</span>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <p className="text-[10px] text-slate-400 mt-2 font-medium flex items-center gap-1">
-                                            <Info size={12}/> Digite os modelos que esta peça serve. Pressione Enter para adicionar.
-                                        </p>
-                                    </div>
-                                    <div className="col-span-2">
-                                        <label className="text-xs font-black text-slate-400 uppercase">Fornecedor</label>
-                                        <input name="supplier" value={form.supplier} onChange={handleChange} className="input-glass mt-1 w-full" placeholder="Ex: Distribuidora XYZ" />
-                                    </div>
-                                </div>
-                            )}
-
-                            <div>
-                                <label className="text-xs font-black text-slate-400 uppercase">Descrição Opcional</label>
-                                <textarea name="description" value={form.description} onChange={handleChange} className="input-glass mt-1 w-full min-h-[80px]" placeholder="Informações visíveis na vitrine..." />
-                            </div>
-
-                            <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl cursor-pointer border border-slate-100 hover:border-brand-200 transition-colors">
-                                <div className="relative">
-                                    <input type="checkbox" name="show_in_storefront" checked={form.show_in_storefront} onChange={handleChange} className="sr-only peer" />
-                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-sm font-bold text-slate-700 flex items-center gap-2"><Eye size={16}/> Exibir na Vitrine Online</span>
-                                    <span className="text-xs text-slate-500">Ative para permitir clientes verem e orçarem este item online.</span>
+                            {/* Toggle vitrine */}
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <button
+                                type="button"
+                                onClick={() => handleFieldChange('show_in_storefront', !form.show_in_storefront)}
+                                className={cn(
+                                    "w-11 h-6 rounded-full transition-all relative shrink-0",
+                                    form.show_in_storefront ? "bg-brand-500" : "bg-slate-200"
+                                )}
+                                >
+                                <div className={cn(
+                                    "absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all",
+                                    form.show_in_storefront ? "left-6" : "left-1"
+                                )} />
+                                </button>
+                                <div>
+                                <p className="text-sm font-bold text-slate-700">Exibir na Vitrine Online</p>
+                                <p className="text-[11px] text-slate-400">
+                                    Permite que clientes vejam e solicitem esta peça
+                                </p>
                                 </div>
                             </label>
+                            </div>
+                        </GlassCard>
 
-                            {/* Seção de código de barras */}
-                            <div className="pt-4 border-t border-slate-100">
-                                <label className="text-xs font-black text-slate-400 uppercase flex items-center gap-1 mb-4">
-                                    <Barcode size={14}/> Código de Barras / SKU
+                        {/* 2. Compatibilidade */}
+                        <GlassCard title="Compatibilidade" icon={Wrench}>
+                            <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                    Marca do Aparelho
                                 </label>
-                                
-                                <div className="space-y-6">
-                                    {/* Preview se já tem código */}
-                                    {(form.barcode || form.sku) && (
-                                        <div className="flex justify-center p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <BarcodeDisplay
-                                                value={form.barcode || form.sku}
-                                                size="md"
-                                                showEAN={true}
-                                                showQR={true}
-                                                productName={form.name}
-                                                price={parseInt(form.sale_price.replace(/\D/g,''), 10) || 0}
-                                            />
-                                        </div>
-                                    )}
-
-                                    {/* Gerador */}
-                                    <BarcodeGenerator
-                                        itemType={itemType || undefined}
-                                        partType={form.part_type}
-                                        imei={itemType === 'celular' ? form.imei : undefined}
-                                        currentBarcode={form.barcode}
-                                        onGenerated={(barcode, sku) => {
-                                            setForm(prev => ({ ...prev, barcode, sku }));
-                                        }}
-                                    />
-
-                                    {/* Campos manuais (avançado) */}
-                                    <details className="group">
-                                        <summary className="text-[10px] font-black text-slate-400 uppercase cursor-pointer hover:text-slate-600 transition-colors list-none flex items-center gap-1">
-                                            <ChevronDown size={10} className="group-open:rotate-180 transition-transform" /> 
-                                            Editar manualmente
-                                        </summary>
-                                        <div className="grid grid-cols-2 gap-4 mt-3">
-                                            <div>
-                                                <label className="text-xs font-black text-slate-400 uppercase">Cód. Barras/EAN</label>
-                                                <input
-                                                    name="barcode"
-                                                    value={form.barcode}
-                                                    onChange={handleChange}
-                                                    className="input-glass mt-1 w-full font-mono text-sm"
-                                                    placeholder="Ex: 7891234567890"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-xs font-black text-slate-400 uppercase">SKU Interno</label>
-                                                <input
-                                                    name="sku"
-                                                    value={form.sku}
-                                                    onChange={handleChange}
-                                                    className="input-glass mt-1 w-full font-mono text-sm uppercase"
-                                                />
-                                            </div>
-                                        </div>
-                                    </details>
+                                <input
+                                    value={form.part_brand || ''}
+                                    onChange={(e) => handleFieldChange('part_brand', e.target.value)}
+                                    className="input-glass w-full"
+                                    placeholder="Ex: Apple, Samsung"
+                                />
+                                </div>
+                                <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                    Modelo Principal
+                                </label>
+                                <input
+                                    value={form.model || ''}
+                                    onChange={(e) => handleFieldChange('model', e.target.value)}
+                                    className="input-glass w-full"
+                                    placeholder="Ex: iPhone 15 Pro Max"
+                                />
                                 </div>
                             </div>
-                        </div>
-                    </GlassCard>
 
-                    {itemType === 'celular' && (
-                        <DeviceFields
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                Modelos Compatíveis
+                                </label>
+                                <CompatibleModelsSelector
+                                value={form.compatible_models}
+                                onChange={(v) => handleFieldChange('compatible_models', v)}
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                Referência do Fornecedor
+                                <span className="text-slate-300 font-normal ml-2">(código usado pelo fornecedor)</span>
+                                </label>
+                                <input
+                                value={form.supplier_ref}
+                                name="supplier_ref"
+                                onChange={handleChange}
+                                className="input-glass w-full font-mono"
+                                placeholder="Ex: APL-SCR-15PM-OR"
+                                />
+                            </div>
+                            </div>
+                        </GlassCard>
+
+                        {/* 3. Preços */}
+                        <GlassCard title="Preços e Atacado" icon={DollarSign}>
+                            <PriceGroup
+                            costValue={form.cost_price}
+                            saleValue={form.sale_price}
+                            onCostChange={(v) => {
+                                handleFieldChange('cost_price', v);
+                                setPrecoEditado(true);
+                            }}
+                            onSaleChange={(v) => handleFieldChange('sale_price', v)}
+                            wholesaleValue={form.sale_price_wholesale_brl}
+                            onWholesaleChange={(v) => handleFieldChange('sale_price_wholesale_brl', v)}
+                            showMargin
+                            />
+                        </GlassCard>
+
+                        {/* 4. Estoque e localização */}
+                        <GlassCard title="Estoque e Localização" icon={Package}>
+                            <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                Quantidade Atual *
+                                </label>
+                                <input
+                                type="number"
+                                min="0"
+                                value={form.stock_qty}
+                                name="stock_qty"
+                                onChange={handleChange}
+                                className="input-glass w-full font-bold text-lg text-center"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                Estoque Mínimo
+                                <span className="text-slate-300 font-normal ml-1">(alerta)</span>
+                                </label>
+                                <input
+                                type="number"
+                                min="0"
+                                value={form.stock_alert_qty}
+                                name="stock_alert_qty"
+                                onChange={handleChange}
+                                className="input-glass w-full"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                Ponto de Reposição
+                                <span className="text-slate-300 font-normal ml-1">(sugerir compra)</span>
+                                </label>
+                                <input
+                                type="number"
+                                min="0"
+                                value={form.reorder_point}
+                                name="reorder_point"
+                                onChange={handleChange}
+                                className="input-glass w-full"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                <MapPin size={11} className="inline mr-1" />
+                                Localização Física
+                                </label>
+                                <input
+                                value={form.storage_location}
+                                name="storage_location"
+                                onChange={handleChange}
+                                className="input-glass w-full font-mono"
+                                placeholder="Ex: Gaveta A3, Prateleira 2"
+                                />
+                            </div>
+                            </div>
+                        </GlassCard>
+
+                        {/* 5. Garantia e fornecedor */}
+                        <GlassCard title="Garantia e Fornecedor" icon={ShieldCheck}>
+                            <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                Garantia ao Cliente (dias)
+                                </label>
+                                <input
+                                type="number"
+                                min="0"
+                                value={form.warranty_days_part}
+                                name="warranty_days_part"
+                                onChange={handleChange}
+                                className="input-glass w-full"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                Prazo de Entrega (dias)
+                                </label>
+                                <input
+                                type="number"
+                                min="0"
+                                value={form.supplier_lead_days}
+                                name="supplier_lead_days"
+                                onChange={handleChange}
+                                className="input-glass w-full"
+                                />
+                            </div>
+                            </div>
+                        </GlassCard>
+
+                        {/* 6. Fiscal */}
+                        <FiscalPanel
                             value={{
-                                imei: form.imei,
-                                imei2: form.imei2,
-                                serialNumber: form.serial_number,
-                                color: form.color,
-                                storage: form.storage,
-                                ram: form.ram,
-                                batteryHealth: form.battery_health,
-                                batteryCycle: form.battery_cycle,
-                                grade: form.grade,
-                                condicao: form.condicao,
-                                diasGarantia: form.dias_garantia,
-                                observacao: form.observacao,
-                                dataEntrada: form.data_entrada,
+                            ncm: form.ncm,
+                            cfopEstadualSaida: form.cfop_estadual_saida || form.cfop || '5102',
+                            cfopInterestadualSaida: form.cfop_interestadual_saida || '6102',
+                            cfopEstadualEntrada: form.cfop_estadual_entrada || '',
+                            cfopInterestadualEntrada: form.cfop_interestadual_entrada || '',
+                            cstCsosn: form.cst_csosn || '',
+                            cest: form.cest,
+                            origemProduto: form.origin_code,
+                            codigoBeneficioFiscal: form.codigo_beneficio_fiscal || '',
+                            tributacaoId: form.tributacao_id || '',
                             }}
                             onChange={(field, val) => {
                                 const fieldMap: Record<string, string> = {
-                                    imei: 'imei', imei2: 'imei2', serialNumber: 'serial_number',
-                                    color: 'color', storage: 'storage', ram: 'ram',
-                                    batteryHealth: 'battery_health', batteryCycle: 'battery_cycle',
-                                    grade: 'grade', condicao: 'condicao',
-                                    diasGarantia: 'dias_garantia', observacao: 'observacao',
-                                    dataEntrada: 'data_entrada',
+                                    ncm: 'ncm',
+                                    cfopEstadualSaida: 'cfop_estadual_saida',
+                                    cfopInterestadualSaida: 'cfop_interestadual_saida',
+                                    cfopEstadualEntrada: 'cfop_estadual_entrada',
+                                    cfopInterestadualEntrada: 'cfop_interestadual_entrada',
+                                    cstCsosn: 'cst_csosn',
+                                    cest: 'cest',
+                                    origemProduto: 'origin_code',
+                                    codigoBeneficioFiscal: 'codigo_beneficio_fiscal',
+                                    tributacaoId: 'tributacao_id',
                                 };
-                                setForm(prev => ({ ...prev, [fieldMap[field] || field]: val }));
+                                handleFieldChange(fieldMap[field] || field, val);
                             }}
-                            imeiScanner={
-                                <IMEIScanner
-                                    value={form.imei}
-                                    onChange={(val) => setForm(prev => ({ ...prev, imei: val }))}
-                                    tenantId={profile?.empresa_id || ""}
-                                />
-                            }
+                            regime={regime}
+                            tributacoes={tributacoes}
+                            onSuggestNCM={() => {
+                            const suggested = suggestNCM(form.name);
+                            if (suggested) handleFieldChange('ncm', suggested);
+                            }}
                         />
-                    )}
 
-                    <FiscalPanel
-                        value={{
-                            ncm: form.ncm,
-                            cfopEstadualSaida: form.cfop_estadual_saida || form.cfop,
-                            cfopInterestadualSaida: form.cfop_interestadual_saida,
-                            cfopEstadualEntrada: form.cfop_estadual_entrada,
-                            cfopInterestadualEntrada: form.cfop_interestadual_entrada,
-                            cstCsosn: form.cst_csosn,
-                            cest: form.cest,
-                            origemProduto: form.origin_code,
-                            codigoBeneficioFiscal: form.codigo_beneficio_fiscal,
-                            tributacaoId: form.tributacao_id,
-                        }}
-                        onChange={(field, val) => {
-                            const fieldMap: Record<string, string> = {
-                                ncm: 'ncm',
-                                cfopEstadualSaida: 'cfop_estadual_saida',
-                                cfopInterestadualSaida: 'cfop_interestadual_saida',
-                                cfopEstadualEntrada: 'cfop_estadual_entrada',
-                                cfopInterestadualEntrada: 'cfop_interestadual_entrada',
-                                cstCsosn: 'cst_csosn',
-                                cest: 'cest',
-                                origemProduto: 'origin_code',
-                                codigoBeneficioFiscal: 'codigo_beneficio_fiscal',
-                                tributacaoId: 'tributacao_id',
-                            };
-                            setForm(prev => ({ ...prev, [fieldMap[field] || field]: val }));
-                        }}
-                        regime={regime}
-                        tributacoes={tributacoes}
-                        onSuggestNCM={() => {
-                            const s = suggestNCM(form.name);
-                            if (s) {
-                                setForm(prev => ({ ...prev, ncm: s }));
-                                toast.success(`NCM sugerido: ${s}`);
-                            } else {
-                                toast.info("Não encontramos uma sugestão para este nome.");
-                            }
-                        }}
-                    />
-                </div>
-
-                {/* Coluna Lateral (Direita) */}
-                <div className="space-y-6">
-                    <GlassCard title="Preços e Atacado" icon={DollarSign} className="bg-brand-50/10 border-brand-100">
-                        <div className="space-y-4">
-                            <div>
-                                <label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
-                                    <Layers size={14} className="text-brand-500" />
-                                    Perfil de Precificação
-                                </label>
-                                <PricingSegmentSelector
-                                    value={form.pricing_segment_id}
-                                    onChange={(id) => setForm(prev => ({ ...prev, pricing_segment_id: id }))}
-                                    allowCreate
+                        {/* 7. Código de barras */}
+                        <GlassCard title="Código de Barras / SKU" icon={Barcode}>
+                            {(form.barcode || form.sku) && (
+                            <div className="flex justify-center mb-4">
+                                <BarcodeDisplay
+                                value={form.barcode || form.sku}
+                                size="md"
+                                showEAN
+                                showQR
+                                productName={form.name}
+                                price={parseInt(form.sale_price.replace(/\D/g,''), 10) || 0}
                                 />
                             </div>
-
-                            <PriceGroup
-                                costValue={form.cost_price}
-                                saleValue={form.sale_price}
-                                wholesaleValue={form.sale_price_wholesale_brl}
-                                onCostChange={(val) => {
-                                    setPrecoEditado(false);
-                                    setForm(prev => ({ ...prev, cost_price: val }));
-                                }}
-                                onSaleChange={(val) => {
-                                    setForm(prev => ({ ...prev, sale_price: val }));
-                                    setPrecoEditado(true);
-                                }}
-                                onWholesaleChange={(val) => setForm(prev => ({ ...prev, sale_price_wholesale_brl: val }))}
+                            )}
+                            <BarcodeGenerator
+                            itemType="peca"
+                            partType={form.part_type || undefined}
+                            currentBarcode={form.barcode}
+                            onGenerated={(barcode, sku) => {
+                                handleFieldChange('barcode', barcode);
+                                handleFieldChange('sku', sku);
+                            }}
                             />
-                            
-                            <div className="pt-2 border-t border-slate-100 space-y-3">
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="text-[10px] font-black text-indigo-600 uppercase">Atacado (US$)</label>
-                                        <input name="sale_price_usd" value={form.sale_price_usd} onChange={handleChange} className="input-glass mt-1 w-full text-right font-bold text-indigo-600" />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase">Cotação Base USD</label>
-                                        <input name="sale_price_usd_rate" value={form.sale_price_usd_rate} onChange={handleChange} className="input-glass mt-1 w-full text-right text-sm text-slate-500" />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </GlassCard>
-
-                    <GlassCard title="Gestão de Estoque" icon={Package}>
-                        <div className="space-y-4">
-                            {units.length > 1 ? (
-                                <div className="space-y-3">
-                                    <label className="text-xs font-black text-slate-400 uppercase">Estoque Inicial por Unidade</label>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {units.map(u => (
-                                            <div key={u.id} className="p-3 bg-slate-50 border border-slate-100 rounded-2xl">
-                                                <label className="text-[10px] font-black text-slate-500 uppercase block mb-1 truncate">{u.name}</label>
-                                                <input
-                                                    type="number"
-                                                    value={unitStocks[u.id] || "0"}
-                                                    onChange={(e) => setUnitStocks(prev => ({ ...prev, [u.id]: e.target.value }))}
-                                                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-center font-black text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                                                />
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ) : (
+                            <details className="mt-3">
+                            <summary className="text-[10px] font-black text-slate-400 uppercase cursor-pointer hover:text-slate-600">
+                                Editar manualmente
+                            </summary>
+                            <div className="grid grid-cols-2 gap-4 mt-3">
                                 <div>
-                                    <label className="text-xs font-black text-slate-400 uppercase">Quantidade Atual</label>
-                                    <input name="stock_qty" type="number" value={form.stock_qty} onChange={handleChange} className="input-glass mt-1 w-full text-xl font-black text-center" />
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                    Código de Barras
+                                </label>
+                                <input
+                                    value={form.barcode}
+                                    name="barcode"
+                                    onChange={handleChange}
+                                    className="input-glass w-full font-mono text-sm"
+                                    placeholder="EAN-13 ou código livre"
+                                />
                                 </div>
-                            )}
-                            
-                            <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
-                                <label className="text-[10px] font-black text-amber-600 uppercase">Aviso de Estoque Baixo</label>
-                                <p className="text-xs text-amber-700/70 mb-2 leading-relaxed">Alertar quando o estoque for igual ou menor a:</p>
-                                <input name="stock_alert_qty" type="number" value={form.stock_alert_qty} onChange={handleChange} className="w-full bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-center font-bold text-amber-900 outline-none focus:ring-2 focus:ring-amber-500" />
+                                <div>
+                                <label className="text-xs font-black text-slate-400 uppercase mb-1 block">
+                                    SKU Interno
+                                </label>
+                                <input
+                                    value={form.sku}
+                                    name="sku"
+                                    onChange={handleChange}
+                                    className="input-glass w-full font-mono text-sm uppercase"
+                                />
+                                </div>
                             </div>
+                            </details>
+                        </GlassCard>
                         </div>
-                    </GlassCard>
 
-                    <GlassCard title="Foto do Produto" icon={Upload}>
-                        <div className="space-y-4 text-center">
+                        {/* ══════════════════════════════
+                            SIDEBAR (1/3)
+                        ══════════════════════════════ */}
+                        <div className="space-y-4">
+                        {/* Foto do produto */}
+                        <GlassCard title="Foto do Produto" icon={Eye}>
+                            <div className="aspect-square bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 hover:border-brand-300 transition-all group relative overflow-hidden">
                             {form.image_url ? (
-                                <div className="relative group rounded-2xl overflow-hidden border-2 border-slate-100">
-                                    <img src={form.image_url} alt="Imagem" className="w-full h-48 object-cover" />
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                        <button type="button" onClick={() => setForm(p => ({...p, image_url: ""}))} className="bg-white text-red-500 px-4 py-2 rounded-xl text-xs font-bold">Remover</button>
-                                    </div>
-                                </div>
+                                <>
+                                <img src={form.image_url} alt="Foto" className="w-full h-full object-cover" />
+                                <button
+                                    type="button"
+                                    onClick={() => handleFieldChange('image_url', '')}
+                                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-all z-10"
+                                >
+                                    <X size={12} />
+                                </button>
+                                </>
                             ) : (
-                                <div className="border-2 border-dashed border-slate-200 hover:border-brand-400 bg-slate-50 hover:bg-brand-50 rounded-2xl p-6 transition-colors relative cursor-pointer">
-                                    <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                                    <Upload className="mx-auto text-slate-400 mb-2" size={24} />
-                                    <span className="text-xs font-bold text-slate-500 uppercase">Clique para Upload</span>
-                                </div>
+                                <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer absolute inset-0 z-10">
+                                    <input type="file" accept="image/*" onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            uploadProdutoImage(file, profile?.empresa_id || "").then(url => {
+                                                if (url) handleFieldChange('image_url', url);
+                                            });
+                                        }
+                                    }} className="hidden" />
+                                    <Upload size={28} className="text-slate-300 mb-2 group-hover:text-brand-400 transition-colors" />
+                                    <p className="text-xs font-bold text-slate-400">Clique para upload</p>
+                                    <p className="text-[10px] text-slate-300 mt-1">JPG, PNG até 5MB</p>
+                                </label>
                             )}
+                            </div>
+                        </GlassCard>
+
+                        {/* Sidebar de estoque e margem */}
+                        <PartStockSidebar
+                            costPrice={
+                            Math.round(parseFloat((form.cost_price || '0').replace(/\./g,'').replace(',','.')) * 100)
+                            }
+                            salePrice={
+                            Math.round(parseFloat((form.sale_price || '0').replace(/\./g,'').replace(',','.')) * 100)
+                            }
+                            currentQty={parseInt(form.stock_qty) || 0}
+                            minQty={parseInt(form.stock_alert_qty) || 0}
+                        />
                         </div>
-                    </GlassCard>
-                </div>
+                    </>
+                )}
+
+                {itemType !== 'peca' && (
+                    <div className="space-y-6 mt-6 col-span-1 lg:col-span-3">
+                        {itemType === 'celular' && (
+                            <DeviceFields
+                                value={{
+                                    imei: form.imei,
+                                    imei2: form.imei2,
+                                    serialNumber: form.serial_number,
+                                    color: form.color,
+                                    storage: form.storage,
+                                    ram: form.ram,
+                                    batteryHealth: form.battery_health,
+                                    batteryCycle: form.battery_cycle,
+                                    grade: form.grade,
+                                    condicao: form.condicao,
+                                    diasGarantia: form.dias_garantia,
+                                    observacao: form.observacao,
+                                    dataEntrada: form.data_entrada,
+                                }}
+                                onChange={(field, val) => {
+                                    const fieldMap: Record<string, string> = {
+                                        imei: 'imei', imei2: 'imei2', serialNumber: 'serial_number',
+                                        color: 'color', storage: 'storage', ram: 'ram',
+                                        batteryHealth: 'battery_health', batteryCycle: 'battery_cycle',
+                                        grade: 'grade', condicao: 'condicao',
+                                        diasGarantia: 'dias_garantia', observacao: 'observacao',
+                                        dataEntrada: 'data_entrada',
+                                    };
+                                    setForm(prev => ({ ...prev, [fieldMap[field] || field]: val }));
+                                }}
+                                imeiScanner={
+                                    <IMEIScanner
+                                        value={form.imei}
+                                        onChange={(val) => setForm(prev => ({ ...prev, imei: val }))}
+                                        tenantId={profile?.empresa_id || ""}
+                                    />
+                                }
+                            />
+                        )}
+                    </div>
+                )}
+
+            {/* Footer com Botão Flutuante */}
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <button
+                    type="submit"
+                    disabled={loading}
+                    className="h-14 px-10 rounded-2xl bg-brand-500 text-white font-black text-lg shadow-[0_20px_50px_rgba(59,130,246,0.3)] hover:shadow-[0_20px_50px_rgba(59,130,246,0.5)] hover:-translate-y-1 active:translate-y-0 transition-all flex items-center gap-3 disabled:opacity-50 group"
+                >
+                    {loading ? (
+                        <>
+                            <RefreshCw className="w-6 h-6 animate-spin" />
+                            Salvando...
+                        </>
+                    ) : (
+                        <>
+                            <Save className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                            Cadastrar Item
+                        </>
+                    )}
+                </button>
             </div>
         </form>
+        </div>
     );
 }
 
