@@ -9,12 +9,6 @@ export const QUALITY_OPTIONS = [
     color: 'emerald',
   },
   {
-    value: 'premium',
-    label: 'Premium',
-    desc: 'Qualidade equivalente ao original',
-    color: 'blue',
-  },
-  {
     value: 'oem',
     label: 'OEM',
     desc: 'Fabricante original de equipamento',
@@ -31,12 +25,6 @@ export const QUALITY_OPTIONS = [
     label: 'China',
     desc: 'Importada genérica',
     color: 'orange',
-  },
-  {
-    value: 'incell',
-    label: 'Incell',
-    desc: 'Tela LCD incell',
-    color: 'slate',
   },
 ] as const;
 
