@@ -310,7 +310,7 @@ export function EstoqueListaClient({
                     },
                     {
                         label: "Nova Peça",
-                        href: "/estoque/peca/nova",
+                        href: "/estoque/novo?tipo=peca",
                         variant: "secondary" as const,
                         icon: <Wrench size={18} />
                     },

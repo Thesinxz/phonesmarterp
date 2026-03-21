@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowLeft, Save, Package, Smartphone, Headphones, Wrench, DollarSign, Barcode, Eye, FileText, Upload, Tag, Cpu, X, Info, ChevronDown, Layers } from "lucide-react";
 import { createCatalogItem } from "@/services/catalog";
@@ -36,8 +37,10 @@ import { useCatalogData } from "@/hooks/useCatalogData";
 
 type ItemType = 'celular' | 'acessorio' | 'peca' | null;
 
-export default function NovoCatalogItemPage() {
+function NovoCatalogContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const initialTipo = searchParams.get('tipo') as ItemType | null;
     const { profile } = useAuth();
     const { config } = useFinanceConfig();
     const { regime, tributacoes } = useEmpresaFiscal();
@@ -107,7 +110,7 @@ export default function NovoCatalogItemPage() {
         compatible_models_parts: "" // será split(',') depois
     });
 
-    const [itemType, setItemType] = useState<ItemType>(null);
+    const [itemType, setItemType] = useState<ItemType>(initialTipo);
     const { segments, brands, productTypes, loading: catalogLoading } = useCatalogData();
     const { categories } = useCatalogCategories(itemType || undefined);
     
@@ -909,5 +912,13 @@ export default function NovoCatalogItemPage() {
                 </div>
             </div>
         </form>
+    );
+}
+
+export default function NovoCatalogItemPage() {
+    return (
+        <Suspense fallback={<div className="p-8 text-center text-slate-500">Carregando formulário...</div>}>
+            <NovoCatalogContent />
+        </Suspense>
     );
 }
